@@ -2,19 +2,32 @@ import styled from "styled-components";
 import logo from "../assets/logo.svg";
 import { useEffect, useState } from "react";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { auth } from "../firebaseconfig";
+import { auth, db } from "../firebaseconfig";
+import { doc, getDoc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 
 export default function Header() {
   const [userName, setUserName] = useState("");
+  const [userRole, setUserRole] = useState<number | null>(null); // ✅ role 상태
   const navigate = useNavigate(); 
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user && user.displayName) {
-        setUserName(user.displayName); // ✅ Firebase에 저장된 이름 가져오기
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        if (user.displayName) {
+          setUserName(user.displayName);
+        }
+
+        // ✅ Firestore에서 role 가져오기
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        if (userDoc.exists()) {
+          setUserRole(userDoc.data().role);
+        } else {
+          setUserRole(null);
+        }
       } else {
-        setUserName(""); // 로그아웃 상태 처리
+        setUserName("");
+        setUserRole(null);
       }
     });
 
@@ -31,12 +44,22 @@ export default function Header() {
     });
   }
 
+  const getRoleName = (role: number | null) => {
+    switch (role) {
+      case 1: return "요청자";
+      case 2: return "디자이너";
+      case 3: return "담당자";
+      default: return "역할 없음";
+    }
+  };
+
   return (
     <HeaderElement>
       <HomePlusLogo src={logo}></HomePlusLogo>
       <UtilWrap>
-        <UserName>{userName}님 환영합니다.</UserName>
+        <UserName>{userName}님 ({getRoleName(userRole)})환영합니다.</UserName>
         <LogoutButton onClick={logout}>로그아웃</LogoutButton>
+        <Lole></Lole>
       </UtilWrap>
     </HeaderElement>
   )
@@ -64,6 +87,12 @@ const UserName = styled.span`
 `;
 
 const LogoutButton = styled.button`
+  color: ${({ theme }) => theme.colors.white};
+  font-size: 14px;
+  line-height: 20px;
+`;
+
+const Lole = styled.span`
   color: ${({ theme }) => theme.colors.white};
   font-size: 14px;
   line-height: 20px;

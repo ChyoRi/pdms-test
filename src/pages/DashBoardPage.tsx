@@ -1,10 +1,12 @@
 import styled from "styled-components";
-import HeaderElement from "../components/Header";
+import Header from "../components/Header";
+import Main from '../components/Main';
 
 export default function DashBoardPage() {
   return(
     <Container>
-      <HeaderElement />
+      <Header />
+      <Main />
     </Container>
   )
 }

@@ -2,7 +2,8 @@ import styled from "styled-components"
 import logo from "../assets/logo.svg";
 import { useState } from "react";
 import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
-import { auth } from "../firebaseconfig";
+import { auth, db } from "../firebaseconfig";
+import { doc, setDoc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 
 export default function SignUpPage() {
@@ -18,18 +19,25 @@ export default function SignUpPage() {
       return;
     }
 
-  createUserWithEmailAndPassword(auth, email, password)
-    .then((userCredential) => {
-      const user = userCredential.user;
-      return updateProfile(user, { displayName: name }); // ✅ 이름 추가
-    })
-    .then(() => {
-      alert("회원가입이 완료되었습니다!");
-      navigate("/"); // 회원가입 후 로그인 페이지로 이동
-    })
-    .catch((error) => {
-      alert("회원가입 중 오류 발생: " + error.message);
-    });
+    createUserWithEmailAndPassword(auth, email, password)
+      .then(async (userCredential) => {
+        const user = userCredential.user;
+
+        await updateProfile(user, { displayName: name }); // ✅ 이름 추가
+
+        // ✅ Firestore에 role 저장 (users/{uid})
+        await setDoc(doc(db, "users", user.uid), {
+          role: 3, // 기본값: 요청자
+          createdAt: new Date(),
+        });
+      })
+      .then(() => {
+        alert("회원가입이 완료되었습니다!");
+        navigate("/"); // 회원가입 후 로그인 페이지로 이동
+      })
+      .catch((error) => {
+        alert("회원가입 중 오류 발생: " + error.message);
+      });
   }
 
   return (
