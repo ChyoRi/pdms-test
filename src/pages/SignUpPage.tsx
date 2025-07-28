@@ -27,7 +27,8 @@ export default function SignUpPage() {
 
         // ✅ Firestore에 role 저장 (users/{uid})
         await setDoc(doc(db, "users", user.uid), {
-          role: 3, // 기본값: 요청자
+          name: name,
+          role: 2, // 기본값: 요청자
           createdAt: new Date(),
         });
       })

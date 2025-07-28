@@ -1,21 +1,34 @@
 import styled from "styled-components";
 import { useEffect, useState } from "react";
 import { db } from "../firebaseconfig";
-import { doc, getDoc, updateDoc, collection, getDocs, query, where } from "firebase/firestore";
+import { doc, updateDoc, collection, getDocs, onSnapshot, query, where } from "firebase/firestore";
 
 export default function Manager() {
   const [requests, setRequests] = useState<any[]>([]);
   const [designerList, setDesignerList] = useState<any[]>([]);
   const [selectedDesigners, setSelectedDesigners] = useState<{ [key: string]: string }>({});
+  const [responses, setResponses] = useState<{ [key: string]: any }>({}); // ✅ 응답 데이터 저장
 
   // ✅ Firestore에서 요청 리스트 가져오기
   useEffect(() => {
-    const fetchRequests = async () => {
-      const snapshot = await getDocs(collection(db, "design_request"));
+    const unsubscribe = onSnapshot(collection(db, "design_request"), (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setRequests(data);
-    };
-    fetchRequests();
+      setRequests(data); // 실시간 반영
+    });
+    return () => unsubscribe(); // cleanup
+  }, []);
+
+  // ✅ Firestore에서 응답 리스트 가져오기
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, "design_response"), (snapshot) => {
+      const data: { [key: string]: any } = {};
+      snapshot.docs.forEach(doc => {
+        const response = doc.data();
+        data[response.request_id] = response; // ✅ request_id로 매핑
+      });
+      setResponses(data);
+    });
+    return () => unsubscribe();
   }, []);
 
   // ✅ Firestore에서 role=2인 디자이너 목록 가져오기
@@ -55,44 +68,74 @@ export default function Manager() {
     );
   };
 
+  const sendToRequester = async (requestId: string) => {
+  const responseRef = doc(db, "design_response", requestId);
+  await updateDoc(responseRef, { is_sent_to_requester: true });
+  
+  alert("요청자에게 전달되었습니다.");
+  
+  setResponses(prev => ({
+    ...prev,
+    [requestId]: { ...prev[requestId], is_sent_to_requester: true }
+  }));
+};
+
   return (
     <Container>
       <h2>요청 리스트</h2>
       {requests.length > 0 ? (
         <List>
-          {requests.map(req => (
-            <ListItem key={req.id}>
-              <Info>
-                <p><strong>요청자:</strong> {req.requester}</p>
-                <p><strong>요청일:</strong> {req.request_date}</p>
-                <p><strong>업무형태:</strong> {req.task_form}</p>
-                <p><strong>업무타입:</strong> {req.task_type}</p>
-                <p><strong>요청내용:</strong> {req.requirement}</p>
-                {req.url && (
-                  <p>
-                    <strong>기획안:</strong> <a href={req.url} target="_blank" rel="noopener noreferrer">보기</a>
-                  </p>
-                )}
-                <p>
-                  <strong>배정 디자이너:</strong> {req.assigned_designer || "미배정"}
-                </p>
-              </Info>
-              <Action>
-                <select
-                  value={selectedDesigners[req.id] || ""}
-                  onChange={(e) => designerSelect(req.id, e.target.value)}
-                >
-                  <option value="">디자이너 선택</option>
-                  {designerList.map(designer => (
-                    <option key={designer.id} value={designer.name}>
-                      {designer.name}
-                    </option>
-                  ))}
-                </select>
-                <button onClick={() => assignDesigner(req.id)}>배정</button>
-              </Action>
-            </ListItem>
-          ))}
+          {requests.map(req => {
+            const response = responses[req.id]; // ✅ request_id로 응답 찾기
+            return (
+              <ListItem key={req.id}>
+                <Info>
+                  <p><strong>요청자:</strong> {req.requester}</p>
+                  <p><strong>요청일:</strong> {req.request_date}</p>
+                  <p><strong>업무형태:</strong> {req.task_form}</p>
+                  <p><strong>업무타입:</strong> {req.task_type}</p>
+                  <p><strong>요청내용:</strong> {req.requirement}</p>
+                  {req.url && (
+                    <p>
+                      <strong>기획안:</strong> <a href={req.url} target="_blank" rel="noopener noreferrer">보기</a>
+                    </p>
+                  )}
+                  <p><strong>배정 디자이너:</strong> {req.assigned_designer || "미배정"}</p>
+
+                  {/* ✅ 응답 데이터 (있을 때만 표시) */}
+                  {response && (
+                    <ResponseBox>
+                      <h4>디자이너 응답</h4>
+                      <p><strong>시작일:</strong> {response.start_dt || "-"}</p>
+                      <p><strong>종료일:</strong> {response.end_dt || "-"}</p>
+                      <p><strong>산출물 링크:</strong> {response.result_url ? <a href={response.result_url} target="_blank">보기</a> : "-"}</p>
+                      <p><strong>진행상태:</strong> {response.status || "-"}</p>
+
+                      {/* ✅ 요청자에게 전달 버튼 (is_sent_to_requester가 false일 때만) */}
+                      {!response.is_sent_to_requester && (
+                        <SendButton onClick={() => sendToRequester(req.id)}>요청자에게 전달</SendButton>
+                      )}
+                      {response.is_sent_to_requester && <p style={{ color: "green" }}>요청자에게 전달됨</p>}
+                    </ResponseBox>
+                  )}
+                </Info>
+                <Action>
+                  <select
+                    value={selectedDesigners[req.id] || ""}
+                    onChange={(e) => designerSelect(req.id, e.target.value)}
+                  >
+                    <option value="">디자이너 선택</option>
+                    {designerList.map(designer => (
+                      <option key={designer.id} value={designer.name}>
+                        {designer.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button onClick={() => assignDesigner(req.id)}>배정</button>
+                </Action>
+              </ListItem>
+            );
+          })}
         </List>
       ) : (
         <p>요청 데이터를 불러오는 중...</p>
@@ -128,6 +171,14 @@ const Info = styled.div`
   }
 `;
 
+const ResponseBox = styled.div`
+  margin-top: 15px;
+  padding: 10px;
+  background: #f9f9f9;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+`;
+
 const Action = styled.div`
   display: flex;
   flex-direction: column;
@@ -144,4 +195,14 @@ const Action = styled.div`
     border-radius: 4px;
     cursor: pointer;
   }
+`;
+
+const SendButton = styled.button`
+  margin-top: 10px;
+  padding: 8px 12px;
+  background: #28a745;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
 `;
