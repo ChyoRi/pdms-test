@@ -102,6 +102,11 @@ export default function Manager() {
                   )}
                   <p><strong>배정 디자이너:</strong> {req.assigned_designer || "미배정"}</p>
 
+                  {/* ✅ 검수완료 표시 */}
+                  {req.review_status === "검수완료" && (
+                    <p style={{ color: "green", fontWeight: "bold" }}>검수가 완료되었습니다.</p>
+                  )}
+
                   {/* ✅ 응답 데이터 (있을 때만 표시) */}
                   {response && (
                     <ResponseBox>

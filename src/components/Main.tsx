@@ -8,20 +8,17 @@ import Designer from "./Designer";
 import Manager from "./Manager";
 
 export default function Main() {
-  // const [userName, setUserName] = useState<string>("");
   const [userRole, setUserRole] = useState<number | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        // setUserName(user.displayName || "");
         // Firestore에서 role 가져오기
         const userDoc = await getDoc(doc(db, "users", user.uid));
         if (userDoc.exists()) {
           setUserRole(userDoc.data().role);
         }
       } else {
-        // setUserName("");
         setUserRole(null);
       }
     });
@@ -40,5 +37,5 @@ export default function Main() {
 }
 
 const Container = styled.main`
-  
+  padding: 20px 25px;
 `;

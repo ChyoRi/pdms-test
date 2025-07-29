@@ -7,11 +7,15 @@ interface DesignRequest {
   id: string;
   requester: string;
   request_date: string;
+  completion_dt: string;
+  open_dt: string;
   task_form: string;
   task_type: string;
   requirement: string;
-  url?: string;
+  url1?: string;
+  url2?: string;
   assigned_designer?: string;
+  review_status?: string;
 }
 
 export default function Designer() {
@@ -69,12 +73,24 @@ export default function Designer() {
                 <p><strong>업무형태:</strong> {req.task_form}</p>
                 <p><strong>업무타입:</strong> {req.task_type}</p>
                 <p><strong>요청내용:</strong> {req.requirement}</p>
-                {req.url && (
+                {req.url1 && (
                   <p>
-                    <strong>기획안:</strong> <a href={req.url} target="_blank" rel="noopener noreferrer">보기</a>
+                    <strong>기획안:</strong> <a href={req.url1} target="_blank" rel="noopener noreferrer">보기</a>
+                  </p>
+                )}
+                {req.url2 && (
+                  <p>
+                    <strong>기획안:</strong> <a href={req.url2} target="_blank" rel="noopener noreferrer">보기</a>
                   </p>
                 )}
                 <p><strong>배정 디자이너:</strong> {req.assigned_designer}</p>
+
+                {/* ✅ 검수완료 표시 */}
+                {req.review_status === "검수완료" && (
+                  <p style={{ color: "green", fontWeight: "bold", marginTop: "8px" }}>
+                    검수가 완료되었습니다.
+                  </p>
+                )}
 
                 {/* 응답 입력 */}
                 <Label>시작일</Label>
@@ -100,9 +116,9 @@ export default function Designer() {
                 <Select
                   onChange={(e) => handleChange(req.id, "status", e.target.value)}
                 >
-                  <option value="waiting">대기</option>
-                  <option value="in_progress">진행중</option>
-                  <option value="done">완료</option>
+                  <option value="대기중">대기</option>
+                  <option value="진행중">진행중</option>
+                  <option value="완료">완료</option>
                 </Select>
 
                 <SaveButton onClick={() => saveResponse(req.id)}>저장</SaveButton>

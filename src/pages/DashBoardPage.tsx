@@ -11,6 +11,4 @@ export default function DashBoardPage() {
   )
 }
 
-const Container = styled.div`
-  
-`;
+const Container = styled.div``;
