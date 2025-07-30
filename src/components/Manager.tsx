@@ -57,8 +57,7 @@ export default function Manager() {
 
     const docRef = doc(db, "design_request", requestId);
     await updateDoc(docRef, {
-      assigned_designer: selectedDesigner,
-      status: "assigned" // ✅ 상태 필드 추가 (선택)
+      assigned_designer: selectedDesigner
     });
 
     alert("디자이너가 배정되었습니다!");
@@ -90,17 +89,26 @@ export default function Manager() {
             return (
               <ListItem key={req.id}>
                 <Info>
-                  <p><strong>요청자:</strong> {req.requester}</p>
                   <p><strong>요청일:</strong> {req.request_date}</p>
+                  <p><strong>요청자:</strong> {req.requester}</p>
+                  <p><strong>완료요청일:</strong> {req.completion_dt || "-"}</p>
+                  <p><strong>오픈일:</strong> {req.open_dt || "-"}</p>
                   <p><strong>업무형태:</strong> {req.task_form}</p>
                   <p><strong>업무타입:</strong> {req.task_type}</p>
                   <p><strong>요청내용:</strong> {req.requirement}</p>
-                  {req.url && (
+                  {req.url1 && (
                     <p>
-                      <strong>기획안:</strong> <a href={req.url} target="_blank" rel="noopener noreferrer">보기</a>
+                      <strong>기획안1:</strong>{" "}
+                      <a href={req.url1} target="_blank" rel="noopener noreferrer">보기</a>
                     </p>
                   )}
-                  <p><strong>배정 디자이너:</strong> {req.assigned_designer || "미배정"}</p>
+                  {req.url2 && (
+                    <p>
+                      <strong>기획안2:</strong>{" "}
+                      <a href={req.url2} target="_blank" rel="noopener noreferrer">보기</a>
+                    </p>
+                  )}
+                  <p><strong>담당 디자이너:</strong> {req.assigned_designer || "미배정"}</p>
 
                   {/* ✅ 검수완료 표시 */}
                   {req.review_status === "검수완료" && (
@@ -117,8 +125,8 @@ export default function Manager() {
                       <p><strong>진행상태:</strong> {response.status || "-"}</p>
 
                       {/* ✅ 요청자에게 전달 버튼 (is_sent_to_requester가 false일 때만) */}
-                      {!response.is_sent_to_requester && (
-                        <SendButton onClick={() => sendToRequester(req.id)}>요청자에게 전달</SendButton>
+                      {response.status === "완료" && !response.is_sent_to_requester && (
+                        <SendButton onClick={() => sendToRequester(req.id)}>완료</SendButton>
                       )}
                       {response.is_sent_to_requester && <p style={{ color: "green" }}>요청자에게 전달됨</p>}
                     </ResponseBox>

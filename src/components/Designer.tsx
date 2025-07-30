@@ -1,7 +1,8 @@
 import styled from "styled-components";
 import { useEffect, useState } from "react";
-import { db } from "../firebaseconfig";
-import { collection, onSnapshot, doc, setDoc } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth, db } from "../firebaseconfig";
+import { query, where, collection, onSnapshot, doc, setDoc, updateDoc } from "firebase/firestore";
 
 interface DesignRequest {
   id: string;
@@ -20,21 +21,38 @@ interface DesignRequest {
 
 export default function Designer() {
   const [assignedRequests, setAssignedRequests] = useState<DesignRequest[]>([]);
+  const [designerName, setDesignerName] = useState(""); // ✅ 로그인 디자이너 이름
   const [formData, setFormData] = useState<{ [key: string]: any }>({});
 
-  // ✅ Firestore에서 요청 리스트 가져오기
+  // ✅ 로그인 디자이너 이름 가져오기
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, "design_request"), (snapshot) => {
-    const data: DesignRequest[] = snapshot.docs
-      .map(doc => ({
-        id: doc.id,
-        ...(doc.data() as Omit<DesignRequest, "id">)
-      }))
-      .filter(req => req.assigned_designer && req.assigned_designer !== "미배정"); // ✅ 여기서 필터링
-      setAssignedRequests(data); // ✅ 필터 후 상태 업데이트
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user && user.displayName) {
+        setDesignerName(user.displayName);
+      }
     });
     return () => unsubscribe();
   }, []);
+
+  // ✅ Firestore에서 로그인 디자이너에게 배정된 요청만 가져오기
+  useEffect(() => {
+    if (!designerName) return; // 이름 없으면 실행 X
+
+    const q = query(
+      collection(db, "design_request"),
+      where("assigned_designer", "==", designerName) // ✅ 필터 추가
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data: DesignRequest[] = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...(doc.data() as Omit<DesignRequest, "id">)
+      }));
+      setAssignedRequests(data);
+    });
+
+    return () => unsubscribe();
+  }, [designerName]); // ✅ 의존성에 designerName 추가
 
   // ✅ 입력값 변경
   const handleChange = (requestId: string, field: string, value: string) => {
@@ -50,12 +68,24 @@ export default function Designer() {
   // ✅ design_response에 저장
   const saveResponse = async (requestId: string) => {
     const responseRef = doc(db, "design_response", requestId);
+    const requestRef = doc(db, "design_request", requestId); // ✅ design_request 참조 추가
+
     const data = {
       request_id: requestId,
       ...formData[requestId],
       updated_at: new Date()
     };
+
+    // ✅ design_response 업데이트
     await setDoc(responseRef, data, { merge: true });
+
+    // ✅ design_request의 status도 업데이트
+    if (formData[requestId]?.status) {
+      await updateDoc(requestRef, {
+        status: formData[requestId].status // 예: "진행중", "완료"
+      });
+    }
+
     alert("응답이 저장되었습니다.");
   };
 
