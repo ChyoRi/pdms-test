@@ -7,16 +7,20 @@ import { query, where, collection, onSnapshot, doc, setDoc, updateDoc } from "fi
 interface DesignRequest {
   id: string;
   requester: string;
-  request_date: string;
-  completion_dt: string;
-  open_dt: string;
+  request_date: any;
+  completion_dt: any;
+  open_dt: any;
   task_form: string;
   task_type: string;
   requirement: string;
-  url1?: string;
-  url2?: string;
+  url?: string;
+  note?: string;
   assigned_designer?: string;
   review_status?: string;
+  designer_start_date?: string;
+  designer_end_date?: string;
+  result_url?: string;
+  status?: string;
 }
 
 export default function Designer() {
@@ -65,30 +69,35 @@ export default function Designer() {
     }));
   };
 
-  // ✅ design_response에 저장
+  // ✅ Firestore 업데이트 (design_request)
   const saveResponse = async (requestId: string) => {
-    const responseRef = doc(db, "design_response", requestId);
-    const requestRef = doc(db, "design_request", requestId); // ✅ design_request 참조 추가
+    const requestRef = doc(db, "design_request", requestId);
+    const data = formData[requestId];
 
-    const data = {
-      request_id: requestId,
-      ...formData[requestId],
-      updated_at: new Date()
-    };
-
-    // ✅ design_response 업데이트
-    await setDoc(responseRef, data, { merge: true });
-
-    // ✅ design_request의 status도 업데이트
-    if (formData[requestId]?.status) {
-      await updateDoc(requestRef, {
-        status: formData[requestId].status // 예: "진행중", "완료"
-      });
+    if (!data) {
+      alert("변경된 내용이 없습니다.");
+      return;
     }
 
-    alert("응답이 저장되었습니다.");
+    await updateDoc(requestRef, {
+      designer_start_date: data.start_dt || "",
+      designer_end_date: data.end_dt || "",
+      result_url: data.result_url || "",
+      status: data.status
+    });
+
+    alert("저장되었습니다.");
   };
 
+  // ✅ 날짜 포맷
+  const formatDate = (timestamp: any) => {
+    if (!timestamp) return "-";
+    if (timestamp.toDate) {
+      const date = timestamp.toDate();
+      return `${date.getMonth() + 1}/${date.getDate()}`;
+    }
+    return timestamp;
+  };
 
   return (
     <Container>
@@ -99,18 +108,18 @@ export default function Designer() {
             <ListItem key={req.id}>
               <Info>
                 <p><strong>요청자:</strong> {req.requester}</p>
-                <p><strong>요청일:</strong> {req.request_date}</p>
+                <p><strong>요청일:</strong> {formatDate(req.request_date)}</p>
                 <p><strong>업무형태:</strong> {req.task_form}</p>
                 <p><strong>업무타입:</strong> {req.task_type}</p>
                 <p><strong>요청내용:</strong> {req.requirement}</p>
-                {req.url1 && (
+                {req.url && (
                   <p>
-                    <strong>기획안:</strong> <a href={req.url1} target="_blank" rel="noopener noreferrer">보기</a>
+                    <strong>기획안:</strong> <a href={req.url} target="_blank" rel="noopener noreferrer">보기</a>
                   </p>
                 )}
-                {req.url2 && (
+                {req.note && (
                   <p>
-                    <strong>기획안:</strong> <a href={req.url2} target="_blank" rel="noopener noreferrer">보기</a>
+                    <strong>비고:</strong> <a href={req.note} target="_blank" rel="noopener noreferrer">보기</a>
                   </p>
                 )}
                 <p><strong>배정 디자이너:</strong> {req.assigned_designer}</p>
@@ -148,7 +157,7 @@ export default function Designer() {
                 >
                   <option value="대기중">대기</option>
                   <option value="진행중">진행중</option>
-                  <option value="완료">완료</option>
+                  <option value="검수요청">검수요청</option>
                 </Select>
 
                 <SaveButton onClick={() => saveResponse(req.id)}>저장</SaveButton>

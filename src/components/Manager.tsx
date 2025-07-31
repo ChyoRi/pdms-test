@@ -3,30 +3,39 @@ import { useEffect, useState } from "react";
 import { db } from "../firebaseconfig";
 import { doc, updateDoc, collection, getDocs, onSnapshot, query, where } from "firebase/firestore";
 
+interface RequestData {
+  id: string;
+  request_date: any;
+  requester: string;
+  completion_dt: any;
+  open_dt: any;
+  task_form: string;
+  task_type: string;
+  requirement: string;
+  url?: string;
+  note?: string;
+  status?: string;
+  assigned_designer?: string;
+  requester_review_status?: string;
+  manager_review_status?: string;
+  designer_start_date?: string;
+  designer_end_date?: string;
+  result_url?: string;     
+}
+
 export default function Manager() {
-  const [requests, setRequests] = useState<any[]>([]);
+  const [requests, setRequests] = useState<RequestData[]>([]);
   const [designerList, setDesignerList] = useState<any[]>([]);
   const [selectedDesigners, setSelectedDesigners] = useState<{ [key: string]: string }>({});
-  const [responses, setResponses] = useState<{ [key: string]: any }>({}); // ✅ 응답 데이터 저장
 
   // ✅ Firestore에서 요청 리스트 가져오기
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "design_request"), (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setRequests(data); // 실시간 반영
-    });
-    return () => unsubscribe(); // cleanup
-  }, []);
-
-  // ✅ Firestore에서 응답 리스트 가져오기
-  useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, "design_response"), (snapshot) => {
-      const data: { [key: string]: any } = {};
-      snapshot.docs.forEach(doc => {
-        const response = doc.data();
-        data[response.request_id] = response; // ✅ request_id로 매핑
-      });
-      setResponses(data);
+      const data = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...(doc.data() as Omit<RequestData, "id">)
+      }));
+      setRequests(data);
     });
     return () => unsubscribe();
   }, []);
@@ -42,7 +51,7 @@ export default function Manager() {
     fetchDesigners();
   }, []);
 
-  // ✅ 디자이너 배정
+  // ✅ 디자이너 선택
   const designerSelect = (requestId: string, designerName: string) => {
     setSelectedDesigners(prev => ({ ...prev, [requestId]: designerName }));
   };
@@ -67,17 +76,36 @@ export default function Manager() {
     );
   };
 
+  // ✅ 검수 완료 처리
+  const reviewComplete = async (requestId: string) => {
+    try {
+      await updateDoc(doc(db, "design_request", requestId), {
+        manager_review_status: "검수완료",
+        status: "검수중"
+      });
+      alert("검수 완료 처리되었습니다.");
+    } catch (error) {
+      console.error(error);
+      alert("검수 완료 처리 중 오류 발생");
+    }
+  };
+
+  // ✅ 날짜 포맷
+  const formatDate = (timestamp: any) => {
+    if (!timestamp) return "-";
+    if (timestamp.toDate) {
+      const date = timestamp.toDate();
+      return `${date.getMonth() + 1}/${date.getDate()}`;
+    }
+    return timestamp;
+  };
+
   const sendToRequester = async (requestId: string) => {
-  const responseRef = doc(db, "design_response", requestId);
-  await updateDoc(responseRef, { is_sent_to_requester: true });
-  
-  alert("요청자에게 전달되었습니다.");
-  
-  setResponses(prev => ({
-    ...prev,
-    [requestId]: { ...prev[requestId], is_sent_to_requester: true }
-  }));
-};
+    const responseRef = doc(db, "design_response", requestId);
+    await updateDoc(responseRef, { is_sent_to_requester: true });
+    
+    alert("요청자에게 전달되었습니다.");
+  };
 
   return (
     <Container>
@@ -85,50 +113,58 @@ export default function Manager() {
       {requests.length > 0 ? (
         <List>
           {requests.map(req => {
-            const response = responses[req.id]; // ✅ request_id로 응답 찾기
             return (
               <ListItem key={req.id}>
                 <Info>
-                  <p><strong>요청일:</strong> {req.request_date}</p>
+                  <p><strong>요청일:</strong> {formatDate(req.request_date)}</p>
                   <p><strong>요청자:</strong> {req.requester}</p>
-                  <p><strong>완료요청일:</strong> {req.completion_dt || "-"}</p>
-                  <p><strong>오픈일:</strong> {req.open_dt || "-"}</p>
+                  <p><strong>완료요청일:</strong> {formatDate(req.completion_dt)}</p>
+                  <p><strong>오픈일:</strong> {formatDate(req.open_dt)}</p>
                   <p><strong>업무형태:</strong> {req.task_form}</p>
                   <p><strong>업무타입:</strong> {req.task_type}</p>
                   <p><strong>요청내용:</strong> {req.requirement}</p>
-                  {req.url1 && (
+                  {req.url && (
                     <p>
-                      <strong>기획안1:</strong>{" "}
-                      <a href={req.url1} target="_blank" rel="noopener noreferrer">보기</a>
+                      <strong>기획안:</strong>{" "}
+                      <a href={req.url} target="_blank" rel="noopener noreferrer">보기</a>
                     </p>
                   )}
-                  {req.url2 && (
+                  {req.note && (
                     <p>
-                      <strong>기획안2:</strong>{" "}
-                      <a href={req.url2} target="_blank" rel="noopener noreferrer">보기</a>
+                      <strong>비고:</strong>{" "}
+                      <a href={req.note} target="_blank" rel="noopener noreferrer">보기</a>
                     </p>
                   )}
                   <p><strong>담당 디자이너:</strong> {req.assigned_designer || "미배정"}</p>
 
                   {/* ✅ 검수완료 표시 */}
-                  {req.review_status === "검수완료" && (
+                  {req.requester_review_status === "검수완료" && (
                     <p style={{ color: "green", fontWeight: "bold" }}>검수가 완료되었습니다.</p>
                   )}
 
                   {/* ✅ 응답 데이터 (있을 때만 표시) */}
-                  {response && (
+                  {req.designer_start_date && (
                     <ResponseBox>
                       <h4>디자이너 응답</h4>
-                      <p><strong>시작일:</strong> {response.start_dt || "-"}</p>
-                      <p><strong>종료일:</strong> {response.end_dt || "-"}</p>
-                      <p><strong>산출물 링크:</strong> {response.result_url ? <a href={response.result_url} target="_blank">보기</a> : "-"}</p>
-                      <p><strong>진행상태:</strong> {response.status || "-"}</p>
+                      <p><strong>시작일:</strong> {req.designer_start_date || "-"}</p>
+                      <p><strong>종료일:</strong> {req.designer_end_date || "-"}</p>
+                      <p>
+                        <strong>산출물 링크:</strong>{" "}
+                        {req.result_url ? (
+                          <a href={req.result_url} target="_blank" rel="noopener noreferrer">보기</a>
+                        ) : "-"}
+                      </p>
+                      <p><strong>진행상태:</strong> {req.status}</p>
 
-                      {/* ✅ 요청자에게 전달 버튼 (is_sent_to_requester가 false일 때만) */}
-                      {response.status === "완료" && !response.is_sent_to_requester && (
+                      {/* ✅ 요청자에게 전달 버튼 */}
+                      {req.status === "검수요청" &&  (
                         <SendButton onClick={() => sendToRequester(req.id)}>완료</SendButton>
                       )}
-                      {response.is_sent_to_requester && <p style={{ color: "green" }}>요청자에게 전달됨</p>}
+
+                      {/* ✅ 전달 완료 메시지 */}
+                      {req.manager_review_status === "검수완료" && (
+                        <p style={{ color: "green", fontWeight: "bold" }}>요청자에게 전달됨</p>
+                      )}
                     </ResponseBox>
                   )}
                 </Info>

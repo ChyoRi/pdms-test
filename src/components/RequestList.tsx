@@ -10,71 +10,63 @@ interface RequestData {
   task_form: string;
   task_type: string;
   requirement: string;
-  assigned_designer?: string;
+  url?: string;
+  note?: string;
   status?: string;
   review_status?: string;
-  url1?: string;
-  url2?: string;
-}
-
-interface ResponseData {
-  start_dt?: string;
-  end_dt?: string;
-  status?: string;
+  assigned_designer?: string;
   result_url?: string;
-  is_sent_to_requester?: boolean;
-}
-
-interface MergedData {
-  id: string;
-  request: RequestData;
-  response: ResponseData | null;
+  emergency?: boolean;
+  edit_state?: boolean;
 }
 
 interface RequestListProps {
-  data: MergedData[];
+  data: RequestData[];
   onReviewComplete: (id: string) => void;
 }
 
 export default function RequestList({ data, onReviewComplete }: RequestListProps) {
+  console.log(data);
   return (
     <RequestListTable>
       <RequestListTableCaption>요청 리스트</RequestListTableCaption>
       <colgroup>
+        <col style={{ width: '50px' }} /><col style={{ width: '60px' }} />
+        <col style={{ width: '60px' }} /><col style={{ width: '60px' }} />
         <col style={{ width: '60px' }} /><col style={{ width: '80px' }} />
-        <col style={{ width: '100px' }} /><col style={{ width: '60px' }} />
-        <col style={{ width: '100px' }} /><col style={{ width: '100px' }} />
+        <col style={{ width: '120px' }}/><col />
         <col /><col />
-        {data.some(item => item.request.url2) && <col />}<col style={{ width: '100px' }} />
-        <col style={{ width: '100px' }} /><col />
-        <col style={{ width: '80px' }} />
+        <col style={{ width: '100px' }} /><col style={{ width: '80px' }}/>
+        <col /><col style={{ width: '60px' }} />
+        <col style={{ width: '100px' }} />
       </colgroup>
       <thead>
         <tr>
+          <th>NO</th>
           <th>요청일</th>
           <th>요청자</th>
-          <th>완료 요청일</th>
+          <th>완료<br/>요청일</th>
           <th>오픈일</th>
           <th>업무형태</th>
           <th>업무타입</th>
-          <th>요청내용</th>
+          <th>작업항목</th>
           <th>기획안 URL</th>
-          {/* ✅ url2가 있는 경우만 헤더 표시 */}
-          {data.some(item => item.request.url2) && <th>비고</th>}
+          <th>비고</th>
           <th>진행상태</th>
-          <th>담당디자이너</th>
+          <th>담당<br/>디자이너</th>
           <th>산출물 URL</th>
+          <th>수정</th>
           <th>검수</th>
         </tr>
       </thead>
       <tbody>
         {data.length > 0 ? (
-          data.map(item => (
-            <RequestItem key={item.id} item={item} onReviewComplete={onReviewComplete} />
+          data.map((item, index) => (
+            <RequestItem key={item.id} index={index + 1} item={item} onReviewComplete={onReviewComplete} />
           ))
         ) : (
           <tr>
-            <td colSpan={12} style={{ textAlign: "center", padding: "20px" }}>
+            <td colSpan={15} style={{ textAlign: "center", padding: "20px" }}>
               등록된 요청이 없습니다.
             </td>
           </tr>

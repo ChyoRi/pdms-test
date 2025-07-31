@@ -10,52 +10,53 @@ interface RequestData {
   task_form: string;
   task_type: string;
   requirement: string;
-  assigned_designer?: string;
+  url?: string;
+  note?: string;
   status?: string;
   review_status?: string;
-  url1?: string;
-  url2?: string;
-}
-
-interface ResponseData {
-  start_dt?: string;
-  end_dt?: string;
-  status?: string;
+  assigned_designer?: string;
   result_url?: string;
-  is_sent_to_requester?: boolean;
-}
-
-interface MergedData {
-  id: string;
-  request: RequestData;
-  response: ResponseData | null;
+  emergency?: boolean;
+  edit_state?: boolean;
 }
 
 interface RequestItemProps {
-  item: MergedData;
+  item: RequestData;
+  index: number;
   onReviewComplete: (id: string) => void;
 }
 
-export default function RequestItem({ item, onReviewComplete }: RequestItemProps) {
-  const { request, response } = item;
+export default function RequestItem({ item, index, onReviewComplete }: RequestItemProps) {
+  const formatDate = (timestamp: any) => {
+    if (!timestamp) return "-";
+    if (timestamp.toDate) {
+      const date = timestamp.toDate();
+      return `${date.getMonth() + 1}/${date.getDate()}`; // ✅ 완전 깔끔
+    }
+    return timestamp;
+  };
 
   return (
     <tr>
-      <td>{request.request_date}</td>
-      <td>{request.requester}</td>
-      <td>{request.completion_dt}</td>
-      <td>{request.open_dt}</td>
-      <td>{request.task_form}</td>
-      <td>{request.task_type}</td>
-      <td>{request.requirement}</td>
-      <td>{request.url1}</td>
-      {request.url2 && <td>{request.url2}</td>}
-      <td>{request.status || "대기"}</td>
-      <td>{request.assigned_designer || "미배정"}</td>
-      <td>{response?.result_url}</td>
+      <td>{index}</td>
+      <td>{formatDate(item.request_date)}</td>
+      <td>{item.requester}</td>
+      <td>{formatDate(item.completion_dt)}</td>
+      <td>{formatDate(item.open_dt)}</td>
+      <td>{item.task_form}</td>
+      <td>{item.task_type}</td>
+      <td>{item.requirement}</td>
+      <td>{item.url}</td>
+      <td>{item.note}</td>
+      <td>{item.status === "검수요청" ? "검수중" : (item.status || "대기")}</td>
+      <td>{item.assigned_designer || "미배정"}</td>
+      <td>{item?.result_url}</td>
       <td>
-        {request.status === "완료" ? (
-          request.review_status !== "검수완료" ? (
+        <EditButton>수정</EditButton>
+      </td>
+      <td>
+        {item.status === "완료" ? (
+          item.review_status !== "검수완료" ? (
             <ReviewButton onClick={() => onReviewComplete(item.id)}>검수완료</ReviewButton>
           ) : (
             <CompletedText>완료</CompletedText>
@@ -78,4 +79,11 @@ const ReviewButton = styled.button`
 const CompletedText = styled.span`
   color: green;
   font-weight: bold;
+`;
+
+const EditButton = styled.button`
+  padding: 5px 10px;
+  border-radius: 4px;
+  color: ${({ theme }) => theme.colors.white};
+  background-color: ${({ theme }) => theme.colors.navy};
 `;

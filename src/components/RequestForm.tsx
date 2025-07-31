@@ -1,7 +1,7 @@
 import styled from "styled-components";
 import { useState } from "react";
 import { db } from "../firebaseconfig";
-import { collection, addDoc, serverTimestamp} from "firebase/firestore";
+import { collection, addDoc, serverTimestamp, Timestamp } from "firebase/firestore";
 
 interface RequestFormProps {
   userName: string;
@@ -14,8 +14,8 @@ export default function RequestForm({ userName }: RequestFormProps) {
     taskForm: "GHS",
     taskType: "프론트테마",
     requirement: "",
-    url1: "",
-    url2: ""
+    url: "",
+    note: ""
   });
 
   // ✅ 입력 변경 핸들러
@@ -34,28 +34,32 @@ export default function RequestForm({ userName }: RequestFormProps) {
   
       // 오늘 날짜 (MM/DD)
       const today = new Date();
-      const formattedDate = `${today.getMonth() + 1}/${today.getDate()}`;
+      // const formattedDate = `${today.getMonth() + 1}/${today.getDate()}`;
   
-      // ✅ 날짜 변환 함수
-      const formatDate = (dateStr: string) => {
-        if (!dateStr) return "";
-        const date = new Date(dateStr);
-        return `${date.getMonth() + 1}/${date.getDate()}`;
+      // ✅ 날짜 변환 함수 (Timestamp로)
+      const toTimestamp = (dateStr: string) => {
+        return dateStr ? Timestamp.fromDate(new Date(dateStr)) : null;
       };
       
       addDoc(collection(db, "design_request"), {
+        request_date: toTimestamp(today.toISOString()),
         requester: userName,
-        request_date: formattedDate,
-        completion_dt: formatDate(requestData.completionDt),
-        open_dt: formatDate(requestData.openDt),
+        completion_dt: toTimestamp(requestData.completionDt),
+        open_dt: toTimestamp(requestData.openDt),
         task_form: requestData.taskForm,
         task_type: requestData.taskType,
         requirement: requestData.requirement,
-        url1: requestData.url1,
-        url2: requestData.url2,
-        review_status: "검수대기",
-        assigned_designer: "미배정",
+        url: requestData.url,
+        note: requestData.note,
         status: "대기",
+        assigned_designer: "미배정",
+        requester_review_status: "검수대기",
+        manager_review_status: "",
+        result_url: "",
+        designer_start_date: "",
+        designer_end_date: "",
+        emergency: false,
+        edit_state: false,
         created_at: serverTimestamp(),
         updated_at: null,
         delete_at: null
@@ -68,8 +72,8 @@ export default function RequestForm({ userName }: RequestFormProps) {
           taskForm: "GHS",
           taskType: "프론트테마",
           requirement: "",
-          url1: "",
-          url2: ""
+          url: "",
+          note: ""
         });
       })
       .catch((error) => {
@@ -133,32 +137,29 @@ export default function RequestForm({ userName }: RequestFormProps) {
           </select>
         </RequestFormItem>
         <RequestFormItem>
-          <RequestFormItemLabel htmlFor="requirement">요청 내용</RequestFormItemLabel>
-          <input
-            type="text"
+          <RequestFormItemLabel htmlFor="requirement">작업 항목</RequestFormItemLabel>
+          <RequestFormTextArea
             id="requirement"
             value={requestData.requirement}
             onChange={(e) => requsetForm("requirement", e.target.value)}
-            placeholder="요청 내용을 입력하세요."
+            placeholder="작업 항목을 입력하세요."
           />
         </RequestFormItem>
         <RequestFormItem>
-          <RequestFormItemLabel htmlFor="url1">요청 기획안 URL</RequestFormItemLabel>
-          <input
-            type="text"
-            id="url1"
-            value={requestData.url1}
-            onChange={(e) => requsetForm("url1", e.target.value)}
+          <RequestFormItemLabel htmlFor="url">요청 기획안 URL</RequestFormItemLabel>
+          <RequestFormTextArea
+            id="url"
+            value={requestData.url}
+            onChange={(e) => requsetForm("url", e.target.value)}
             placeholder="요청 기획안 URL을 입력하세요."
           />
         </RequestFormItem>
         <RequestFormItem>
-          <RequestFormItemLabel htmlFor="url2">비고</RequestFormItemLabel>
-          <input
-            type="text"
-            id="url2"
-            value={requestData.url2}
-            onChange={(e) => requsetForm("url2", e.target.value)}
+          <RequestFormItemLabel htmlFor="note">비고</RequestFormItemLabel>
+          <RequestFormTextArea
+            id="note"
+            value={requestData.note}
+            onChange={(e) => requsetForm("note", e.target.value)}
             placeholder="비고 URL을 입력하세요."
           />
         </RequestFormItem>
@@ -200,3 +201,8 @@ const RequestSubmitButton = styled.button`
   background-color: ${({ theme }) => theme.colors.navy};
   color: ${({ theme }) => theme.colors.white};
 `;
+
+const RequestFormTextArea = styled.textarea`
+  min-width: 200px;
+  resize: none;
+`
