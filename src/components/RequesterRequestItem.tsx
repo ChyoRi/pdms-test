@@ -14,6 +14,7 @@ interface RequestData {
   note?: string;
   status?: string;
   review_status?: string;
+  manager_review_status?: string;
   assigned_designer?: string;
   result_url?: string;
   emergency?: boolean;
@@ -26,7 +27,7 @@ interface RequestItemProps {
   onReviewComplete: (id: string) => void;
 }
 
-export default function RequestItem({ item, index, onReviewComplete }: RequestItemProps) {
+export default function RequesterRequestItem({ item, index, onReviewComplete }: RequestItemProps) {
   const formatDate = (timestamp: any) => {
     if (!timestamp) return "-";
     if (timestamp.toDate) {
@@ -48,21 +49,28 @@ export default function RequestItem({ item, index, onReviewComplete }: RequestIt
       <td>{item.requirement}</td>
       <td>{item.url}</td>
       <td>{item.note}</td>
-      <td>{item.status === "검수요청" ? "검수중" : (item.status || "대기")}</td>
+      <td>
+        {item.status === "검수요청"
+          ? "진행중"
+          : item.status === "검수중"
+          ? "검수 요청"
+          : (item.status || "대기")
+        }
+      </td>
       <td>{item.assigned_designer || "미배정"}</td>
-      <td>{item?.result_url}</td>
+      <td>{item.manager_review_status === "검수완료" ? (item.url || "") : ""}</td>
       <td>
         <EditButton>수정</EditButton>
       </td>
       <td>
-        {item.status === "완료" ? (
-          item.review_status !== "검수완료" ? (
+        {item.manager_review_status === "검수완료" ? (
+          item.status !== "완료" ? (
             <ReviewButton onClick={() => onReviewComplete(item.id)}>검수완료</ReviewButton>
           ) : (
             <CompletedText>완료</CompletedText>
           )
         ) : (
-          <span>-</span>
+          ""
         )}
       </td>
     </tr>

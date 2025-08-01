@@ -4,7 +4,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "../firebaseconfig";
 import { collection, onSnapshot, query, where, updateDoc, doc} from "firebase/firestore";
 import RequestForm from "./RequestForm";
-import RequestList from "./RequestList";
+import RequesterRequestList from "./RequesterRequestList";
 
 // ✅ Firestore 데이터 구조 기반 타입 정의
 interface RequestData {
@@ -60,23 +60,25 @@ export default function Requester() {
 
   // ✅ 검수완료 처리
   const reviewComplete = async (id: string) => {
-    try {
-      await updateDoc(doc(db, "design_request", id), {
-        review_status: "검수완료",
-        reviewed_at: new Date()
-      });
-      alert("검수완료 처리되었습니다.");
-    } catch (error) {
-      console.error(error);
-      alert("검수완료 처리 중 오류 발생");
-    }
+    await updateDoc(doc(db, "design_request", id), {
+      status: "완료",
+      requester_review_status: "검수완료"
+    });
+
+    setRequests(prev =>
+      prev.map(req =>
+        req.id === id ? { ...req, status: "완료", requester_review_status: "검수완료" } : req
+      )
+    );
+
+    alert("완료 처리되었습니다.");
   };
 
   return (
     <>
       <RequestForm userName={userName} />
-      <RequestListTitle>디자인 요청 리스트</RequestListTitle>
-      <RequestList data={requests} onReviewComplete={reviewComplete} />
+      <RequestListTitle>요청 리스트</RequestListTitle>
+      <RequesterRequestList data={requests} onReviewComplete={reviewComplete} />
     </>
   );
 }

@@ -9,7 +9,7 @@ export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   return (
-    <Router>
+    <Router basename="/pdms-test">
       <Routes>
         <Route path='/' element={<LoginPage onLoginSuccess={() => setIsAuthenticated(true)} />} />
         <Route path='/dashboard' element={isAuthenticated ? <DashboardPage /> : <Navigate to='/' />} />
