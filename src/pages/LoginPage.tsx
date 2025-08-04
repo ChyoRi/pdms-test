@@ -54,7 +54,7 @@ const Container = styled.div`
   ${({ theme }) => theme.mixin.flex('center', 'center')};
   flex-direction: column;
   height: 100%;
-  background-color: ${({ theme }) => theme.colors.gray};
+  background-color: ${({ theme }) => theme.colors.gray01};
 `;
 
 const LoginFrame = styled.div`
@@ -62,7 +62,7 @@ const LoginFrame = styled.div`
   flex-direction: column;
   max-width: 500px;
   padding: 50px 20px;
-  background-color: ${({ theme }) => theme.colors.white};
+  background-color: ${({ theme }) => theme.colors.white01};
 `;
 
 const LoginHeader = styled.div`
@@ -119,7 +119,7 @@ const LoginButton = styled.button`
   font-size: 16px;
   font-weight: 700;
   line-height: 18px;
-  color: ${({ theme }) => theme.colors.white};
+  color: ${({ theme }) => theme.colors.white01};
 `;
 
 const CopyLight = styled.p`

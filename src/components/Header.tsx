@@ -81,19 +81,19 @@ const UtilWrap = styled.div`
 
 const UserName = styled.span`
   margin-right: 10px;
-  color: ${({ theme }) => theme.colors.white};
+  color: ${({ theme }) => theme.colors.white01};
   font-size: 14px;
   line-height: 20px;
 `;
 
 const LogoutButton = styled.button`
-  color: ${({ theme }) => theme.colors.white};
+  color: ${({ theme }) => theme.colors.white01};
   font-size: 14px;
   line-height: 20px;
 `;
 
 const Lole = styled.span`
-  color: ${({ theme }) => theme.colors.white};
+  color: ${({ theme }) => theme.colors.white01};
   font-size: 14px;
   line-height: 20px;
 `;

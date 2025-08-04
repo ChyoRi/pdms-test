@@ -40,7 +40,7 @@ export default function ManagerRequestList({
 }: ManagerRequestListProps) {
   return (
     <RequestListTable>
-      <RequestListTableCaption>요청 리스트</RequestListTableCaption>
+      <RequestListTableCaption>매니저 요청 리스트</RequestListTableCaption>
       <colgroup>
         <col style={{ width: '50px' }} /><col style={{ width: '60px' }} />
         <col style={{ width: '60px' }} /><col style={{ width: '60px' }} />
@@ -65,7 +65,6 @@ export default function ManagerRequestList({
           <th>기획안 URL</th>
           <th>비고</th>
           <th>진행상태</th>
-          <th>담당<br/>디자이너</th>
           <th>산출물 URL</th>
           <th>디자인<br />시작일</th>
           <th>디자인<br />종료일</th>

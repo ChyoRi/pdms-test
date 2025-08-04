@@ -2,7 +2,7 @@ import styled from "styled-components";
 import { useState, useEffect } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "../firebaseconfig";
-import { collection, onSnapshot, query, where, updateDoc, doc} from "firebase/firestore";
+import { collection, onSnapshot, query, where, updateDoc, doc, orderBy, Timestamp} from "firebase/firestore";
 import RequestForm from "./RequestForm";
 import RequesterRequestList from "./RequesterRequestList";
 
@@ -24,6 +24,7 @@ interface RequestData {
   result_url?: string;
   emergency?: boolean;
   edit_state?: boolean;
+  created_at: Timestamp;
 }
 
 
@@ -52,11 +53,13 @@ export default function Requester() {
         id: doc.id,
         ...(doc.data() as Omit<RequestData, "id">)
       }));
+
       setRequests(data);
     });
 
     return () => unsubscribe();
   }, [userName]);
+
 
   // ✅ 검수완료 처리
   const reviewComplete = async (id: string) => {
@@ -74,11 +77,24 @@ export default function Requester() {
     alert("완료 처리되었습니다.");
   };
 
+  // ✅ 취소 처리
+  const cancelRequest = async (id: string) => {
+    await updateDoc(doc(db, "design_request", id), {
+      status: "취소"
+    });
+
+    setRequests(prev =>
+      prev.map(req =>
+        req.id === id ? { ...req, status: "취소" } : req
+      )
+    );
+  };
+
   return (
     <>
       <RequestForm userName={userName} />
       <RequestListTitle>요청 리스트</RequestListTitle>
-      <RequesterRequestList data={requests} onReviewComplete={reviewComplete} />
+      <RequesterRequestList data={requests} onReviewComplete={reviewComplete} onCancel={cancelRequest} />
     </>
   );
 }

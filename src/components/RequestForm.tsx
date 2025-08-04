@@ -15,7 +15,8 @@ export default function RequestForm({ userName }: RequestFormProps) {
     taskType: "프론트테마",
     requirement: "",
     url: "",
-    note: ""
+    note: "",
+    priority: "없음"
   });
 
   // ✅ 입력 변경 핸들러
@@ -58,8 +59,9 @@ export default function RequestForm({ userName }: RequestFormProps) {
         result_url: "",
         designer_start_date: null,
         designer_end_date: null,
-        emergency: false,
-        edit_state: false,
+        priority: requestData.priority,
+        requester_edit_state: false,
+        designer_edit_state: false,
         created_at: serverTimestamp(),
         updated_at: null,
         delete_at: null
@@ -73,7 +75,8 @@ export default function RequestForm({ userName }: RequestFormProps) {
           taskType: "프론트테마",
           requirement: "",
           url: "",
-          note: ""
+          note: "",
+          priority: "없음"
         });
       })
       .catch((error) => {
@@ -164,6 +167,20 @@ export default function RequestForm({ userName }: RequestFormProps) {
           />
         </RequestFormItem>
         <RequestFormItem>
+        <RequestFormItemLabel htmlFor="priority">우선순위</RequestFormItemLabel>
+          <select
+            id="priority"
+            value={requestData.priority}
+            onChange={(e) => requsetForm("priority", e.target.value)}
+          >
+            <option value="없음">없음</option>
+            <option value="낮음">↓ 낮음</option>
+            <option value="보통">- 보통</option>
+            <option value="높음">↑ 높음</option>
+            <option value="긴급">⏰ 긴급</option>
+          </select>
+      </RequestFormItem>
+        <RequestFormItem>
           <RequestSubmitButton type="submit">등록하기</RequestSubmitButton>
         </RequestFormItem>
       </RequestFormList>
@@ -199,7 +216,7 @@ const RequestSubmitButton = styled.button`
   border-radius: 4px;
   font-size: 15px;
   background-color: ${({ theme }) => theme.colors.navy};
-  color: ${({ theme }) => theme.colors.white};
+  color: ${({ theme }) => theme.colors.white01};
 `;
 
 const RequestFormTextArea = styled.textarea`

@@ -96,7 +96,7 @@ export default function Manager() {
 
   return (
     <Container>
-      <ManagerRequestTitle>요청리스트</ManagerRequestTitle>
+      <ManagerRequestTitle>매니저 요청리스트</ManagerRequestTitle>
       <ManagerRequestList data={requests}
         designerList={designerList}
         selectedDesigners={selectedDesigners}

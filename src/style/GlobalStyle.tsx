@@ -31,6 +31,14 @@ const GlobalStyle = createGlobalStyle`
       outline: none;
     }
   }
+
+  table {
+    border-collapse: collapse;
+
+    th, td {
+      border: 1px solid #ccc;
+    }
+  }
 `;
 
 export default GlobalStyle;

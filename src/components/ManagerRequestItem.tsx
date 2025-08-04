@@ -49,7 +49,7 @@ export default function ManagerRequestItem({
     return timestamp;
   };
   return(
-    <tr>
+    <RequestListTableTr>
       <td>{index}</td>
       <td>{formatDate(item.request_date)}</td>
       <td>{item.requester}</td>
@@ -61,7 +61,6 @@ export default function ManagerRequestItem({
       <td>{item.url || ""}</td>
       <td>{item.note || ""}</td>
       <td>{item.status === "검수요청" ? "검수중" : (item.status || "대기")}</td>
-      <td>{item.assigned_designer || "미배정"}</td>
       <td>{item.result_url || ""}</td>
       <td>{formatDate(item.designer_start_date)}</td>
       <td>{formatDate(item.designer_end_date)}</td>
@@ -87,7 +86,7 @@ export default function ManagerRequestItem({
           ""
         )}
       </td>
-    </tr>
+    </RequestListTableTr>
   )
 }
 
@@ -117,6 +116,18 @@ const SendButton = styled.button`
   border-radius: 4px;
   cursor: pointer;
 `;
+
+const RequestListTableTr = styled.tr<{ isCanceled: boolean }>`
+  ${({ isCanceled }) =>
+    isCanceled &&
+    `
+      td {
+        text-decoration: line-through;
+        color: gray;
+      }
+    `}
+`;
+
 
 const CompletedText = styled.span`
   color: green;

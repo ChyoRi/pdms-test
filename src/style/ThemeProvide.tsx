@@ -1,7 +1,10 @@
 const colors = {
-  white: '#fff',
+  white01: '#fff',
+  white02: '#f4f4f4',
   navy: '#073863',
-  gray: '#ECEDF0'
+  gray01: '#ECEDF0',
+  gray02: '#ccc',
+  black: '#212121'
 }
 
 const mixin = {

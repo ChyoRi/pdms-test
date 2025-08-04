@@ -67,7 +67,7 @@ const Container = styled.div`
   ${({ theme }) => theme.mixin.flex('center', 'center')};
   flex-direction: column;
   height: 100%;
-  background-color: ${({ theme }) => theme.colors.gray};
+  background-color: ${({ theme }) => theme.colors.gray01};
 `;
 
 const SignUpFrame = styled.div`
@@ -75,7 +75,7 @@ const SignUpFrame = styled.div`
   flex-direction: column;
   max-width: 500px;
   padding: 50px 20px;
-  background-color: ${({ theme }) => theme.colors.white};
+  background-color: ${({ theme }) => theme.colors.white01};
 `;
 
 const SignUpHeader = styled.div`
@@ -160,5 +160,5 @@ const SignUpButton = styled.button`
   font-size: 16px;
   font-weight: 700;
   line-height: 18px;
-  color: ${({ theme }) => theme.colors.white};
+  color: ${({ theme }) => theme.colors.white01};
 `;
