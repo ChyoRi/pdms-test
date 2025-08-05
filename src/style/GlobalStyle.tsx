@@ -1,4 +1,6 @@
 import { createGlobalStyle } from "styled-components";
+import PretendardRegular from "../assets/fonts/Pretendard-Regular.ttf";
+import PretendardBold from "../assets/fonts/Pretendard-Bold.ttf";
 
 const GlobalStyle = createGlobalStyle`
   * {
@@ -39,6 +41,19 @@ const GlobalStyle = createGlobalStyle`
       border: 1px solid #ccc;
     }
   }
+
+  @font-face {
+    font-family: 'Pretendard';
+    src: url(${PretendardRegular}) format('truetype');
+    font-weight: 400;
+  }
+
+  @font-face {
+    font-family: 'Pretendard';
+    src: url(${PretendardBold}) format('truetype');
+    font-weight: 700;
+  }
+
 `;
 
 export default GlobalStyle;

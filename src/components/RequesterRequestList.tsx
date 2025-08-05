@@ -2,6 +2,7 @@ import styled from "styled-components";
 import RequesterRequestItem from "./RequesterRequestItem";
 
 interface RequestData {
+  design_request_id: string;
   id: string;
   request_date: string;
   requester: string;
@@ -32,19 +33,19 @@ export default function RequesterRequestList({ data, onReviewComplete, onCancel 
     <RequestListTable>
       <RequestListTableCaption>요청 리스트</RequestListTableCaption>
       <colgroup>
-        <col style={{ width: '50px' }} /><col style={{ width: '60px' }} />
+        <col style={{ width: '50px' }} /><col style={{ width: '80px' }}/>
         <col style={{ width: '60px' }} /><col style={{ width: '60px' }} />
-        <col style={{ width: '60px' }} /><col style={{ width: '80px' }} />
-        <col style={{ width: '120px' }}/><col />
+        <col style={{ width: '60px' }} /><col style={{ width: '60px' }} />
+        <col style={{ width: '80px' }} /><col style={{ width: '120px' }}/>
         <col /><col />
-        <col style={{ width: '80px' }} />
-        <col style={{ width: '100px' }} /><col style={{ width: '80px' }}/>
-        <col /><col style={{ width: '60px' }} />
-        <col style={{ width: '100px' }} />
+        <col /><col style={{ width: '100px' }} />
+        <col style={{ width: '80px' }}/><col /><col style={{ width: '60px' }} />
+        <col style={{ width: '80px' }} /><col style={{ width: '80px' }} />
       </colgroup>
       <thead>
         <tr>
           <RequestListTableTh>NO</RequestListTableTh>
+          <RequestListTableTh>문서번호</RequestListTableTh>
           <RequestListTableTh>요청일</RequestListTableTh>
           <RequestListTableTh>요청자</RequestListTableTh>
           <RequestListTableTh>완료<br/>요청일</RequestListTableTh>
@@ -53,8 +54,7 @@ export default function RequesterRequestList({ data, onReviewComplete, onCancel 
           <RequestListTableTh>업무타입</RequestListTableTh>
           <RequestListTableTh>작업항목</RequestListTableTh>
           <RequestListTableTh>기획안 URL</RequestListTableTh>
-          <RequestListTableTh>비고</RequestListTableTh>
-          <RequestListTableTh>우선순위</RequestListTableTh>
+          <RequestListTableTh>메모</RequestListTableTh>
           <RequestListTableTh>진행상태</RequestListTableTh>
           <RequestListTableTh>담당<br/>디자이너</RequestListTableTh>
           <RequestListTableTh>산출물 URL</RequestListTableTh>
@@ -96,6 +96,9 @@ const RequestListTableCaption = styled.caption`
 `;
 
 const RequestListTableTh = styled.th`
-  background-color: ${({ theme }) => theme.colors.white02};
   border-bottom: none;
+  font-family: 'Pretendard';
+  font-size: 14px;
+  font-weight: 700;
+  background-color: ${({ theme }) => theme.colors.white02};
 `;

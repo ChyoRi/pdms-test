@@ -1,7 +1,7 @@
 import styled from "styled-components";
 import { useState } from "react";
 import { db } from "../firebaseconfig";
-import { collection, addDoc, serverTimestamp, Timestamp } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp, Timestamp, query, where, getDocs } from "firebase/firestore";
 
 interface RequestFormProps {
   userName: string;
@@ -16,11 +16,11 @@ export default function RequestForm({ userName }: RequestFormProps) {
     requirement: "",
     url: "",
     note: "",
-    priority: "없음"
+    emergency: false
   });
 
   // ✅ 입력 변경 핸들러
-    const requsetForm = (field: string, value: string) => {
+    const requsetForm = (field: string, value: string | boolean) => {
       setRequestData((prev) => ({ ...prev, [field]: value }));
     };
   
@@ -41,8 +41,27 @@ export default function RequestForm({ userName }: RequestFormProps) {
       const toTimestamp = (dateStr: string) => {
         return dateStr ? Timestamp.fromDate(new Date(dateStr)) : null;
       };
+
+      const generateDocNumber = async () => {
+        const now = new Date();
+        const year = now.getFullYear().toString().slice(2);
+        const month = (now.getMonth() + 1).toString().padStart(2, "0");
+        
+        // Firestore에서 이번 달 문서 수 조회
+        const q = query(collection(db, "design_request"),
+          where("design_request_id", ">=", `H${year}${month}000`),
+          where("design_request_id", "<", `H${year}${month}999`)
+        );
+        
+        const snapshot = await getDocs(q);
+        const nextNumber = snapshot.size + 1;
+        
+        return `H${year}${month}${nextNumber.toString().padStart(3, "0")}`;
+      };
+      
       
       addDoc(collection(db, "design_request"), {
+        design_request_id: await generateDocNumber(),
         request_date: toTimestamp(today.toISOString()),
         requester: userName,
         completion_dt: toTimestamp(requestData.completionDt),
@@ -59,7 +78,7 @@ export default function RequestForm({ userName }: RequestFormProps) {
         result_url: "",
         designer_start_date: null,
         designer_end_date: null,
-        priority: requestData.priority,
+        emergency: requestData.emergency,
         requester_edit_state: false,
         designer_edit_state: false,
         created_at: serverTimestamp(),
@@ -76,7 +95,7 @@ export default function RequestForm({ userName }: RequestFormProps) {
           requirement: "",
           url: "",
           note: "",
-          priority: "없음"
+          emergency: false
         });
       })
       .catch((error) => {
@@ -158,28 +177,26 @@ export default function RequestForm({ userName }: RequestFormProps) {
           />
         </RequestFormItem>
         <RequestFormItem>
-          <RequestFormItemLabel htmlFor="note">비고</RequestFormItemLabel>
+          <RequestFormItemLabel htmlFor="note">메모</RequestFormItemLabel>
           <RequestFormTextArea
             id="note"
             value={requestData.note}
             onChange={(e) => requsetForm("note", e.target.value)}
-            placeholder="비고 URL을 입력하세요."
+            placeholder="메모를 입력하세요."
           />
         </RequestFormItem>
         <RequestFormItem>
-        <RequestFormItemLabel htmlFor="priority">우선순위</RequestFormItemLabel>
-          <select
-            id="priority"
-            value={requestData.priority}
-            onChange={(e) => requsetForm("priority", e.target.value)}
-          >
-            <option value="없음">없음</option>
-            <option value="낮음">↓ 낮음</option>
-            <option value="보통">- 보통</option>
-            <option value="높음">↑ 높음</option>
-            <option value="긴급">⏰ 긴급</option>
-          </select>
-      </RequestFormItem>
+          <RequestFormItemLabel htmlFor="emergency">긴급 일정</RequestFormItemLabel>
+          <EmergencyWrap>
+            <input
+              type="checkbox"
+              id="emergency"
+              checked={requestData.emergency}
+              onChange={(e) => requsetForm("emergency", e.target.checked)}
+            />
+            <span>긴급으로 설정</span>
+          </EmergencyWrap>
+        </RequestFormItem>
         <RequestFormItem>
           <RequestSubmitButton type="submit">등록하기</RequestSubmitButton>
         </RequestFormItem>
@@ -222,4 +239,9 @@ const RequestSubmitButton = styled.button`
 const RequestFormTextArea = styled.textarea`
   min-width: 200px;
   resize: none;
-`
+`;
+
+const EmergencyWrap = styled.div`
+  ${({ theme }) => theme.mixin.flex('center')};
+  gap: 5px;
+`;

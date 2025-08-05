@@ -2,6 +2,7 @@ import styled from "styled-components";
 
 // Props 타입
 interface RequestData {
+  design_request_id: string;
   id: string;
   request_date: string;
   requester: string;
@@ -17,7 +18,7 @@ interface RequestData {
   manager_review_status?: string;
   assigned_designer?: string;
   result_url?: string;
-  priority?: string;
+  emergency?: boolean;
   edit_state?: boolean;
 }
 
@@ -41,16 +42,18 @@ export default function RequesterRequestItem({ item, index, onReviewComplete, on
   return (
     <RequestListTableTr isCanceled={item.status === "취소"}>
       <RequestListTableTd>{index}</RequestListTableTd>
+      <RequestListTableTd>{item.design_request_id}</RequestListTableTd>
       <RequestListTableTd>{formatDate(item.request_date)}</RequestListTableTd>
       <RequestListTableTd>{item.requester}</RequestListTableTd>
       <RequestListTableTd>{formatDate(item.completion_dt)}</RequestListTableTd>
       <RequestListTableTd>{formatDate(item.open_dt)}</RequestListTableTd>
       <RequestListTableTd>{item.task_form}</RequestListTableTd>
       <RequestListTableTd>{item.task_type}</RequestListTableTd>
-      <RequestListTableTd>{item.requirement}</RequestListTableTd>
+      <RequestListTableTd>
+        {item.emergency ? <EmergencyBadge>긴급</EmergencyBadge> : ""}{item.requirement}
+      </RequestListTableTd>
       <RequestListTableTd>{item.url}</RequestListTableTd>
       <RequestListTableTd>{item.note}</RequestListTableTd>
-      <RequestListTableTd>{item.priority}</RequestListTableTd>
       <RequestListTableTd>
         {item.status === "검수요청"
           ? "진행중"
@@ -121,4 +124,16 @@ const RequestListTableTr = styled.tr<{ isCanceled: boolean }>`
 
 const RequestListTableTd = styled.td`
   padding: 5px;
+  font-family: 'Pretendard';
+  font-size: 14px;
+  font-weight: 400;
+`;
+
+const EmergencyBadge = styled.span`
+  margin-right: 5px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-weight: 700;
+  background-color: ${({ theme }) => theme.colors.red};
+  color: ${({ theme }) => theme.colors.white01};
 `;

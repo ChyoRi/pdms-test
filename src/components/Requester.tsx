@@ -2,12 +2,13 @@ import styled from "styled-components";
 import { useState, useEffect } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "../firebaseconfig";
-import { collection, onSnapshot, query, where, updateDoc, doc, orderBy, Timestamp} from "firebase/firestore";
+import { collection, onSnapshot, query, where, updateDoc, doc, Timestamp, orderBy} from "firebase/firestore";
 import RequestForm from "./RequestForm";
 import RequesterRequestList from "./RequesterRequestList";
 
 // ✅ Firestore 데이터 구조 기반 타입 정의
 interface RequestData {
+  design_request_id: string;
   id: string;
   request_date: string;
   requester: string;
@@ -46,14 +47,14 @@ export default function Requester() {
   useEffect(() => {
     if (!userName) return; // 로그인 이름 없으면 실행 X
 
-    const q = query(collection(db, "design_request"),where("requester", "==", userName));
+    const q = query(collection(db, "design_request"),where("requester", "==", userName), orderBy("design_request_id", "asc"));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...(doc.data() as Omit<RequestData, "id">)
       }));
-
+      console.log("Firestore 정렬 데이터:", data.map(d => d.design_request_id));
       setRequests(data);
     });
 

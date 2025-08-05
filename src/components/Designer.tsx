@@ -22,6 +22,7 @@ interface DesignRequest {
   designer_end_date?: string;
   result_url?: string;
   status?: string;
+  priority?: string;
 }
 
 export default function Designer() {

@@ -21,27 +21,27 @@ export default function DesignerRequestList({
         <col style={{ width: '70px' }} /><col style={{ width: '90px' }} />
         <col style={{ width: '120px' }}/><col />
         <col /><col />
-        <col style={{ width: '100px' }} /><col style={{ width: '80px' }}/>
+        <col style={{ width: '80px' }} /><col style={{ width: '80px' }}/>
         <col /><col style={{ width: '60px' }} />
         <col style={{ width: '100px' }} />
       </colgroup>
       <thead>
         <tr>
-          <th>NO</th>
-          <th>요청일</th>
-          <th>요청자</th>
-          <th>완료<br />요청일</th>
-          <th>오픈일</th>
-          <th>업무형태</th>
-          <th>업무타입</th>
-          <th>작업항목</th>
-          <th>기획안 URL</th>
-          <th>비고</th>
-          <th>디자인<br />시작일</th>
-          <th>디자인<br />종료일</th>
-          <th>산출물 링크</th>
-          <th>진행상태</th>
-          <th>저장</th>
+          <RequestListTableTh>NO</RequestListTableTh>
+          <RequestListTableTh>요청일</RequestListTableTh>
+          <RequestListTableTh>요청자</RequestListTableTh>
+          <RequestListTableTh>완료<br />요청일</RequestListTableTh>
+          <RequestListTableTh>오픈일</RequestListTableTh>
+          <RequestListTableTh>업무형태</RequestListTableTh>
+          <RequestListTableTh>업무타입</RequestListTableTh>
+          <RequestListTableTh>작업항목</RequestListTableTh>
+          <RequestListTableTh>기획안 URL</RequestListTableTh>
+          <RequestListTableTh>메모</RequestListTableTh>
+          <RequestListTableTh>디자인 시작일</RequestListTableTh>
+          <RequestListTableTh>디자인 종료일</RequestListTableTh>
+          <RequestListTableTh>산출물 링크</RequestListTableTh>
+          <RequestListTableTh>진행상태</RequestListTableTh>
+          <RequestListTableTh>저장</RequestListTableTh>
         </tr>
       </thead>
       <tbody>
@@ -70,9 +70,13 @@ export default function DesignerRequestList({
 const RequestListTable = styled.table`
   width: 100%;
   text-align: center;
-  border-collapse: collapse;
-  th, td {
-    border: 1px solid #ddd;
-    padding: 8px;
-  }
+  border-top: 2px solid ${({ theme }) => theme.colors.black};
+`;
+
+const RequestListTableTh = styled.th`
+  border-bottom: none;
+  font-family: 'Pretendard';
+  font-size: 14px;
+  font-weight: 700;
+  background-color: ${({ theme }) => theme.colors.white02};
 `;

@@ -17,6 +17,7 @@ interface RequestData {
   designer_start_date?: string;
   designer_end_date?: string;
   result_url?: string;
+  emergency?: boolean;
 }
 
 
@@ -49,24 +50,26 @@ export default function ManagerRequestItem({
     return timestamp;
   };
   return(
-    <RequestListTableTr>
-      <td>{index}</td>
-      <td>{formatDate(item.request_date)}</td>
-      <td>{item.requester}</td>
-      <td>{formatDate(item.completion_dt)}</td>
-      <td>{formatDate(item.open_dt)}</td>
-      <td>{item.task_form}</td>
-      <td>{item.task_type}</td>
-      <td>{item.requirement}</td>
-      <td>{item.url || ""}</td>
-      <td>{item.note || ""}</td>
-      <td>{item.status === "검수요청" ? "검수중" : (item.status || "대기")}</td>
-      <td>{item.result_url || ""}</td>
-      <td>{formatDate(item.designer_start_date)}</td>
-      <td>{formatDate(item.designer_end_date)}</td>
+    <RequestListTableTr isCanceled={item.status === "취소"}>
+      <RequestListTableTd>{index}</RequestListTableTd>
+      <RequestListTableTd>{formatDate(item.request_date)}</RequestListTableTd>
+      <RequestListTableTd>{item.requester}</RequestListTableTd>
+      <RequestListTableTd>{formatDate(item.completion_dt)}</RequestListTableTd>
+      <RequestListTableTd>{formatDate(item.open_dt)}</RequestListTableTd>
+      <RequestListTableTd>{item.task_form}</RequestListTableTd>
+      <RequestListTableTd>{item.task_type}</RequestListTableTd>
+      <RequestListTableTd>
+        {item.emergency ? <EmergencyBadge>긴급</EmergencyBadge> : ""}{item.requirement}
+      </RequestListTableTd>
+      <RequestListTableTd>{item.url || ""}</RequestListTableTd>
+      <RequestListTableTd>{item.note || ""}</RequestListTableTd>
+      <RequestListTableTd>{item.status === "검수요청" ? "검수중" : (item.status || "대기")}</RequestListTableTd>
+      <RequestListTableTd>{item.result_url || ""}</RequestListTableTd>
+      <RequestListTableTd>{formatDate(item.designer_start_date)}</RequestListTableTd>
+      <RequestListTableTd>{formatDate(item.designer_end_date)}</RequestListTableTd>
       {/* ✅ 디자이너 선택 + 배정 */}
-      <td>
-        <Select value={selectedDesigner} onChange={(e) => onDesignerSelect(e.target.value)}>
+      <RequestListTableTd>
+        <Select value={selectedDesigner} onChange={(e) => onDesignerSelect(e.target.value)} disabled={item.status === "취소"}>
           <option value="">디자이너 선택</option>
           {designerList.map((designer) => (
             <option key={designer.id} value={designer.name}>
@@ -74,10 +77,10 @@ export default function ManagerRequestItem({
             </option>
           ))}
         </Select>
-        <Button onClick={onAssignDesigner}>배정</Button>
-      </td>
+        <Button onClick={onAssignDesigner} disabled={item.status === "취소"}>배정</Button>
+      </RequestListTableTd>
       {/* ✅ 요청자 전달 버튼 */}
-      <td>
+      <RequestListTableTd>
         {item.status === "검수요청" && item.manager_review_status !== "검수완료" ? (
           <SendButton onClick={onSendToRequester}>완료</SendButton>
         ) : item.manager_review_status === "검수완료" ? (
@@ -85,7 +88,7 @@ export default function ManagerRequestItem({
         ) : (
           ""
         )}
-      </td>
+      </RequestListTableTd>
     </RequestListTableTr>
   )
 }
@@ -128,9 +131,24 @@ const RequestListTableTr = styled.tr<{ isCanceled: boolean }>`
     `}
 `;
 
+const RequestListTableTd = styled.td`
+  padding: 5px;
+  font-family: 'Pretendard';
+  font-size: 14px;
+  font-weight: 400;
+`;
 
 const CompletedText = styled.span`
   color: green;
   font-size: 13px;
   font-weight: bold;
+`;
+
+const EmergencyBadge = styled.span`
+  margin-right: 5px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-weight: 700;
+  background-color: ${({ theme }) => theme.colors.red};
+  color: ${({ theme }) => theme.colors.white01};
 `;
