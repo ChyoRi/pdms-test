@@ -1,6 +1,7 @@
 import styled from "styled-components";
 
 interface RequestData {
+  design_request_id: string;
   id: string;
   request_date: any;
   requester: string;
@@ -52,6 +53,7 @@ export default function ManagerRequestItem({
   return(
     <RequestListTableTr isCanceled={item.status === "취소"}>
       <RequestListTableTd>{index}</RequestListTableTd>
+      <RequestListTableTd>{item.design_request_id}</RequestListTableTd>
       <RequestListTableTd>{formatDate(item.request_date)}</RequestListTableTd>
       <RequestListTableTd>{item.requester}</RequestListTableTd>
       <RequestListTableTd>{formatDate(item.completion_dt)}</RequestListTableTd>

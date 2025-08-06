@@ -2,10 +2,11 @@ import styled from "styled-components";
 import { useEffect, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "../firebaseconfig";
-import { query, where, collection, onSnapshot, doc, updateDoc, Timestamp } from "firebase/firestore";
+import { query, where, collection, onSnapshot, doc, updateDoc, Timestamp, orderBy } from "firebase/firestore";
 import DesignerRequestList from "./DesignerRequestList";
 
 interface DesignRequest {
+  design_request_id: string;
   id: string;
   requester: string;
   request_date: any;
@@ -46,7 +47,8 @@ export default function Designer() {
 
     const q = query(
       collection(db, "design_request"),
-      where("assigned_designer", "==", designerName) // ✅ 필터 추가
+      where("assigned_designer", "==", designerName), // ✅ 필터 추가
+      orderBy("design_request_id", "asc")
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {

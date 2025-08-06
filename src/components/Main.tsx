@@ -1,31 +1,13 @@
 import styled from "styled-components";
-import { useEffect, useState } from "react";
-import { onAuthStateChanged } from "firebase/auth";
-import { auth, db } from "../firebaseconfig";
-import { doc, getDoc } from "firebase/firestore";
 import Requester from "./Requester";
 import Designer from "./Designer";
 import Manager from "./Manager";
 
-export default function Main() {
-  const [userRole, setUserRole] = useState<number | null>(null);
+interface MainProps {
+  userRole: number | null;
+}
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        // Firestore에서 role 가져오기
-        const userDoc = await getDoc(doc(db, "users", user.uid));
-        if (userDoc.exists()) {
-          setUserRole(userDoc.data().role);
-        }
-      } else {
-        setUserRole(null);
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
-
+export default function Main({ userRole }: MainProps) {
   // ✅ 권한별 컴포넌트 렌더링
   const renderComponent = () => {
     if (userRole === 1) return <Requester />;

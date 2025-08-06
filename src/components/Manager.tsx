@@ -1,10 +1,11 @@
 import styled from "styled-components";
 import { useEffect, useState } from "react";
 import { db } from "../firebaseconfig";
-import { doc, updateDoc, collection, getDocs, onSnapshot, query, where } from "firebase/firestore";
+import { doc, updateDoc, collection, getDocs, onSnapshot, query, where, orderBy } from "firebase/firestore";
 import ManagerRequestList from "./ManagerRequestList";
 
 interface RequestData {
+  design_request_id: string;
   id: string;
   request_date: any;
   requester: string;
@@ -29,15 +30,21 @@ export default function Manager() {
   const [designerList, setDesignerList] = useState<any[]>([]);
   const [selectedDesigners, setSelectedDesigners] = useState<{ [key: string]: string }>({});
 
-  // ✅ Firestore에서 요청 리스트 가져오기
+  // ✅ Firestore에서 요청 리스트 가져오기 (정렬 추가)
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, "design_request"), (snapshot) => {
+    const q = query(
+      collection(db, "design_request"),
+      orderBy("design_request_id", "asc") // 문서번호 오름차순 정렬
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...(doc.data() as Omit<RequestData, "id">)
       }));
       setRequests(data);
     });
+
     return () => unsubscribe();
   }, []);
 

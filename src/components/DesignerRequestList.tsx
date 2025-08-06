@@ -16,18 +16,19 @@ export default function DesignerRequestList({
   return (
     <RequestListTable>
       <colgroup>
-        <col style={{ width: '50px' }} /><col style={{ width: '60px' }} />
-        <col style={{ width: '80px' }} /><col style={{ width: '80px' }} />
-        <col style={{ width: '70px' }} /><col style={{ width: '90px' }} />
-        <col style={{ width: '120px' }}/><col />
+        <col style={{ width: '50px' }} /><col style={{ width: '80px' }} />
+        <col style={{ width: '60px' }} /><col style={{ width: '80px' }} />
+        <col style={{ width: '80px' }} /><col style={{ width: '70px' }} />
+        <col style={{ width: '90px' }} /><col style={{ width: '120px' }}/>
         <col /><col />
-        <col style={{ width: '80px' }} /><col style={{ width: '80px' }}/>
-        <col /><col style={{ width: '60px' }} />
-        <col style={{ width: '100px' }} />
+        <col /><col style={{ width: '80px' }} />
+        <col style={{ width: '80px' }}/><col />
+        <col style={{ width: '60px' }} /><col style={{ width: '100px' }} />
       </colgroup>
       <thead>
         <tr>
           <RequestListTableTh>NO</RequestListTableTh>
+          <RequestListTableTh>문서번호</RequestListTableTh>
           <RequestListTableTh>요청일</RequestListTableTh>
           <RequestListTableTh>요청자</RequestListTableTh>
           <RequestListTableTh>완료<br />요청일</RequestListTableTh>
@@ -57,7 +58,7 @@ export default function DesignerRequestList({
           ))
         ) : (
           <tr>
-            <td colSpan={15} style={{ textAlign: "center" }}>
+            <td colSpan={16} style={{ textAlign: "center" }}>
               배정된 요청이 없습니다.
             </td>
           </tr>

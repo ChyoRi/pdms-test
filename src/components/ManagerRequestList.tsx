@@ -2,6 +2,7 @@ import styled from "styled-components";
 import ManagerRequestItem from "./ManagerRequestItem";
 
 interface RequestData {
+  design_request_id: string;
   id: string;
   request_date: string;
   requester: string;
@@ -42,18 +43,20 @@ export default function ManagerRequestList({
     <RequestListTable>
       <RequestListTableCaption>매니저 요청 리스트</RequestListTableCaption>
       <colgroup>
-        <col style={{ width: '50px' }} /><col style={{ width: '60px' }} />
+        <col style={{ width: '50px' }} /><col style={{ width: '80px' }}/>
         <col style={{ width: '60px' }} /><col style={{ width: '60px' }} />
-        <col style={{ width: '60px' }} /><col style={{ width: '80px' }} />
-        <col style={{ width: '120px' }}/><col />
+        <col style={{ width: '60px' }} /><col style={{ width: '60px' }} />
+        <col style={{ width: '80px' }} /><col style={{ width: '120px' }}/>
         <col /><col />
-        <col style={{ width: '80px' }}/><col />
-        <col style={{ width: '60px' }} /><col style={{ width: '60px' }} />
-        <col style={{ width: '180px' }} /><col style={{ width: '60px' }} />
+        <col /><col style={{ width: '80px' }}/>
+        <col /><col style={{ width: '60px' }} />
+        <col style={{ width: '60px' }} /><col style={{ width: '180px' }} />
+        <col style={{ width: '60px' }} />
       </colgroup>
       <thead>
         <tr>
           <RequestListTableTh>NO</RequestListTableTh>
+          <RequestListTableTh>문서번호</RequestListTableTh>
           <RequestListTableTh>요청일</RequestListTableTh>
           <RequestListTableTh>요청자</RequestListTableTh>
           <RequestListTableTh>완료<br/>요청일</RequestListTableTh>
@@ -85,7 +88,7 @@ export default function ManagerRequestList({
           ))
         ) : (
           <tr>
-            <td colSpan={16} style={{ textAlign: "center", padding: "20px" }}>
+            <td colSpan={17} style={{ textAlign: "center", padding: "20px" }}>
               등록된 요청이 없습니다.
             </td>
           </tr>

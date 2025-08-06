@@ -67,7 +67,7 @@ export default function Header() {
 
 const HeaderElement = styled.header`
   ${({ theme }) => theme.mixin.flex('center', 'space-between')};
-  padding: 15px 20px;
+  padding: 12px 20px;
   background-color: ${({ theme }) => theme.colors.navy};
 `;
 
