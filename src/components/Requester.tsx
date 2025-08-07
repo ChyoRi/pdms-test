@@ -1,10 +1,9 @@
-import styled from "styled-components";
 import { useState, useEffect } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "../firebaseconfig";
 import { collection, onSnapshot, query, where, updateDoc, doc, Timestamp, orderBy } from "firebase/firestore";
-import RequestForm from "./RequestForm";
 import RequesterRequestList from "./RequesterRequestList";
+import MainTitle from "./MainTitle";
 
 // ✅ Firestore 데이터 구조 기반 타입 정의
 interface RequestData {
@@ -92,13 +91,8 @@ export default function Requester() {
 
   return (
     <>
-      <RequestForm userName={userName} />
-      <RequestListTitle>요청 리스트</RequestListTitle>
+      <MainTitle />
       <RequesterRequestList data={requests} onReviewComplete={reviewComplete} onCancel={cancelRequest} />
     </>
   );
 }
-
-const RequestListTitle = styled.h2`
-  margin-bottom: 20px;
-`;

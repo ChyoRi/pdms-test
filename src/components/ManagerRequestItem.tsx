@@ -150,6 +150,7 @@ const EmergencyBadge = styled.span`
   margin-right: 5px;
   padding: 4px 6px;
   border-radius: 4px;
+  font-size: 12px;
   font-weight: 700;
   background-color: ${({ theme }) => theme.colors.red};
   color: ${({ theme }) => theme.colors.white01};

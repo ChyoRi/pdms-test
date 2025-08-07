@@ -7,8 +7,14 @@ declare module 'styled-components' {
       white02: string;
       red: string;
       navy: string;
+      beige: string;
+      orange: string;
+      lightpupple: string;
+      blue: string;
       gray01: string;
       gray02: string;
+      gray03: string;
+      gray04: string;
       black: string;
     };
     mixin: {

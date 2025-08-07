@@ -2,6 +2,7 @@ import styled from "styled-components";
 import { useState } from "react";
 import { db } from "../firebaseconfig";
 import { collection, addDoc, serverTimestamp, Timestamp, query, where, getDocs } from "firebase/firestore";
+import requestFormExitButton from "../assets/requestformexit-button.svg";
 
 interface RequestFormProps {
   userName: string;
@@ -105,7 +106,10 @@ export default function RequestForm({ userName }: RequestFormProps) {
 
   return (
     <RequestFormContainer onSubmit={requestFormSubmit}>
-      <RequestFormTitle>디자인 요청 등록</RequestFormTitle>
+      <RequestTitleWrap>
+        <RequestTitle>디자인 요청 등록</RequestTitle>
+        <RequestExitButton />
+      </RequestTitleWrap>
       <RequestFormList>
         <RequestFormItem>
           <RequestFormItemLabel htmlFor="completionDt">요청 완료일</RequestFormItemLabel>
@@ -205,9 +209,28 @@ export default function RequestForm({ userName }: RequestFormProps) {
   )
 }
 
-const RequestFormContainer = styled.form``;
+const RequestFormContainer = styled.form`
+  font-family: 'Pretendard';
+`;
 
-const RequestFormTitle = styled.h2``;
+const RequestTitleWrap = styled.div`
+  ${({ theme }) => theme.mixin.flex('center', 'space-between')};
+`;
+
+const RequestTitle = styled.h3`
+  font-size: 24px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.black};
+  letter-spacing: -2%;
+`;
+
+const RequestExitButton = styled.button`
+  width: 24px;
+  height: 24px;
+  background-image: url(${requestFormExitButton});
+  /* background: url(${requestFormExitButton}) no-repeat center; */
+  background-size: contain;
+`;
 
 const RequestFormList = styled.ul`
   ${({ theme }) => theme.mixin.flex('center')};

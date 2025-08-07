@@ -57,7 +57,7 @@ export default function Header() {
     <HeaderElement>
       <HomePlusLogo src={logo}></HomePlusLogo>
       <UtilWrap>
-        <UserName>{userName}님 ({getRoleName(userRole)})환영합니다.</UserName>
+        <UserNameWrap><UserName>{userName}</UserName>님({getRoleName(userRole)}) 환영합니다.</UserNameWrap>
         <LogoutButton onClick={logout}>로그아웃</LogoutButton>
         <Lole></Lole>
       </UtilWrap>
@@ -67,33 +67,34 @@ export default function Header() {
 
 const HeaderElement = styled.header`
   ${({ theme }) => theme.mixin.flex('center', 'space-between')};
-  padding: 12px 20px;
-  background-color: ${({ theme }) => theme.colors.navy};
+  padding: 12px 48px;
+  font-family: 'Pretendard';
+  background-color: ${({ theme }) => theme.colors.black};
 `;
 
-const HomePlusLogo = styled.img`
-  
-`;
+const HomePlusLogo = styled.img``;
 
-const UtilWrap = styled.div`
+const UtilWrap = styled.div``;
 
+const UserNameWrap = styled.span`
+  margin-right: 24px;
+  color: ${({ theme }) => theme.colors.white01};
+  font-size: 16px;
 `;
 
 const UserName = styled.span`
-  margin-right: 10px;
-  color: ${({ theme }) => theme.colors.white01};
-  font-size: 14px;
-  line-height: 20px;
+  font-weight: 700;
 `;
 
 const LogoutButton = styled.button`
+  padding: 5px 10px;
+  border: 1px solid ${({ theme }) => theme.colors.white01};
+  border-radius: 4px;
   color: ${({ theme }) => theme.colors.white01};
-  font-size: 14px;
-  line-height: 20px;
+  font-size: 16px;
 `;
 
 const Lole = styled.span`
   color: ${({ theme }) => theme.colors.white01};
-  font-size: 14px;
-  line-height: 20px;
+  font-size: 16px;
 `;

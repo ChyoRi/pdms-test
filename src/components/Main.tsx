@@ -18,6 +18,4 @@ export default function Main({ userRole }: MainProps) {
   return <Container>{renderComponent()}</Container>;
 }
 
-const Container = styled.main`
-  padding: 20px 25px;
-`;
+const Container = styled.main``;

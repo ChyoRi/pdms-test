@@ -4,38 +4,64 @@ import myrequestIcon from "../assets/myrequest-icon.svg"
 import MyRequestItem from "../components/MyRequestItem"
 
 interface RequestData {
-  id: string;
-  design_request_id: string;
   status: string;
 }
 
 interface AsideProps {
   requests: RequestData[];
+  role: number | null;
+  onRequestButtonClick: () => void;
 }
 
-export default function Aside({ requests }: AsideProps) {
+export default function Aside({ requests, role, onRequestButtonClick }: AsideProps) {
+  const statusList = [
+    {
+      status: "대기중",
+      count: requests.filter(r => r.status === "대기").length
+    },
+    {
+      status: "작업중",
+      count: requests.filter(r => r.status === "진행중").length
+    },
+    {
+      status: "완료",
+      count: requests.filter(r => r.status === "완료").length
+    }
+  ];
+
+  const getRoleTitle = (role: number | null): string => {
+    switch (role) {
+      case 1:
+        return "나의 요청";
+      case 2:
+        return "나의 작업 현황";
+      case 3:
+        return "전체 요청 현황";
+      default:
+        return "요청 현황";
+    }
+  };
+
   return (
     <AsideFrame>
       <AsideLogoWrap>
         <AsideLogo src={asideLogo} />
         <AsideTitle>업무 관리시스템</AsideTitle>
       </AsideLogoWrap>
-      <RequestFormButtonWrap>
-        <RequestFormButton>디자인 요청 등록</RequestFormButton>
-      </RequestFormButtonWrap>
+      {role === 1 && (
+        <RequestFormButtonWrap>
+          <RequestFormButton onClick={onRequestButtonClick}>디자인 요청 등록</RequestFormButton>
+        </RequestFormButtonWrap>
+      )}
       <MyRequestWrap>
         <MyRequestTitleWrap>
           <MyRequestIcon src={myrequestIcon} />
-          <MyRequestTitle>나의 요청</MyRequestTitle>
+          <MyRequestTitle>{getRoleTitle(role)}</MyRequestTitle>
         </MyRequestTitleWrap>
         <MyRequestList>
-          {requests.length > 0 ? (
-            requests.slice(0, 5).map(item => (
-              <MyRequestItem key={item.id} design_request_id={item.design_request_id} status={item.status} />
-            ))
-          ) : (
-            <EmptyMessage>나의 요청이 없습니다.</EmptyMessage>
-          )}
+          {statusList.map((item) => (
+            <MyRequestItem key={item.status} item={item} />
+          ))}
         </MyRequestList>
       </MyRequestWrap>
     </AsideFrame>
@@ -81,12 +107,14 @@ const RequestFormButton = styled.button`
   white-space: nowrap;
 `;
 
-const MyRequestWrap = styled.div``;
+const MyRequestWrap = styled.div`
+  padding: 0 24px;
+`;
 
 const MyRequestTitleWrap = styled.div`
   ${({ theme }) => theme.mixin.flex('center')};
   gap: 12px;
-  padding: 24px 30px;
+  padding: 30px 0;
 `;
 
 const MyRequestIcon = styled.img``;
@@ -98,10 +126,7 @@ const MyRequestTitle = styled.h4`
   color: ${({ theme }) => theme.colors.black};
 `;
 
-const MyRequestList = styled.ul``;
-
-const EmptyMessage = styled.div`
-  text-align: center;
-  color: #999;
-  font-size: 14px;
-`
+const MyRequestList = styled.ul`
+  ${({ theme }) => theme.mixin.flex('center')};
+  flex-direction: column;
+`;
