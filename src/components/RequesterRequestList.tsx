@@ -18,16 +18,17 @@ interface RequestData {
   assigned_designer?: string;
   result_url?: string;
   priority?: string;
-  edit_state?: boolean;
+  requester_edit_state?: boolean;
 }
 
 interface RequestListProps {
   data: RequestData[];
   onReviewComplete: (id: string) => void;
   onCancel: (id: string) => void;
+  onEditClick: (id: string) => void;
 }
 
-export default function RequesterRequestList({ data, onReviewComplete, onCancel }: RequestListProps) {
+export default function RequesterRequestList({ data, onReviewComplete, onCancel, onEditClick }: RequestListProps) {
   return (
     <RequestListTableWrap>
       <RequestListTable>
@@ -66,7 +67,7 @@ export default function RequesterRequestList({ data, onReviewComplete, onCancel 
         <tbody>
           {data.length > 0 ? (
             data.map((item, index) => (
-              <RequesterRequestItem key={item.id} index={index + 1} item={item} onReviewComplete={onReviewComplete} onCancel={onCancel} />
+              <RequesterRequestItem key={item.id} index={index + 1} item={item} onReviewComplete={onReviewComplete} onCancel={onCancel} onEditClick={onEditClick} />
             ))
           ) : (
             <tr>

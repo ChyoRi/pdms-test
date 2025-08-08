@@ -3,17 +3,18 @@ import styled from "styled-components"
 export default function MainTitle() {
   const today = new Date();
   const year = today.getFullYear();
-  const month = today.getMonth() + 1; // getMonth()는 0부터 시작하므로 +1 필요
+  const month = today.getMonth() + 1;
+  const date = today.getDate();
 
   return (
     <MainTitleWrap>
-      <MainTitleText>{year}년 {month}월 디자인 편성 요청 스케줄</MainTitleText>
+      <MainTitleText>{year}년 {month}월 {date}일 디자인 편성 요청 스케줄</MainTitleText>
     </MainTitleWrap>
   )
 }
 
 const MainTitleWrap = styled.div`
-  padding: 35.5px 48px;
+  padding: 30px 48px;
   background-color: ${({ theme }) => theme.colors.gray04};
 `;
 

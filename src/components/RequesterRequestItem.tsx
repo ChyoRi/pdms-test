@@ -19,7 +19,7 @@ interface RequestData {
   assigned_designer?: string;
   result_url?: string;
   emergency?: boolean;
-  edit_state?: boolean;
+  requester_edit_state?: boolean;
 }
 
 interface RequestItemProps {
@@ -27,9 +27,10 @@ interface RequestItemProps {
   index: number;
   onReviewComplete: (id: string) => void;
   onCancel: (id: string) => void;
+  onEditClick: (id: string) => void;
 }
 
-export default function RequesterRequestItem({ item, index, onReviewComplete, onCancel }: RequestItemProps) {
+export default function RequesterRequestItem({ item, index, onReviewComplete, onCancel, onEditClick }: RequestItemProps) {
   const formatDate = (timestamp: any) => {
     if (!timestamp) return "-";
     if (timestamp.toDate) {
@@ -68,7 +69,7 @@ export default function RequesterRequestItem({ item, index, onReviewComplete, on
         <CancelButton onClick={() => onCancel(item.id)}>취소</CancelButton>
       </RequestListTableTd>
       <RequestListTableTd>
-        <EditButton>수정</EditButton>
+        <EditButton onClick={() => onEditClick(item.id)}>수정</EditButton>
       </RequestListTableTd>
       <RequestListTableTd>
         {item.manager_review_status === "검수완료" ? (
@@ -131,9 +132,9 @@ const RequestListTableTd = styled.td`
 
 const EmergencyBadge = styled.span`
   margin-right: 5px;
-  padding: 4px 6px;
-  border-radius: 4px;
-  font-size: 12px;
+  padding: 3px 5px;
+  border-radius: 2px;
+  font-size: 10px;
   font-weight: 700;
   background-color: ${({ theme }) => theme.colors.red};
   color: ${({ theme }) => theme.colors.white01};

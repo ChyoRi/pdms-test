@@ -32,13 +32,13 @@ const DrawerContainer = styled.div<{ isVisible: boolean }>`
   position: fixed;
   top: 64px;
   right: 0;
-  width: 520px;
+  width: 680px;
   height: 100%;
   background-color: white;
   box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
   z-index: 1001;
   overflow-y: auto;
-  padding: 32px;
+  padding: 24px;
   transform: ${({ isVisible }) => (isVisible ? "translateX(0)" : "translateX(100%)")};
   transition: transform 0.3s ease;
 `;

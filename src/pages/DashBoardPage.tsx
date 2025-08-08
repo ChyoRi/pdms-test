@@ -9,15 +9,36 @@ import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "../firebaseconfig";
 import { doc, getDoc, collection, query, where, onSnapshot } from "firebase/firestore";
 
+// ✅ 타입 확장
 interface RequestData {
-  status: string;
+  design_request_id?: string;
+  id?: string;
+  request_date?: string;
+  requester?: string;
+  completion_dt?: string;
+  open_dt?: string;
+  task_form?: string;
+  task_type?: string;
+  requirement?: string;
+  url?: string;
+  note?: string;
+  status?: string;
+  review_status?: string;
+  assigned_designer?: string;
+  result_url?: string;
+  emergency?: boolean;
+  requester_edit_state?: boolean;
+  created_at?: any;
 }
+
 
 export default function DashBoardPage() {
   const [userRole, setUserRole] = useState<number | null>(null);
   const [requests, setRequests] = useState<RequestData[]>([]);
   const [userName, setUserName] = useState("");
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  // ✅ editData 상태 추가
+  const [editData, setEditData] = useState<RequestData | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -77,10 +98,12 @@ export default function DashBoardPage() {
       <Aside requests={requests} role={userRole} onRequestButtonClick={() => setIsDrawerOpen(true)} />
       <DashBoardFrame>
         <Header />
-        <Main userRole={userRole} />
+        {/* ✅ Main에 setEditData 전달 */}
+        <Main userRole={userRole} setIsDrawerOpen={setIsDrawerOpen} setEditData={setEditData} />
       </DashBoardFrame>
-      <RequestDrawer isOpen={isDrawerOpen} onClose={() => setIsDrawerOpen(false)}>
-        <RequestForm userName={userName}/>
+      {/* ✅ RequestForm에 editData 전달 */}
+      <RequestDrawer isOpen={isDrawerOpen} onClose={() => { setEditData(null); setIsDrawerOpen(false); }}>
+        <RequestForm userName={userName} onClose={() => {setEditData(null); setIsDrawerOpen(false);}} editData={editData}/>
       </RequestDrawer>
     </Container>
   )

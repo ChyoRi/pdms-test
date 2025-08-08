@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "../firebaseconfig";
-import { collection, onSnapshot, query, where, updateDoc, doc, Timestamp, orderBy } from "firebase/firestore";
+import { collection, onSnapshot, query, where, updateDoc, doc, Timestamp, orderBy, getDoc } from "firebase/firestore";
 import RequesterRequestList from "./RequesterRequestList";
 import MainTitle from "./MainTitle";
 
@@ -27,8 +27,14 @@ interface RequestData {
   created_at: Timestamp;
 }
 
+// ✅ 추가된 Props 인터페이스 정의
+interface RequesterProps {
+  setIsDrawerOpen: (value: boolean) => void;
+  setEditData: (data: RequestData | null) => void;
+}
 
-export default function Requester() {
+
+export default function Requester({ setIsDrawerOpen, setEditData }: RequesterProps) {
   const [userName, setUserName] = useState("");
   const [requests, setRequests] = useState<RequestData[]>([]); // request DB 배열
 
@@ -76,6 +82,18 @@ export default function Requester() {
     alert("완료 처리되었습니다.");
   };
 
+  const editRequest = async (id: string) => {
+    const docRef = doc(db, "design_request", id);
+    await updateDoc(docRef, { requester_edit_state: true });
+
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      const data = { id: docSnap.id, ...(docSnap.data() as Omit<RequestData, "id">) };
+      setEditData(data);
+      setIsDrawerOpen(true);
+    }
+  }
+
   // ✅ 취소 처리
   const cancelRequest = async (id: string) => {
     await updateDoc(doc(db, "design_request", id), {
@@ -92,7 +110,7 @@ export default function Requester() {
   return (
     <>
       <MainTitle />
-      <RequesterRequestList data={requests} onReviewComplete={reviewComplete} onCancel={cancelRequest} />
+      <RequesterRequestList data={requests} onReviewComplete={reviewComplete} onCancel={cancelRequest} onEditClick={editRequest} />
     </>
   );
 }

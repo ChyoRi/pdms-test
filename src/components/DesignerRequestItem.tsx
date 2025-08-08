@@ -102,9 +102,9 @@ const RequestListTableTd = styled.td`
 
 const EmergencyBadge = styled.span`
   margin-right: 5px;
-  padding: 4px 6px;
-  border-radius: 4px;
-  font-size: 12px;
+  padding: 3px 5px;
+  border-radius: 2px;
+  font-size: 10px;
   font-weight: 700;
   background-color: ${({ theme }) => theme.colors.red};
   color: ${({ theme }) => theme.colors.white01};

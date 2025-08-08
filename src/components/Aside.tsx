@@ -4,7 +4,7 @@ import myrequestIcon from "../assets/myrequest-icon.svg"
 import MyRequestItem from "../components/MyRequestItem"
 
 interface RequestData {
-  status: string;
+  status?: string;
 }
 
 interface AsideProps {
@@ -69,14 +69,13 @@ export default function Aside({ requests, role, onRequestButtonClick }: AsidePro
 }
 
 const AsideFrame = styled.aside`
-  max-width: 240px;
   height: 100%;
   border-right: 1px solid ${({ theme }) => theme.colors.black};
 `;
 
 const AsideLogoWrap = styled.div`
   ${({ theme }) => theme.mixin.flex('center', 'center')};
-  padding: 20px 24px;
+  padding: 19.5px 23px;
   border-bottom: 1px solid ${({ theme }) => theme.colors.gray02};
 `;
 
@@ -93,7 +92,7 @@ const AsideTitle = styled.span`
 `;
 
 const RequestFormButtonWrap = styled.div`
-  padding: 32.5px 20px;
+  padding: 32px 20px;
   border-bottom: 1px solid ${({ theme }) => theme.colors.gray02};
 `;
 

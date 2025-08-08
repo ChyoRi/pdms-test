@@ -24,6 +24,7 @@ const ItemWrap = styled.li<{ status: string }>`
   width: 100%;
   padding: 20.5px 44px 20.5px 28px;
   margin-bottom: 8px;
+  border-radius: 4px;
   font-family: 'Pretendard';
   color: ${({ theme }) => theme.colors.black};
 
@@ -43,7 +44,7 @@ const ItemWrap = styled.li<{ status: string }>`
 
 const Status = styled.span`
   font-size: 16px;
-  font-weight: 400;
+  font-weight: 500;
 `;
 
 const StatusCount = styled.span<{ status: string }>`
