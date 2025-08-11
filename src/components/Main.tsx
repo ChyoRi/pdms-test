@@ -6,7 +6,7 @@ import Manager from "./Manager";
 interface MainProps {
   userRole: number | null;
   setIsDrawerOpen: (value: boolean) => void;
-  setEditData: (data: RequestData | null) => void;
+  setEditData: (data: RequestData) => void;
 }
 
 export default function Main({ userRole, setIsDrawerOpen, setEditData }: MainProps) {

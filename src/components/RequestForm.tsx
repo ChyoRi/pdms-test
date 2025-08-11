@@ -9,57 +9,32 @@ import selectBoxArrow from "../assets/selectbox-arrow.svg";
 interface RequestFormProps {
   userName: string;
   editData?: RequestData | null;
+  isDrawerOpen: boolean;
   onClose: () => void;
 }
 
-export default function RequestForm({ userName, editData, onClose }: RequestFormProps) {
+const defaultRequestData: Partial<RequestData> = {
+  completion_dt: "",
+  open_dt: "",
+  task_form: "GHS",
+  task_type: "프론트테마",
+  requirement: "",
+  url: "",
+  note: "",
+  emergency: false
+}
+
+export default function RequestForm({ userName, editData, isDrawerOpen, onClose }: RequestFormProps) {
   const isEdit = editData?.requester_edit_state === true; // ✅ 수정모드 판별
 
-  const [requestData, setRequestData] = useState({
-    completionDt: "",
-    openDt: "",
-    taskForm: "GHS",
-    taskType: "프론트테마",
-    requirement: "",
-    url: "",
-    note: "",
-    emergency: false
-  });
-
-  // ✅ 수정 모드일 경우 editData로 초기값 설정
-  useEffect(() => {
-  if (isEdit && editData) {
-    setRequestData({
-      completionDt: editData.completion_dt ? editData.completion_dt.toDate().toISOString().slice(0, 10) : "",
-      openDt: editData.open_dt ? editData.open_dt.toDate().toISOString().slice(0, 10) : "",
-      taskForm: editData.task_form ?? "GHS",
-      taskType: editData.task_type ?? "프론트테마",
-      requirement: editData.requirement ?? "",
-      url: editData.url ?? "",
-      note: editData.note ?? "",
-      emergency: editData.emergency ?? false,
-    });
-  } else {
-    // ✅ 등록 모드일 때 초기화
-    setRequestData({
-      completionDt: "",
-      openDt: "",
-      taskForm: "GHS",
-      taskType: "프론트테마",
-      requirement: "",
-      url: "",
-      note: "",
-      emergency: false,
-    });
-  }
-}, [isEdit, editData]);
+  const [requestData, setRequestData] = useState<Partial<RequestData>>(defaultRequestData);
 
   // ✅ 입력 변경 핸들러
   const requsetForm = (field: string, value: string | boolean) => {
     setRequestData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const toTimestamp = (dateStr: string) => {
+  const toTimestamp = (dateStr: string | undefined) => {
     return dateStr ? Timestamp.fromDate(new Date(dateStr)) : null;
   };
 
@@ -91,10 +66,10 @@ export default function RequestForm({ userName, editData, onClose }: RequestForm
 
     if (isEdit && editData?.id) {
       await updateDoc(doc(db, "design_request", editData.id), {
-        completion_dt: toTimestamp(requestData.completionDt),
-        open_dt: toTimestamp(requestData.openDt),
-        task_form: requestData.taskForm,
-        task_type: requestData.taskType,
+        completion_dt: toTimestamp(requestData.completion_dt),
+        open_dt: toTimestamp(requestData.open_dt),
+        task_form: requestData.task_form,
+        task_type: requestData.task_type,
         requirement: requestData.requirement,
         url: requestData.url,
         note: requestData.note,
@@ -110,14 +85,21 @@ export default function RequestForm({ userName, editData, onClose }: RequestForm
 
     const today = new Date();
 
+    /**
+    addDoc(collection(db, "design_history"), {
+      date: new Date(),
+      text: "OOOOOO OOOO OOOO."
+    })
+     */
+
     addDoc(collection(db, "design_request"), {
       design_request_id: await generateDocNumber(),
       request_date: toTimestamp(today.toISOString()),
       requester: userName,
-      completion_dt: toTimestamp(requestData.completionDt),
-      open_dt: toTimestamp(requestData.openDt),
-      task_form: requestData.taskForm,
-      task_type: requestData.taskType,
+      completion_dt: toTimestamp(requestData.completion_dt),
+      open_dt: toTimestamp(requestData.open_dt),
+      task_form: requestData.task_form,
+      task_type: requestData.task_type,
       requirement: requestData.requirement,
       url: requestData.url,
       note: requestData.note,
@@ -137,22 +119,34 @@ export default function RequestForm({ userName, editData, onClose }: RequestForm
     })
     .then(() => {
       alert("요청이 등록되었습니다!");
-      setRequestData({
-        completionDt: "",
-        openDt: "",
-        taskForm: "GHS",
-        taskType: "프론트테마",
-        requirement: "",
-        url: "",
-        note: "",
-        emergency: false
-      });
+      setRequestData(defaultRequestData);
       onClose();
     })
     .catch((error) => {
       alert("등록 중 오류가 발생했습니다: " + error.message);
     });
   };
+
+  // ✅ 수정 모드일 경우 editData로 초기값 설정
+  useEffect(() => {
+  if (isEdit && editData) {
+    setRequestData({
+      completion_dt: editData.completion_dt ? (editData.completion_dt as any).toDate().toISOString().slice(0, 10) : "",
+      open_dt: editData.open_dt ? (editData.open_dt as any).toDate().toISOString().slice(0, 10) : "",
+      task_form: editData.task_form ?? "GHS",
+      task_type: editData.task_type ?? "프론트테마",
+      requirement: editData.requirement ?? "",
+      url: editData.url ?? "",
+      note: editData.note ?? "",
+      emergency: editData.emergency ?? false,
+    });
+  }
+}, [isEdit, editData]);
+
+  useEffect(() => {
+    if (!isDrawerOpen || isEdit) return;
+    setRequestData(defaultRequestData);
+  }, [isDrawerOpen]);
 
   return (
     <>
@@ -172,31 +166,31 @@ export default function RequestForm({ userName, editData, onClose }: RequestForm
               <RequestFormTableTd>{isEdit ? editData?.design_request_id : ""}</RequestFormTableTd>
             </tr>
             <tr>
-              <RequestFormTableTh><RequestFormItemLabel htmlFor="completionDt">완료 요청일</RequestFormItemLabel></RequestFormTableTh>
+              <RequestFormTableTh><RequestFormItemLabel htmlFor="completion_dt">완료 요청일</RequestFormItemLabel></RequestFormTableTh>
               <RequestFormTableTd>
                 <RequestFormDateInput
                   type="date"
-                  id="completionDt"
-                  value={requestData.completionDt}
-                  onChange={(e) => requsetForm("completionDt", e.target.value)}
+                  id="completion_dt"
+                  value={requestData.completion_dt}
+                  onChange={(e) => requsetForm("completion_dt", e.target.value)}
                 />
               </RequestFormTableTd>
             </tr>
             <tr>
-              <RequestFormTableTh><RequestFormItemLabel htmlFor="openDt">오픈일</RequestFormItemLabel></RequestFormTableTh>
+              <RequestFormTableTh><RequestFormItemLabel htmlFor="open_dt">오픈일</RequestFormItemLabel></RequestFormTableTh>
               <RequestFormTableTd>
                 <RequestFormDateInput
                   type="date"
-                  id="openDt"
-                  value={requestData.openDt}
-                  onChange={(e) => requsetForm("openDt", e.target.value)}
+                  id="open_dt"
+                  value={requestData.open_dt}
+                  onChange={(e) => requsetForm("open_dt", e.target.value)}
                 />
               </RequestFormTableTd>
             </tr>
             <tr>
-              <RequestFormTableTh><RequestFormItemLabel htmlFor="taskForm">업무 형태</RequestFormItemLabel></RequestFormTableTh>
+              <RequestFormTableTh><RequestFormItemLabel htmlFor="task_form">업무 형태</RequestFormItemLabel></RequestFormTableTh>
               <RequestFormTableTd>
-                <RequestFormSelectBox id="taskForm" value={requestData.taskForm} onChange={(e) => requsetForm("taskForm", e.target.value)}>
+                <RequestFormSelectBox id="task_form" value={requestData.task_form} onChange={(e) => requsetForm("task_form", e.target.value)}>
                   <option value="GHS">GHS</option>
                   <option value="MHC">MHC</option>
                   <option value="MHC/GHS">MHC/GHS</option>
@@ -204,9 +198,9 @@ export default function RequestForm({ userName, editData, onClose }: RequestForm
               </RequestFormTableTd>
             </tr>
             <tr>
-              <RequestFormTableTh><RequestFormItemLabel htmlFor="taskType">업무 유형</RequestFormItemLabel></RequestFormTableTh>
+              <RequestFormTableTh><RequestFormItemLabel htmlFor="task_type">업무 유형</RequestFormItemLabel></RequestFormTableTh>
               <RequestFormTableTd>
-                <RequestFormSelectBox id="taskType" value={requestData.taskType} onChange={(e) => requsetForm("taskType", e.target.value)}>
+                <RequestFormSelectBox id="task_type" value={requestData.task_type} onChange={(e) => requsetForm("task_type", e.target.value)}>
                   <option value="프론트테마">프론트테마</option>
                   <option value="별도기획전">별도기획전</option>
                   <option value="일자별배너">일자별배너</option>

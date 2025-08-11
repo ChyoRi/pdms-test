@@ -30,7 +30,7 @@ interface RequestData {
 // ✅ 추가된 Props 인터페이스 정의
 interface RequesterProps {
   setIsDrawerOpen: (value: boolean) => void;
-  setEditData: (data: RequestData | null) => void;
+  setEditData: (data: RequestData) => void;
 }
 
 

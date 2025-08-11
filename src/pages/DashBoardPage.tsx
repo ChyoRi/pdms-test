@@ -9,36 +9,14 @@ import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "../firebaseconfig";
 import { doc, getDoc, collection, query, where, onSnapshot } from "firebase/firestore";
 
-// ✅ 타입 확장
-interface RequestData {
-  design_request_id?: string;
-  id?: string;
-  request_date?: string;
-  requester?: string;
-  completion_dt?: string;
-  open_dt?: string;
-  task_form?: string;
-  task_type?: string;
-  requirement?: string;
-  url?: string;
-  note?: string;
-  status?: string;
-  review_status?: string;
-  assigned_designer?: string;
-  result_url?: string;
-  emergency?: boolean;
-  requester_edit_state?: boolean;
-  created_at?: any;
-}
-
 
 export default function DashBoardPage() {
-  const [userRole, setUserRole] = useState<number | null>(null);
+  const [userRole, setUserRole] = useState<number>(0);
   const [requests, setRequests] = useState<RequestData[]>([]);
-  const [userName, setUserName] = useState("");
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [userName, setUserName] = useState<string>("");
+  const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
   // ✅ editData 상태 추가
-  const [editData, setEditData] = useState<RequestData | null>(null);
+  const [editData, setEditData] = useState<RequestData>();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -48,7 +26,7 @@ export default function DashBoardPage() {
         const userDoc = await getDoc(doc(db, "users", user.uid));
         if (userDoc.exists()) {
           const data = userDoc.data();
-          const role = data.role;
+          const role: number = data.role;
           const displayName = user.displayName;
 
           setUserRole(role);
@@ -83,7 +61,7 @@ export default function DashBoardPage() {
           });
         }
       } else {
-        setUserRole(null);
+        setUserRole(0);
         setUserName("");
         setRequests([]);
       }
@@ -102,8 +80,8 @@ export default function DashBoardPage() {
         <Main userRole={userRole} setIsDrawerOpen={setIsDrawerOpen} setEditData={setEditData} />
       </DashBoardFrame>
       {/* ✅ RequestForm에 editData 전달 */}
-      <RequestDrawer isOpen={isDrawerOpen} onClose={() => { setEditData(null); setIsDrawerOpen(false); }}>
-        <RequestForm userName={userName} onClose={() => {setEditData(null); setIsDrawerOpen(false);}} editData={editData}/>
+      <RequestDrawer isOpen={isDrawerOpen} onClose={() => { setEditData(undefined); setIsDrawerOpen(false); }}>
+        <RequestForm userName={userName} isDrawerOpen={isDrawerOpen} onClose={() => {setEditData(undefined); setIsDrawerOpen(false);}} editData={editData}/>
       </RequestDrawer>
     </Container>
   )
