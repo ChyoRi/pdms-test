@@ -9,10 +9,9 @@ import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "../firebaseconfig";
 import { doc, getDoc, collection, query, where, onSnapshot } from "firebase/firestore";
 
-
 export default function DashBoardPage() {
   const [userRole, setUserRole] = useState<number>(0);
-  const [requests, setRequests] = useState<RequestData[]>([]);
+  const [requests, setRequests] = useState<RequestLite[]>([]);
   const [userName, setUserName] = useState<string>("");
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
   // ✅ editData 상태 추가
@@ -51,10 +50,11 @@ export default function DashBoardPage() {
           }
 
           onSnapshot(q, (snapshot) => {
-            const list: RequestData[] = snapshot.docs.map(doc => {
-              const d = doc.data();
+            const list: RequestLite[] = snapshot.docs.map(docSnap => {
+              const d = docSnap.data();
               return {
-                status: d.status || "대기중"
+                id: docSnap.id,
+                status: (d.status as RequestData["status"]) ?? "대기중", // any → 좁히기
               };
             });
             setRequests(list);

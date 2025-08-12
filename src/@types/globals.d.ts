@@ -1,40 +1,35 @@
+import type { Timestamp } from "firebase/firestore";
 
-// ✅ 타입 확장
-interface RequestData {
-  design_request_id?: string;
-  id?: string;
-  request_date?: string;
-  requester?: string;
-  completion_dt?: string;
-  open_dt?: string;
-  task_form?: string;
-  task_type?: string;
-  requirement?: string;
-  url?: string;
-  note?: string;
-  status?: string;
-  review_status?: string;
-  assigned_designer?: string;
-  result_url?: string;
-  emergency?: boolean;
-  requester_edit_state?: boolean;
-  created_at?: any;
-  design_request_id: string;
-  id: string;
-  request_date: any;
-  requester: string;
-  completion_dt: any;
-  open_dt: any;
-  task_form: string;
-  task_type: string;
-  requirement: string;
-  url?: string;
-  note?: string;
-  status?: string;
-  assigned_designer?: string;
-  requester_review_status?: string;
-  manager_review_status?: string;
-  designer_start_date?: string;
-  designer_end_date?: string;
-  result_url?: string;     
+declare global {
+  interface RequestData {
+    id: string; // firestore 문서 고유번호
+    design_request_id: string; // 문서 고유 번호
+    request_date: string; // 요청일
+    requester: string; // 요청자
+    completion_dt: string; // 완료 요청일
+    open_dt: string; // 오픈일
+    task_form: string; // 업무 형태
+    task_type: string; // 업무 타입
+    requirement: string; // 작성 항목
+    url: string; // 기획안 URL
+    note: string; // 메모
+    status: string; // 진행 상태
+    assigned_designer: string; // 담당 디자이너
+    result_url: string; // 산출물 URL
+    emergency: boolean; // 긴급
+    requester_edit_state?: boolean; // 요청자 수정 상태
+    requester_review_status?: string; // 요청자 검수 상태
+    manager_review_status?: string; // 매니저 검수 상태
+    designer_start_date?: string; // 디자인 시작일
+    designer_end_date?: string; // 디자인 종료일
+    designer_edit_state? : boolean; // 디자이너 수정 상태
+    work_hour?: number | ""; // 공수
+    created_at: Timestamp | null // 문서 생성일시
+    updated_at: Timestamp | null; // 문서 수정일시
+    delete_at: Timestamp | null; // 문서 삭제일시
+  }
+  
+  type RequestLite = Pick<RequestData, "id" | "status">;
 }
+
+export {};

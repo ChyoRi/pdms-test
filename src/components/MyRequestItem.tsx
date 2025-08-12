@@ -31,7 +31,7 @@ const ItemWrap = styled.li<{ status: string }>`
   background-color: ${({ status, theme }) => {
     switch (status) {
       case "대기중":
-        return theme.colors.beige; // 연한 주황
+        return theme.colors.beige01; // 연한 주황
       case "작업중":
         return theme.colors.lightpupple; // 연한 파랑
       case "완료":
@@ -67,7 +67,7 @@ const StatusCount = styled.span<{ status: string }>`
         case "대기중":
           return theme.colors.orange;
         case "작업중":
-          return theme.colors.blue;
+          return theme.colors.blue01;
         case "완료":
           return theme.colors.gray02;
         default:

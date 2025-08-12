@@ -1,31 +1,9 @@
 import { useState, useEffect } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "../firebaseconfig";
-import { collection, onSnapshot, query, where, updateDoc, doc, Timestamp, orderBy, getDoc } from "firebase/firestore";
+import { collection, onSnapshot, query, where, updateDoc, doc, orderBy, getDoc } from "firebase/firestore";
 import RequesterRequestList from "./RequesterRequestList";
 import MainTitle from "./MainTitle";
-
-// ✅ Firestore 데이터 구조 기반 타입 정의
-interface RequestData {
-  design_request_id: string;
-  id: string;
-  request_date: string;
-  requester: string;
-  completion_dt: string;
-  open_dt: string;
-  task_form: string;
-  task_type: string;
-  requirement: string;
-  url?: string;
-  note?: string;
-  status?: string;
-  review_status?: string;
-  assigned_designer?: string;
-  result_url?: string;
-  emergency?: boolean;
-  edit_state?: boolean;
-  created_at: Timestamp;
-}
 
 // ✅ 추가된 Props 인터페이스 정의
 interface RequesterProps {

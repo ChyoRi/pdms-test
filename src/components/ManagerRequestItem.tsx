@@ -1,27 +1,5 @@
 import styled from "styled-components";
 
-interface RequestData {
-  design_request_id: string;
-  id: string;
-  request_date: any;
-  requester: string;
-  completion_dt: any;
-  open_dt: any;
-  task_form: string;
-  task_type: string;
-  requirement: string;
-  url?: string;
-  note?: string;
-  status?: string;
-  manager_review_status?: string;
-  assigned_designer?: string;
-  designer_start_date?: string;
-  designer_end_date?: string;
-  result_url?: string;
-  emergency?: boolean;
-}
-
-
 interface ManagerRequestItemProps {
   index: number;
   item: RequestData;

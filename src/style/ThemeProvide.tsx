@@ -3,15 +3,23 @@ const colors = {
   white02: '#f4f4f4',
   red: '#eb193a',
   navy: '#073863',
-  beige: '#fff4ea',
+  beige01: '#fff4ea',
+  beige02: '#FFEEDE',
   orange: '#f88017',
   lightpupple: '#eaedfa',
-  blue: '#4f76ff',
+  blue01: '#4f76ff',
+  blue02: '#0B1ABF',
   gray01: '#ECEDF0',
   gray02: '#ccc',
   gray03: '#bdbdbd',
   gray04: '#f4f4f4',
-  black: '#212121'
+  gray05: '#888',
+  gray06: '#666',
+  gray07: '#e5e2e2',
+  black: '#212121',
+  pink01: '#FFDDDD',
+  pink02: '#F48193',
+  pink03: '#FFEBEB'
 }
 
 const mixin = {

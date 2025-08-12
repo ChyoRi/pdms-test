@@ -115,7 +115,8 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
       designer_edit_state: false,
       created_at: serverTimestamp(),
       updated_at: null,
-      delete_at: null
+      delete_at: null,
+      work_hour: ""
     })
     .then(() => {
       alert("요청이 등록되었습니다!");
@@ -360,6 +361,7 @@ const RequestFormTextInput = styled.input`
   border-radius: 4px;
   font-family: 'Pretendard';
   font-size: 16px;
+  background-color: #fffff1;
 `;
 
 const RequestFormTextArea = styled.textarea`
@@ -387,7 +389,7 @@ const RequestFormChackBoxInput = styled.input`
   display: none;
 
   &:checked + span {
-    background-color: ${({ theme }) => theme.colors.black};
+    background-color: ${({ theme }) => theme.colors.red};
     background-image: url(${checkBoxChecked}); // 체크 이미지 경로
     background-repeat: no-repeat;
     background-position: center;
@@ -431,7 +433,7 @@ const RequestSubmitButtonWrap = styled.div`
 
 const RequestSubmitButton = styled.button`
   margin-top: 24px;
-  padding: 13.5px 32.5px;
+  padding: 12.5px 32px;
   border-radius: 4px;
   font-family: 'Pretendard';
   font-size: 15px;

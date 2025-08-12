@@ -1,26 +1,5 @@
 import styled from "styled-components";
-
-// Props 타입
-interface RequestData {
-  design_request_id: string;
-  id: string;
-  request_date: string;
-  requester: string;
-  completion_dt: string;
-  open_dt: string;
-  task_form: string;
-  task_type: string;
-  requirement: string;
-  url?: string;
-  note?: string;
-  status?: string;
-  review_status?: string;
-  manager_review_status?: string;
-  assigned_designer?: string;
-  result_url?: string;
-  emergency?: boolean;
-  requester_edit_state?: boolean;
-}
+import urlIcon from "../assets/url-icon.svg";
 
 interface RequestItemProps {
   item: RequestData;
@@ -46,51 +25,198 @@ export default function RequesterRequestItem({ item, index, onReviewComplete, on
       <RequestListTableTd>{item.design_request_id}</RequestListTableTd>
       <RequestListTableTd>{formatDate(item.request_date)}</RequestListTableTd>
       <RequestListTableTd>{item.requester}</RequestListTableTd>
-      <RequestListTableTd>{formatDate(item.completion_dt)}</RequestListTableTd>
-      <RequestListTableTd>{formatDate(item.open_dt)}</RequestListTableTd>
+      <RequestListcompletionTd>{formatDate(item.completion_dt)}</RequestListcompletionTd>
+      <RequestListOpenDtTd>{formatDate(item.open_dt)}</RequestListOpenDtTd>
       <RequestListTableTd>{item.task_form}</RequestListTableTd>
-      <RequestListTableTd>{item.task_type}</RequestListTableTd>
+      <RequestListTaskTypeTd>{item.task_type}</RequestListTaskTypeTd>
+      <RequestListRequirementTd>
+        <RequestListEmergencyWrap>
+          {item.emergency ? <EmergencyBadge>긴급</EmergencyBadge> : ""}{item.requirement}
+        </RequestListEmergencyWrap>
+      </RequestListRequirementTd>
       <RequestListTableTd>
-        {item.emergency ? <EmergencyBadge>긴급</EmergencyBadge> : ""}{item.requirement}
+        <UrlLink href={item.url} target="_blank" />
       </RequestListTableTd>
-      <RequestListTableTd>{item.url}</RequestListTableTd>
-      <RequestListTableTd>{item.note}</RequestListTableTd>
+      <RequestListMemoTd>{item.note}</RequestListMemoTd>
       <RequestListTableTd>
-        {item.status === "검수요청"
-          ? "진행중"
-          : item.status === "검수중"
-          ? "검수 요청"
-          : (item.status || "대기")
-        }
+        <StautsBadge status={item.status}>
+          {item.status === "검수요청"
+            ? "진행중"
+            : item.status === "검수중"
+            ? "검수 요청"
+            : (item.status || "대기")
+          }
+        </StautsBadge>
       </RequestListTableTd>
       <RequestListTableTd>{item.assigned_designer || "미배정"}</RequestListTableTd>
-      <RequestListTableTd>{item.manager_review_status === "검수완료" ? (item.url || "") : ""}</RequestListTableTd>
       <RequestListTableTd>
-        <CancelButton onClick={() => onCancel(item.id)}>취소</CancelButton>
-      </RequestListTableTd>
-      <RequestListTableTd>
-        <EditButton onClick={() => onEditClick(item.id)}>수정</EditButton>
+        {item.manager_review_status === "검수완료" && item.result_url ? (
+          <UrlLink
+            href={item.result_url}
+            target="_blank"
+          />
+        ) : (
+          ""
+        )}
       </RequestListTableTd>
       <RequestListTableTd>
         {item.manager_review_status === "검수완료" ? (
           item.status !== "완료" ? (
             <ReviewButton onClick={() => onReviewComplete(item.id)}>검수완료</ReviewButton>
           ) : (
-            <CompletedText>완료</CompletedText>
+            <CompletedText>검수완료</CompletedText>
           )
         ) : (
           ""
         )}
       </RequestListTableTd>
+      <RequestListTableTd>
+        <EditButton onClick={() => onEditClick(item.id)}>수정</EditButton>
+      </RequestListTableTd>
+      <RequestListTableTd>
+        <CancelButton onClick={() => onCancel(item.id)}>취소</CancelButton>
+      </RequestListTableTd>
     </RequestListTableTr>
   );
 }
 
+const RequestListTableTr = styled.tr<{ isCanceled: boolean }>`
+  ${({ isCanceled }) =>
+    isCanceled &&
+    `
+      td {
+        color: #888;
+        background-color: #f4f4f4;
+      }
+    `}
+  &:hover {
+    td {
+      background-color: ${({ theme }) => theme.colors.gray04}
+    }
+  }
+`;
+
+const RequestListTableTd = styled.td`
+  padding: 15px 0;
+  font-family: 'Pretendard';
+  font-size: 14px;
+  font-weight: 500;
+
+  &:first-of-type {
+    border-left: none;
+  }
+
+  &:nth-of-type(12) {
+    border-right: 1px solid ${({ theme }) => theme.colors.black};
+  }
+`;
+
+const RequestListcompletionTd = styled.td`
+  color: ${({ theme }) => theme.colors.red};
+  font-family: 'Pretendard';
+  font-size: 14px;
+  font-weight: 500;
+`;
+
+const RequestListOpenDtTd = styled.td`
+  color: ${({ theme }) => theme.colors.blue02};
+  font-family: 'Pretendard';
+  font-size: 14px;
+  font-weight: 500;
+`;
+
+const RequestListTaskTypeTd = styled.td`
+  padding: 15px 12px;
+  line-height: 15px;
+  font-family: 'Pretendard';
+  font-size: 14px;
+  font-weight: 500;
+`;
+
+const RequestListRequirementTd = styled.td`
+  line-height: 15px;
+  text-align: left;
+  font-family: 'Pretendard';
+  font-size: 14px;
+  font-weight: 500;
+`
+
+const RequestListMemoTd = styled.td`
+  line-height: 15px;
+  padding: 0 12px;
+  text-align: left;
+  font-family: 'Pretendard';
+  font-size: 14px;
+  font-weight: 500;
+  background-color: #fffff1;
+`;
+
+const RequestListEmergencyWrap = styled.div`
+  ${({ theme }) => theme.mixin.flex('center')};
+  padding: 0 12px;
+`;
+
+
+const EmergencyBadge = styled.span`
+  margin-right: 8px;
+  padding: 3px 5px;
+  border-radius: 2px;
+  font-size: 10px;
+  font-weight: 700;
+  background-color: ${({ theme }) => theme.colors.red};
+  color: ${({ theme }) => theme.colors.white01};
+  white-space: nowrap;
+`;
+
+const UrlLink = styled.a<{ $disabled?: boolean }>`
+  display: inline-block;
+  vertical-align: middle;
+  width: 24px;
+  height: 24px;
+  background: url(${urlIcon}) no-repeat center / contain;
+`;
+
+const StautsBadge = styled.span<{ status: string }>`
+  border-radius: 14px;
+  padding: 5.5px 12px;
+  font-family: 'Pretendard';
+  font-size: 14px;
+  font-weight: 400;
+  color: ${({ status, theme }) => {
+    switch (status) {
+      case "대기":
+        return theme.colors.orange; // 오렌지
+      case "진행중":
+        return theme.colors.blue02; // 파란색
+      case "검수중":
+        return theme.colors.red; // 빨간색
+      case "완료":
+        return theme.colors.gray06; // 회색
+      default:
+        return theme.colors.black; // 기본색
+    }
+  }};
+  background-color: ${({ status, theme }) => {
+    switch (status) {
+      case "대기":
+        return theme.colors.beige02; // 오렌지
+      case "진행중":
+        return theme.colors.lightpupple; // 파란색
+      case "검수중":
+        return theme.colors.pink03; // 빨간색
+      case "완료":
+        return theme.colors.white02; // 회색
+      default:
+        return theme.colors.gray07; // 기본색
+    }
+  }};;
+`;
+
 const ReviewButton = styled.button`
-  padding: 5px 10px;
+  padding: 4.5px 10px;
   border-radius: 4px;
   color: ${({ theme }) => theme.colors.white01};
-  background-color: ${({ theme }) => theme.colors.navy};
+  background-color: ${({ theme }) => theme.colors.black};
 `;
 
 const CompletedText = styled.span`
@@ -99,43 +225,15 @@ const CompletedText = styled.span`
 `;
 
 const EditButton = styled.button`
-  padding: 5px 10px;
+  padding: 4.5px 10px;
   border-radius: 4px;
   color: ${({ theme }) => theme.colors.white01};
-  background-color: ${({ theme }) => theme.colors.navy};
+  background-color: ${({ theme }) => theme.colors.black};
 `;
 
 const CancelButton = styled.button`
-  padding: 5px 10px;
+  padding: 4.5px 10px;
   border-radius: 4px;
   color: ${({ theme }) => theme.colors.white01};
-  background-color: ${({ theme }) => theme.colors.navy};
-`;
-
-const RequestListTableTr = styled.tr<{ isCanceled: boolean }>`
-  ${({ isCanceled }) =>
-    isCanceled &&
-    `
-      td {
-        text-decoration: line-through;
-        color: gray;
-      }
-    `}
-`;
-
-const RequestListTableTd = styled.td`
-  padding: 5px;
-  font-family: 'Pretendard';
-  font-size: 14px;
-  font-weight: 400;
-`;
-
-const EmergencyBadge = styled.span`
-  margin-right: 5px;
-  padding: 3px 5px;
-  border-radius: 2px;
-  font-size: 10px;
-  font-weight: 700;
-  background-color: ${({ theme }) => theme.colors.red};
-  color: ${({ theme }) => theme.colors.white01};
+  background-color: ${({ theme }) => theme.colors.black};
 `;
