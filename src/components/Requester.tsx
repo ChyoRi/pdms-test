@@ -30,7 +30,7 @@ export default function Requester({ setIsDrawerOpen, setEditData }: RequesterPro
   useEffect(() => {
     if (!userName) return; // 로그인 이름 없으면 실행 X
 
-    const q = query(collection(db, "design_request"),where("requester", "==", userName),orderBy("design_request_id", "asc"));
+    const q = query(collection(db, "design_request"),where("requester", "==", userName),orderBy("design_request_id", "desc"));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map((doc) => ({

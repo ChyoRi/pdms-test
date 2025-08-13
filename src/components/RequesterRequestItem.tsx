@@ -31,19 +31,24 @@ export default function RequesterRequestItem({ item, index, onReviewComplete, on
       <RequestListTaskTypeTd>{item.task_type}</RequestListTaskTypeTd>
       <RequestListRequirementTd>
         <RequestListEmergencyWrap>
-          {item.emergency ? <EmergencyBadge>긴급</EmergencyBadge> : ""}{item.requirement}
+          {item.emergency ? <EmergencyBadge>긴급</EmergencyBadge> : ""}
+          <RequestListRequirementText>
+            {item.requirement}
+          </RequestListRequirementText>
         </RequestListEmergencyWrap>
       </RequestListRequirementTd>
       <RequestListTableTd>
         <UrlLink href={item.url} target="_blank" />
       </RequestListTableTd>
-      <RequestListMemoTd>{item.note}</RequestListMemoTd>
+      <RequestListMemoTd>
+        <RequestListMemoText>{item.note || ""}</RequestListMemoText>
+      </RequestListMemoTd>
       <RequestListTableTd>
         <StautsBadge status={item.status}>
           {item.status === "검수요청"
             ? "진행중"
             : item.status === "검수중"
-            ? "검수 요청"
+            ? "검수요청"
             : (item.status || "대기")
           }
         </StautsBadge>
@@ -139,7 +144,7 @@ const RequestListRequirementTd = styled.td`
   font-family: 'Pretendard';
   font-size: 14px;
   font-weight: 500;
-`
+`;
 
 const RequestListMemoTd = styled.td`
   line-height: 15px;
@@ -154,6 +159,15 @@ const RequestListMemoTd = styled.td`
 const RequestListEmergencyWrap = styled.div`
   ${({ theme }) => theme.mixin.flex('center')};
   padding: 0 12px;
+`;
+
+const RequestListRequirementText = styled.span`
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  word-break: break-word;
+  text-overflow: ellipsis;
 `;
 
 
@@ -176,6 +190,15 @@ const UrlLink = styled.a<{ $disabled?: boolean }>`
   background: url(${urlIcon}) no-repeat center / contain;
 `;
 
+const RequestListMemoText = styled.span`
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  word-break: break-word;
+  text-overflow: ellipsis;
+`;
+
 const StautsBadge = styled.span<{ status: string }>`
   border-radius: 14px;
   padding: 5.5px 12px;
@@ -188,6 +211,8 @@ const StautsBadge = styled.span<{ status: string }>`
         return theme.colors.orange; // 오렌지
       case "진행중":
         return theme.colors.blue02; // 파란색
+      case "검수요청":
+        return theme.colors.blue02;
       case "검수중":
         return theme.colors.red; // 빨간색
       case "완료":
@@ -202,6 +227,8 @@ const StautsBadge = styled.span<{ status: string }>`
         return theme.colors.beige02; // 오렌지
       case "진행중":
         return theme.colors.lightpupple; // 파란색
+      case "검수요청":
+        return theme.colors.lightpupple;
       case "검수중":
         return theme.colors.pink03; // 빨간색
       case "완료":

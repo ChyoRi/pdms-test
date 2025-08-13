@@ -4,6 +4,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "../firebaseconfig";
 import { query, where, collection, onSnapshot, doc, updateDoc, Timestamp, orderBy } from "firebase/firestore";
 import DesignerRequestList from "./DesignerRequestList";
+import MainTitle from "./MainTitle";
 
 interface DesignRequest {
   design_request_id: string;
@@ -48,7 +49,7 @@ export default function Designer() {
     const q = query(
       collection(db, "design_request"),
       where("assigned_designer", "==", designerName), // ✅ 필터 추가
-      orderBy("design_request_id", "asc")
+      orderBy("design_request_id", "desc")
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -100,6 +101,7 @@ export default function Designer() {
 
   return (
     <Container>
+      <MainTitle />
       <DesignerRequestTitle>디자이너 화면</DesignerRequestTitle>
       <DesignerRequestList requests={assignedRequests} formData={formData} onChange={handleChange} onSave={saveResponse} />
     </Container>
@@ -110,4 +112,5 @@ const Container = styled.div``;
 
 const DesignerRequestTitle = styled.h2`
   margin-bottom: 20px;
-`
+  padding: 0 48px;
+`;

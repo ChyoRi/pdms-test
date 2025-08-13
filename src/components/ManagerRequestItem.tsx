@@ -1,4 +1,5 @@
 import styled from "styled-components";
+import urlIcon from "../assets/url-icon.svg";
 
 interface ManagerRequestItemProps {
   index: number;
@@ -34,37 +35,59 @@ export default function ManagerRequestItem({
       <RequestListTableTd>{item.design_request_id}</RequestListTableTd>
       <RequestListTableTd>{formatDate(item.request_date)}</RequestListTableTd>
       <RequestListTableTd>{item.requester}</RequestListTableTd>
-      <RequestListTableTd>{formatDate(item.completion_dt)}</RequestListTableTd>
-      <RequestListTableTd>{formatDate(item.open_dt)}</RequestListTableTd>
+      <RequestListcompletionTd>{formatDate(item.completion_dt)}</RequestListcompletionTd>
+      <RequestListOpenDtTd>{formatDate(item.open_dt)}</RequestListOpenDtTd>
       <RequestListTableTd>{item.task_form}</RequestListTableTd>
-      <RequestListTableTd>{item.task_type}</RequestListTableTd>
+      <RequestListTaskTypeTd>{item.task_type}</RequestListTaskTypeTd>
+      <RequestListRequirementTd>
+        <RequestListEmergencyWrap>
+          {item.emergency ? <EmergencyBadge>긴급</EmergencyBadge> : ""}
+        <RequestListRequirementText>
+          {item.requirement}
+        </RequestListRequirementText>
+        </RequestListEmergencyWrap>
+      </RequestListRequirementTd>
       <RequestListTableTd>
-        {item.emergency ? <EmergencyBadge>긴급</EmergencyBadge> : ""}{item.requirement}
+        <UrlLink href={item.url} target="_blank" />
       </RequestListTableTd>
-      <RequestListTableTd>{item.url || ""}</RequestListTableTd>
-      <RequestListTableTd>{item.note || ""}</RequestListTableTd>
-      <RequestListTableTd>{item.status === "검수요청" ? "검수중" : (item.status || "대기")}</RequestListTableTd>
-      <RequestListTableTd>{item.result_url || ""}</RequestListTableTd>
+      <RequestListMemoTd>
+        <RequestListMemoText>{item.note || ""}</RequestListMemoText>
+      </RequestListMemoTd>
+      <RequestListTableTd>
+        <StautsBadge status={item.status}>
+          {item.status === "검수요청" ? "검수중" : (item.status || "대기")}
+        </StautsBadge>
+      </RequestListTableTd>
+      <RequestListTableTd>
+        {item.result_url ? (
+          <UrlLink
+            href={item.result_url}
+            target="_blank"
+          />
+        ) : (
+          ""
+        )}
+      </RequestListTableTd>
       <RequestListTableTd>{formatDate(item.designer_start_date)}</RequestListTableTd>
       <RequestListTableTd>{formatDate(item.designer_end_date)}</RequestListTableTd>
       {/* ✅ 디자이너 선택 + 배정 */}
       <RequestListTableTd>
-        <Select value={selectedDesigner} onChange={(e) => onDesignerSelect(e.target.value)} disabled={item.status === "취소"}>
+        <AssignSelect value={selectedDesigner} onChange={(e) => onDesignerSelect(e.target.value)} disabled={item.status === "취소"}>
           <option value="">디자이너 선택</option>
           {designerList.map((designer) => (
             <option key={designer.id} value={designer.name}>
               {designer.name}
             </option>
           ))}
-        </Select>
-        <Button onClick={onAssignDesigner} disabled={item.status === "취소"}>배정</Button>
+        </AssignSelect>
+        <AssignButton onClick={onAssignDesigner} disabled={item.status === "취소"}>배정</AssignButton>
       </RequestListTableTd>
       {/* ✅ 요청자 전달 버튼 */}
       <RequestListTableTd>
         {item.status === "검수요청" && item.manager_review_status !== "검수완료" ? (
-          <SendButton onClick={onSendToRequester}>완료</SendButton>
+          <ReviewButton onClick={onSendToRequester}>검수완료</ReviewButton>
         ) : item.manager_review_status === "검수완료" ? (
-          <CompletedText>완료</CompletedText>
+          <CompletedText>검수완료</CompletedText>
         ) : (
           ""
         )}
@@ -73,55 +96,80 @@ export default function ManagerRequestItem({
   )
 }
 
-// ✅ 스타일
-const Button = styled.button`
-  margin-left: 10px;
-  margin-top: 6px;
-  padding: 6px 10px;
-  background: #073863;
-  color: #fff;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-`;
-
-const Select = styled.select`
-  padding: 6px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-`;
-
-const SendButton = styled.button`
-  padding: 6px 12px;
-  background: #28a745;
-  color: #fff;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-`;
-
 const RequestListTableTr = styled.tr<{ isCanceled: boolean }>`
   ${({ isCanceled }) =>
     isCanceled &&
     `
       td {
-        text-decoration: line-through;
-        color: gray;
+        color: #888;
+        background-color: #f4f4f4;
       }
     `}
+  &:hover {
+    td {
+      background-color: ${({ theme }) => theme.colors.gray04}
+    }
+  }
 `;
 
 const RequestListTableTd = styled.td`
-  padding: 5px;
+  padding: 11px 0;
   font-family: 'Pretendard';
   font-size: 14px;
   font-weight: 400;
+
+  &:first-of-type {
+    border-left: none;
+  }
+
+  &:nth-of-type(12) {
+    border-right: 1px solid ${({ theme }) => theme.colors.black};
+  }
 `;
 
-const CompletedText = styled.span`
-  color: green;
-  font-size: 13px;
-  font-weight: bold;
+const RequestListcompletionTd = styled.td`
+  color: ${({ theme }) => theme.colors.red};
+  font-family: 'Pretendard';
+  font-size: 14px;
+  font-weight: 500;
+`;
+
+const RequestListOpenDtTd = styled.td`
+  color: ${({ theme }) => theme.colors.blue02};
+  font-family: 'Pretendard';
+  font-size: 14px;
+  font-weight: 500;
+`;
+
+const RequestListTaskTypeTd = styled.td`
+  padding: 15px 12px;
+  line-height: 15px;
+  font-family: 'Pretendard';
+  font-size: 14px;
+  font-weight: 500;
+`;
+
+const RequestListRequirementTd = styled.td`
+  line-height: 15px;
+  text-align: left;
+  font-family: 'Pretendard';
+  font-size: 14px;
+  font-weight: 500;
+`;
+
+const RequestListMemoTd = styled.td`
+  line-height: 15px;
+  padding: 0 12px;
+  text-align: left;
+  font-family: 'Pretendard';
+  font-size: 14px;
+  font-weight: 500;
+  background-color: #fffff1;
+`;
+
+const RequestListEmergencyWrap = styled.div`
+  ${({ theme }) => theme.mixin.flex('center')};
+  padding: 0 12px;
 `;
 
 const EmergencyBadge = styled.span`
@@ -132,4 +180,98 @@ const EmergencyBadge = styled.span`
   font-weight: 700;
   background-color: ${({ theme }) => theme.colors.red};
   color: ${({ theme }) => theme.colors.white01};
+  white-space: nowrap;
+`;
+
+const RequestListRequirementText = styled.span`
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  word-break: break-word;
+  text-overflow: ellipsis;
+`;
+
+const UrlLink = styled.a<{ $disabled?: boolean }>`
+  display: inline-block;
+  vertical-align: middle;
+  width: 24px;
+  height: 24px;
+  background: url(${urlIcon}) no-repeat center / contain;
+`;
+
+const RequestListMemoText = styled.span`
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  word-break: break-word;
+  text-overflow: ellipsis;
+`;
+
+const StautsBadge = styled.span<{ status: string }>`
+  border-radius: 14px;
+  padding: 5.5px 12px;
+  font-family: 'Pretendard';
+  font-size: 14px;
+  font-weight: 400;
+  color: ${({ status, theme }) => {
+    switch (status) {
+      case "대기":
+        return theme.colors.orange; // 오렌지
+      case "진행중":
+        return theme.colors.blue02; // 파란색
+      case "검수요청":
+        return theme.colors.red;
+      case "검수중":
+        return theme.colors.red; // 빨간색
+      case "완료":
+        return theme.colors.gray06; // 회색
+      default:
+        return theme.colors.black; // 기본색
+    }
+  }};
+  background-color: ${({ status, theme }) => {
+    switch (status) {
+      case "대기":
+        return theme.colors.beige02; // 오렌지
+      case "진행중":
+        return theme.colors.lightpupple; // 파란색
+      case "검수요청":
+        return theme.colors.pink03;
+      case "검수중":
+        return theme.colors.pink03; // 빨간색
+      case "완료":
+        return theme.colors.white02; // 회색
+      default:
+        return theme.colors.gray07; // 기본색
+    }
+  }};;
+`;
+
+const AssignButton = styled.button`
+  margin: 6px 0 0 10px;
+  padding: 4.5px 10px;
+  border-radius: 4px;
+  background-color: ${({ theme }) => theme.colors.black};
+  color: ${({ theme }) => theme.colors.white01};
+`;
+
+const AssignSelect = styled.select`
+  padding: 6px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+`;
+
+const ReviewButton = styled.button`
+  padding: 4.5px 10px;
+  border-radius: 4px;
+  background-color: ${({ theme }) => theme.colors.black};
+  color: ${({ theme }) => theme.colors.white01};
+`;
+
+const CompletedText = styled.span`
+  color: green;
+  font-size: 13px;
+  font-weight: bold;
 `;

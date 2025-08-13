@@ -68,9 +68,10 @@ const RequestListTableWrap = styled.div`
 `
 
 const RequestListTable = styled.table`
+  table-layout: fixed;
   width: 100%;
-  text-align: center;
   border-top: 2px solid ${({ theme }) => theme.colors.black};
+  text-align: center;
 `;
 
 const RequestListTableCaption = styled.caption`
@@ -83,6 +84,7 @@ const RequestListTableCaption = styled.caption`
 `;
 
 const RequestListTableTh = styled.th`
+  line-height: 16px;
   padding: 13px 0;
   border-bottom: none;
   font-family: 'Pretendard';

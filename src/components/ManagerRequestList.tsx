@@ -1,3 +1,4 @@
+
 import styled from "styled-components";
 import ManagerRequestItem from "./ManagerRequestItem";
 
@@ -19,68 +20,75 @@ export default function ManagerRequestList({
   sendToRequester,
 }: ManagerRequestListProps) {
   return (
-    <RequestListTable>
-      <RequestListTableCaption>매니저 요청 리스트</RequestListTableCaption>
-      <colgroup>
-        <col style={{ width: '50px' }} /><col style={{ width: '80px' }}/>
-        <col style={{ width: '60px' }} /><col style={{ width: '60px' }} />
-        <col style={{ width: '60px' }} /><col style={{ width: '60px' }} />
-        <col style={{ width: '80px' }} /><col style={{ width: '120px' }}/>
-        <col /><col />
-        <col /><col style={{ width: '80px' }}/>
-        <col /><col style={{ width: '60px' }} />
-        <col style={{ width: '60px' }} /><col style={{ width: '180px' }} />
-        <col style={{ width: '60px' }} />
-      </colgroup>
-      <thead>
-        <tr>
-          <RequestListTableTh>NO</RequestListTableTh>
-          <RequestListTableTh>문서번호</RequestListTableTh>
-          <RequestListTableTh>요청일</RequestListTableTh>
-          <RequestListTableTh>요청자</RequestListTableTh>
-          <RequestListTableTh>완료<br/>요청일</RequestListTableTh>
-          <RequestListTableTh>오픈일</RequestListTableTh>
-          <RequestListTableTh>업무형태</RequestListTableTh>
-          <RequestListTableTh>업무타입</RequestListTableTh>
-          <RequestListTableTh>작업항목</RequestListTableTh>
-          <RequestListTableTh>기획안 URL</RequestListTableTh>
-          <RequestListTableTh>메모</RequestListTableTh>
-          <RequestListTableTh>진행상태</RequestListTableTh>
-          <RequestListTableTh>산출물 URL</RequestListTableTh>
-          <RequestListTableTh>디자인<br />시작일</RequestListTableTh>
-          <RequestListTableTh>디자인<br />종료일</RequestListTableTh>
-          <RequestListTableTh>배정</RequestListTableTh>
-          <RequestListTableTh>검수</RequestListTableTh>
-        </tr>
-      </thead>
-      <tbody>
-        {data.length > 0 ? (
-          data.map((item, index) => (
-            <ManagerRequestItem key={item.id} 
-                                index={index + 1} 
-                                item={item}
-                                designerList={designerList}
-                                selectedDesigner={selectedDesigners[item.id] || ""}
-                                onDesignerSelect={(name) => designerSelect(item.id, name)}
-                                onAssignDesigner={() => assignDesigner(item.id)}
-                                onSendToRequester={() => sendToRequester(item.id)} />
-          ))
-        ) : (
+    <RequestListTableWrap>
+      <RequestListTable>
+        <RequestListTableCaption>매니저 요청 리스트</RequestListTableCaption>
+        <colgroup>
+          <col style={{ width: '50px' }} /><col style={{ width: '100px' }}/>
+          <col style={{ width: '60px' }} /><col style={{ width: '60px' }} />
+          <col style={{ width: '60px' }} /><col style={{ width: '60px' }} />
+          <col style={{ width: '80px' }} /><col style={{ width: '120px' }} />
+          <col /><col style={{ width: '90px' }} />
+          <col style={{ width: '160px' }} /><col style={{ width: '80px' }} />
+          <col style={{ width: '85px' }} /><col style={{ width: '60px' }} />
+          <col style={{ width: '60px' }} /><col style={{ width: '180px' }} />
+          <col style={{ width: '80px' }} />
+        </colgroup>
+        <thead>
           <tr>
-            <td colSpan={17} style={{ textAlign: "center", padding: "20px" }}>
-              등록된 요청이 없습니다.
-            </td>
+            <RequestListTableTh>번호</RequestListTableTh>
+            <RequestListTableTh>문서번호</RequestListTableTh>
+            <RequestListTableTh>요청일</RequestListTableTh>
+            <RequestListTableTh>요청자</RequestListTableTh>
+            <RequestListTableTh>완료<br/>요청일</RequestListTableTh>
+            <RequestListTableTh>오픈일</RequestListTableTh>
+            <RequestListTableTh>업무형태</RequestListTableTh>
+            <RequestListTableTh>업무타입</RequestListTableTh>
+            <RequestListTableTh>작업항목</RequestListTableTh>
+            <RequestListTableTh>요청서 URL</RequestListTableTh>
+            <RequestListTableTh>메모</RequestListTableTh>
+            <RequestListTableTh>진행상태</RequestListTableTh>
+            <RequestListTableTh>산출물 URL</RequestListTableTh>
+            <RequestListTableTh>디자인<br />시작일</RequestListTableTh>
+            <RequestListTableTh>디자인<br />종료일</RequestListTableTh>
+            <RequestListTableTh>배정</RequestListTableTh>
+            <RequestListTableTh>검수</RequestListTableTh>
           </tr>
-        )}
-    </tbody>
-    </RequestListTable>
+        </thead>
+        <tbody>
+          {data.length > 0 ? (
+            data.map((item, index) => (
+              <ManagerRequestItem key={item.id} 
+                                  index={index + 1} 
+                                  item={item}
+                                  designerList={designerList}
+                                  selectedDesigner={selectedDesigners[item.id] || ""}
+                                  onDesignerSelect={(name) => designerSelect(item.id, name)}
+                                  onAssignDesigner={() => assignDesigner(item.id)}
+                                  onSendToRequester={() => sendToRequester(item.id)} />
+            ))
+          ) : (
+            <tr>
+              <td colSpan={17} style={{ textAlign: "center", padding: "20px" }}>
+                등록된 요청이 없습니다.
+              </td>
+            </tr>
+          )}
+      </tbody>
+      </RequestListTable>
+    </RequestListTableWrap>
   );
 }
 
+const RequestListTableWrap = styled.div`
+  padding: 0 48px;
+`
+
 const RequestListTable = styled.table`
+  table-layout: fixed;
   width: 100%;
-  text-align: center;
   border-top: 2px solid ${({ theme }) => theme.colors.black};
+  text-align: center;
 `;
 
 const RequestListTableCaption = styled.caption`
@@ -93,9 +101,27 @@ const RequestListTableCaption = styled.caption`
 `;
 
 const RequestListTableTh = styled.th`
+  line-height: 16px;
+  padding: 13px 0;
   border-bottom: none;
   font-family: 'Pretendard';
   font-size: 14px;
   font-weight: 700;
   background-color: ${({ theme }) => theme.colors.white02};
+
+  &:first-of-type {
+    border-left: none;
+  }
+
+  &:nth-of-type(12) {
+    border-right: 1px solid ${({ theme }) => theme.colors.black};
+  }
+
+  &:nth-of-type(13), &:nth-of-type(14), &:nth-of-type(15), &:nth-of-type(16) {
+    border-right: 1px solid ${({ theme }) => theme.colors.pink02}
+  }
+
+  &:nth-of-type(13), &:nth-of-type(14), &:nth-of-type(15), &:nth-of-type(16), &:nth-of-type(17) {
+    background-color: ${({ theme }) => theme.colors.pink01};
+  }
 `;

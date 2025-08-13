@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { db } from "../firebaseconfig";
 import { doc, updateDoc, collection, getDocs, onSnapshot, query, where, orderBy } from "firebase/firestore";
 import ManagerRequestList from "./ManagerRequestList";
+import MainTitle from "./MainTitle";
 
 export default function Manager() {
   const [requests, setRequests] = useState<RequestData[]>([]);
@@ -13,7 +14,7 @@ export default function Manager() {
   useEffect(() => {
     const q = query(
       collection(db, "design_request"),
-      orderBy("design_request_id", "asc") // 문서번호 오름차순 정렬
+      orderBy("design_request_id", "desc") // 문서번호 오름차순 정렬
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -82,6 +83,7 @@ export default function Manager() {
 
   return (
     <Container>
+      <MainTitle />
       <ManagerRequestTitle>매니저 요청리스트</ManagerRequestTitle>
       <ManagerRequestList data={requests}
         designerList={designerList}
@@ -98,4 +100,5 @@ const Container = styled.div``;
 
 const ManagerRequestTitle = styled.h2`
   margin-bottom: 20px;
+  padding: 0 48px;
 `;
