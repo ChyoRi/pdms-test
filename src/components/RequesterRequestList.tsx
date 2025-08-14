@@ -6,20 +6,22 @@ interface RequestListProps {
   onReviewComplete: (id: string) => void;
   onCancel: (id: string) => void;
   onEditClick: (id: string) => void;
+  // ✅ 디테일 열기 콜백 추가: 메모/작업항목 클릭 시 사용
+  onDetailClick: (item: RequestData) => void;
 }
 
-export default function RequesterRequestList({ data, onReviewComplete, onCancel, onEditClick }: RequestListProps) {
+export default function RequesterRequestList({ data, onReviewComplete, onCancel, onEditClick, onDetailClick }: RequestListProps) {
   return (
     <RequestListTableWrap>
       <RequestListTable>
         <RequestListTableCaption>요청 리스트</RequestListTableCaption>
         <colgroup>
           <col style={{ width: '50px' }} /><col style={{ width: '100px' }}/>
-          <col style={{ width: '60px' }} /><col style={{ width: '60px' }} />
+          <col style={{ width: '60px' }} />
           <col style={{ width: '60px' }} /><col style={{ width: '60px' }} />
           <col style={{ width: '80px' }} /><col style={{ width: '120px' }}/>
           <col /><col style={{ width: '90px' }} />
-          <col style={{ width: '160px' }} /><col style={{ width: '100px' }} />
+          <col style={{ width: '220px' }} /><col style={{ width: '100px' }} />
           <col style={{ width: '85px' }}/><col style={{ width: '90px' }} />
           <col style={{ width: '100px' }} /><col style={{ width: '80px' }} />
           <col style={{ width: '80px' }} />
@@ -29,7 +31,6 @@ export default function RequesterRequestList({ data, onReviewComplete, onCancel,
             <RequestListTableTh>번호</RequestListTableTh>
             <RequestListTableTh>문서번호</RequestListTableTh>
             <RequestListTableTh>요청일</RequestListTableTh>
-            <RequestListTableTh>요청자</RequestListTableTh>
             <RequestListTableTh>완료<br />요청일</RequestListTableTh>
             <RequestListTableTh>오픈일</RequestListTableTh>
             <RequestListTableTh>업무형태</RequestListTableTh>
@@ -48,11 +49,11 @@ export default function RequesterRequestList({ data, onReviewComplete, onCancel,
         <tbody>
           {data.length > 0 ? (
             data.map((item, index) => (
-              <RequesterRequestItem key={item.id} index={index + 1} item={item} onReviewComplete={onReviewComplete} onCancel={onCancel} onEditClick={onEditClick} />
+              <RequesterRequestItem key={item.id} index={index + 1} item={item} onReviewComplete={onReviewComplete} onCancel={onCancel} onEditClick={onEditClick} onDetailClick={onDetailClick} />
             ))
           ) : (
             <tr>
-              <td colSpan={17} style={{ textAlign: "center", padding: "20px" }}>
+              <td colSpan={16} style={{ textAlign: "center", padding: "20px" }}>
                 등록된 요청이 없습니다.
               </td>
             </tr>

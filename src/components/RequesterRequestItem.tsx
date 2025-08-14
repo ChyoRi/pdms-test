@@ -7,9 +7,12 @@ interface RequestItemProps {
   onReviewComplete: (id: string) => void;
   onCancel: (id: string) => void;
   onEditClick: (id: string) => void;
+  onDetailClick: (item: RequestData) => void;
 }
 
-export default function RequesterRequestItem({ item, index, onReviewComplete, onCancel, onEditClick }: RequestItemProps) {
+export default function RequesterRequestItem({ item, index, onReviewComplete, onCancel, onEditClick, onDetailClick }: RequestItemProps) {
+
+  // 날짜 포맷 함수
   const formatDate = (timestamp: any) => {
     if (!timestamp) return "-";
     if (timestamp.toDate) {
@@ -19,12 +22,17 @@ export default function RequesterRequestItem({ item, index, onReviewComplete, on
     return timestamp;
   };
 
+  // ✅ 메모/작업항목 클릭 시 상세 Drawer 열기
+  const openDetail = (e: React.MouseEvent) => {
+    e.stopPropagation(); // 행 단위 클릭과 충돌 방지
+    onDetailClick(item);
+  };
+
   return (
     <RequestListTableTr isCanceled={item.status === "취소"}>
       <RequestListTableTd>{index}</RequestListTableTd>
       <RequestListTableTd>{item.design_request_id}</RequestListTableTd>
       <RequestListTableTd>{formatDate(item.request_date)}</RequestListTableTd>
-      <RequestListTableTd>{item.requester}</RequestListTableTd>
       <RequestListcompletionTd>{formatDate(item.completion_dt)}</RequestListcompletionTd>
       <RequestListOpenDtTd>{formatDate(item.open_dt)}</RequestListOpenDtTd>
       <RequestListTableTd>{item.task_form}</RequestListTableTd>
@@ -32,7 +40,7 @@ export default function RequesterRequestItem({ item, index, onReviewComplete, on
       <RequestListRequirementTd>
         <RequestListEmergencyWrap>
           {item.emergency ? <EmergencyBadge>긴급</EmergencyBadge> : ""}
-          <RequestListRequirementText>
+          <RequestListRequirementText onClick={openDetail}>
             {item.requirement}
           </RequestListRequirementText>
         </RequestListEmergencyWrap>
@@ -41,7 +49,9 @@ export default function RequesterRequestItem({ item, index, onReviewComplete, on
         <UrlLink href={item.url} target="_blank" />
       </RequestListTableTd>
       <RequestListMemoTd>
-        <RequestListMemoText>{item.note || ""}</RequestListMemoText>
+        <RequestListMemoText onClick={openDetail}>
+          {item.note || ""}
+        </RequestListMemoText>
       </RequestListMemoTd>
       <RequestListTableTd>
         <StautsBadge status={item.status}>
@@ -168,8 +178,12 @@ const RequestListRequirementText = styled.span`
   overflow: hidden;
   word-break: break-word;
   text-overflow: ellipsis;
-`;
 
+  &:hover {
+    font-weight: 600;
+    text-decoration: underline;
+  }
+`;
 
 const EmergencyBadge = styled.span`
   margin-right: 8px;
@@ -197,6 +211,11 @@ const RequestListMemoText = styled.span`
   overflow: hidden;
   word-break: break-word;
   text-overflow: ellipsis;
+
+  &:hover {
+    font-weight: 600;
+    text-decoration: underline;
+  }
 `;
 
 const StautsBadge = styled.span<{ status: string }>`

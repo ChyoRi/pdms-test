@@ -1,0 +1,142 @@
+import styled from "styled-components"
+import requestFormExitButton from "../assets/requestformexit-button.svg";
+
+interface RequestDetailProps {
+  data: RequestData;
+  onClose: () => void;
+}
+
+export default function RequestDetail({ data, onClose }: RequestDetailProps) {
+  // 날짜 포맷 함수
+  const formatDate = (timestamp: any) => {
+    if (!timestamp) return "-";
+    if (timestamp.toDate) {
+      const date = timestamp.toDate();
+      return `${date.getMonth() + 1}/${date.getDate()}`;
+    }
+    return timestamp;
+  };
+
+  return (
+    <>
+      <RequestTitleWrap>
+        <RequestTitle>디자인 요청 상세</RequestTitle>
+        <RequestExitButton type="button" onClick={onClose} />
+      </RequestTitleWrap>
+
+      <RequestDetailTable>
+        <RequestDetailTableCaption>디자인 요청 상세</RequestDetailTableCaption>
+        <colgroup>
+          <col style={{ width: "120px" }} />
+        </colgroup>
+        <tbody>
+          <tr>
+            <RequestDetailTableTh>문서번호</RequestDetailTableTh>
+            <RequestDetailTableTd>{data?.design_request_id}</RequestDetailTableTd>
+          </tr>
+          <tr>
+            <RequestDetailTableTh>요청일</RequestDetailTableTh>
+            <RequestDetailTableTd>{formatDate(data?.request_date)}</RequestDetailTableTd>
+          </tr>
+          <tr>
+            <RequestDetailTableTh>완료 요청일</RequestDetailTableTh>
+            <RequestDetailTableTd>{formatDate(data?.completion_dt)}</RequestDetailTableTd>
+          </tr>
+          <tr>
+            <RequestDetailTableTh>오픈일</RequestDetailTableTh>
+            <RequestDetailTableTd>{formatDate(data?.open_dt)}</RequestDetailTableTd>
+          </tr>
+          <tr>
+            <RequestDetailTableTh>업무 형태</RequestDetailTableTh>
+            <RequestDetailTableTd>{data?.task_form}</RequestDetailTableTd>
+          </tr>
+          <tr>
+            <RequestDetailTableTh>업무 유형</RequestDetailTableTh>
+            <RequestDetailTableTd>{data?.task_type}</RequestDetailTableTd>
+          </tr>
+          <tr>
+            <RequestDetailTableTh>작업 항목</RequestDetailTableTh>
+            <RequestDetailTableTd>{data?.requirement}</RequestDetailTableTd>
+          </tr>
+          <tr>
+            <RequestDetailTableTh>긴급 일정</RequestDetailTableTh>
+            <RequestDetailTableTd>{data?.emergency ? "예" : "아니오"}</RequestDetailTableTd>
+          </tr>
+          <tr>
+            <RequestDetailTableTh>요청서 URL</RequestDetailTableTh>
+            <RequestDetailTableTd>
+              {data?.url ? <UrlLink href={data?.url} target="_blank" rel="noreferrer">{data?.url}</UrlLink> : "-"}
+            </RequestDetailTableTd>
+          </tr>
+          <tr>
+            <RequestDetailTableTh>메모</RequestDetailTableTh>
+            <RequestDetailTableTd>
+              <MemoText>{data?.note || "-"}</MemoText>
+            </RequestDetailTableTd>
+          </tr>
+        </tbody>
+      </RequestDetailTable>
+    </>
+  );
+}
+
+const RequestTitleWrap = styled.div`
+  ${({ theme }) => theme.mixin.flex("center", "space-between")};
+  margin-bottom: 24px;
+`;
+
+const RequestTitle = styled.h3`
+  font-family: "Pretendard";
+  font-size: 24px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.black};
+  letter-spacing: -0.48px;
+`;
+
+const RequestExitButton = styled.button`
+  width: 24px;
+  height: 24px;
+  background: url(${requestFormExitButton}) no-repeat center;
+  background-size: contain;
+`;
+
+const RequestDetailTable = styled.table`
+  width: 100%;
+  border-top: 1px solid ${({ theme }) => theme.colors.black};
+  color: ${({ theme }) => theme.colors.black};
+  font-family: 'Pretendard';
+`;
+
+const RequestDetailTableCaption = styled.caption`
+  position: absolute;
+  clip: rect(0 0 0 0);
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+`;
+
+const RequestDetailTableTh = styled.th`
+  padding: 16px;
+  font-size: 16px;
+  border: 1px solid ${({ theme }) => theme.colors.gray02};
+  border-left: none;
+  background-color: ${({ theme }) => theme.colors.gray04};
+`;
+
+const RequestDetailTableTd = styled.td`
+  padding: 12px 24px;
+  border-right: none;
+`;
+
+const UrlLink = styled.a`
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
+`;
+
+const MemoText = styled.span`
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
+`;

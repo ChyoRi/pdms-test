@@ -10,10 +10,11 @@ interface RequestData {
 interface AsideProps {
   requests: RequestData[];
   role: number | null;
+  userName: string;
   onRequestButtonClick: () => void;
 }
 
-export default function Aside({ requests, role, onRequestButtonClick }: AsideProps) {
+export default function Aside({ requests, role, userName, onRequestButtonClick }: AsideProps) {
   const statusList = [
     {
       status: "대기중",
@@ -29,12 +30,12 @@ export default function Aside({ requests, role, onRequestButtonClick }: AsidePro
     }
   ];
 
-  const getRoleTitle = (role: number | null): string => {
+  const getRoleTitle = (role: number | null, name: string): string => {
     switch (role) {
       case 1:
-        return "나의 요청";
+        return `${name}님의 요청`;
       case 2:
-        return "나의 작업 현황";
+        return `${name}님의 작업 현황`;
       case 3:
         return "전체 요청 현황";
       default:
@@ -56,7 +57,7 @@ export default function Aside({ requests, role, onRequestButtonClick }: AsidePro
       <MyRequestWrap>
         <MyRequestTitleWrap>
           <MyRequestIcon src={myrequestIcon} />
-          <MyRequestTitle>{getRoleTitle(role)}</MyRequestTitle>
+          <MyRequestTitle>{getRoleTitle(role, userName)}</MyRequestTitle>
         </MyRequestTitleWrap>
         <MyRequestList>
           {statusList.map((item) => (

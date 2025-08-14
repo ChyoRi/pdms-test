@@ -207,7 +207,6 @@ const RequestListDateInput = styled.input.attrs({ type: "date" })`
   font-weight: 500;
 `;
 
-
 const RequestListTextInput = styled.input`
   width: 100%;
   padding: 0 12px;

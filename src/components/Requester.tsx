@@ -9,10 +9,10 @@ import MainTitle from "./MainTitle";
 interface RequesterProps {
   setIsDrawerOpen: (value: boolean) => void;
   setEditData: (data: RequestData) => void;
+  setDetailData: (data: RequestData) => void;
 }
 
-
-export default function Requester({ setIsDrawerOpen, setEditData }: RequesterProps) {
+export default function Requester({ setIsDrawerOpen, setEditData, setDetailData }: RequesterProps) {
   const [userName, setUserName] = useState("");
   const [requests, setRequests] = useState<RequestData[]>([]); // request DB 배열
 
@@ -72,6 +72,12 @@ export default function Requester({ setIsDrawerOpen, setEditData }: RequesterPro
     }
   }
 
+  // ✅ 메모/작업항목 클릭 → 디테일 모드
+  const openDetail = (item: RequestData) => {
+    setDetailData(item);     // 상위에서 drawerMode='detail' 세팅
+    setIsDrawerOpen(true);
+  };
+
   // ✅ 취소 처리
   const cancelRequest = async (id: string) => {
     await updateDoc(doc(db, "design_request", id), {
@@ -88,7 +94,7 @@ export default function Requester({ setIsDrawerOpen, setEditData }: RequesterPro
   return (
     <>
       <MainTitle />
-      <RequesterRequestList data={requests} onReviewComplete={reviewComplete} onCancel={cancelRequest} onEditClick={editRequest} />
+      <RequesterRequestList data={requests} onReviewComplete={reviewComplete} onCancel={cancelRequest} onEditClick={editRequest} onDetailClick={openDetail} />
     </>
   );
 }
