@@ -5,7 +5,12 @@ import { doc, updateDoc, collection, getDocs, onSnapshot, query, where, orderBy 
 import ManagerRequestList from "./ManagerRequestList";
 import MainTitle from "./MainTitle";
 
-export default function Manager() {
+interface RequesterProps {
+  setIsDrawerOpen: (value: boolean) => void;
+  setDetailData: (data: RequestData) => void;
+}
+
+export default function Manager({ setIsDrawerOpen, setDetailData }: RequesterProps) {
   const [requests, setRequests] = useState<RequestData[]>([]);
   const [designerList, setDesignerList] = useState<any[]>([]);
   const [selectedDesigners, setSelectedDesigners] = useState<{ [key: string]: string }>({});
@@ -81,6 +86,12 @@ export default function Manager() {
     alert("요청자에게 전달되었습니다.");
   };
 
+  // ✅ 메모/작업항목 클릭 → 디테일 모드
+  const openDetail = (item: RequestData) => {
+    setDetailData(item);     // 상위에서 drawerMode='detail' 세팅
+    setIsDrawerOpen(true);
+  };
+
   return (
     <Container>
       <MainTitle />
@@ -91,6 +102,7 @@ export default function Manager() {
         designerSelect={designerSelect}
         assignDesigner={assignDesigner}
         sendToRequester={sendToRequester}
+        onDetailClick={openDetail}
       />
     </Container>
   );

@@ -60,7 +60,7 @@ export default function RequestDetail({ data, onClose }: RequestDetailProps) {
           </tr>
           <tr>
             <RequestDetailTableTh>긴급 일정</RequestDetailTableTh>
-            <RequestDetailTableTd>{data?.emergency ? "예" : "아니오"}</RequestDetailTableTd>
+            <RequestDetailTableTd>{data?.emergency ? "긴급 일정으로 설정" : "긴급 일정으로 설정 안함"}</RequestDetailTableTd>
           </tr>
           <tr>
             <RequestDetailTableTh>요청서 URL</RequestDetailTableTh>
@@ -71,7 +71,7 @@ export default function RequestDetail({ data, onClose }: RequestDetailProps) {
           <tr>
             <RequestDetailTableTh>메모</RequestDetailTableTh>
             <RequestDetailTableTd>
-              <MemoText>{data?.note || "-"}</MemoText>
+              <MemoText>{data.note}</MemoText>
             </RequestDetailTableTd>
           </tr>
         </tbody>
@@ -135,8 +135,8 @@ const UrlLink = styled.a`
   word-break: break-word;
 `;
 
-const MemoText = styled.span`
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
+const MemoText = styled.p`
+  max-height: 120px;
+  overflow-y: auto;
   word-break: break-word;
 `;

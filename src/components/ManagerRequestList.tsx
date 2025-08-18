@@ -1,4 +1,3 @@
-
 import styled from "styled-components";
 import ManagerRequestItem from "./ManagerRequestItem";
 
@@ -9,6 +8,7 @@ interface ManagerRequestListProps {
   designerSelect: (requestId: string, designerName: string) => void;
   assignDesigner: (requestId: string) => void;
   sendToRequester: (requestId: string) => void;
+  onDetailClick: (item: RequestData) => void;
 }
 
 export default function ManagerRequestList({
@@ -18,6 +18,7 @@ export default function ManagerRequestList({
   designerSelect,
   assignDesigner,
   sendToRequester,
+  onDetailClick
 }: ManagerRequestListProps) {
   return (
     <RequestListTableWrap>
@@ -65,7 +66,8 @@ export default function ManagerRequestList({
                                   selectedDesigner={selectedDesigners[item.id] || ""}
                                   onDesignerSelect={(name) => designerSelect(item.id, name)}
                                   onAssignDesigner={() => assignDesigner(item.id)}
-                                  onSendToRequester={() => sendToRequester(item.id)} />
+                                  onSendToRequester={() => sendToRequester(item.id)} 
+                                  onDetailClick={onDetailClick} />
             ))
           ) : (
             <tr>

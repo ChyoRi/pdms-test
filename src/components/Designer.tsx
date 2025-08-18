@@ -6,6 +6,11 @@ import { query, where, collection, onSnapshot, doc, updateDoc, Timestamp, orderB
 import DesignerRequestList from "./DesignerRequestList";
 import MainTitle from "./MainTitle";
 
+interface RequesterProps {
+  setIsDrawerOpen: (value: boolean) => void;
+  setDetailData: (data: RequestData) => void;
+}
+
 interface DesignRequest {
   design_request_id: string;
   id: string;
@@ -27,7 +32,7 @@ interface DesignRequest {
   priority?: string;
 }
 
-export default function Designer() {
+export default function Designer({ setIsDrawerOpen, setDetailData }: RequesterProps) {
   const [assignedRequests, setAssignedRequests] = useState<DesignRequest[]>([]);
   const [designerName, setDesignerName] = useState(""); // ✅ 로그인 디자이너 이름
   const [formData, setFormData] = useState<{ [key: string]: any }>({});
@@ -99,11 +104,17 @@ export default function Designer() {
     alert("저장되었습니다.");
   };
 
+  // ✅ 메모/작업항목 클릭 → 디테일 모드
+  const openDetail = (item: RequestData) => {
+    setDetailData(item);     // 상위에서 drawerMode='detail' 세팅
+    setIsDrawerOpen(true);
+  };
+
   return (
     <Container>
       <MainTitle />
       <DesignerRequestTitle>디자이너 화면</DesignerRequestTitle>
-      <DesignerRequestList requests={assignedRequests} formData={formData} onChange={handleChange} onSave={saveResponse} />
+      <DesignerRequestList requests={assignedRequests} formData={formData} onChange={handleChange} onSave={saveResponse} onDetailClick={openDetail} />
     </Container>
   )
 }

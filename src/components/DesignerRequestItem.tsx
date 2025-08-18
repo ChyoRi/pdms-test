@@ -6,13 +6,15 @@ interface DesignerRequestItemProps {
   item: any;
   onChange: (id: string, field: string, value: string) => void;
   onSave: (id: string) => void;
+  onDetailClick: (item: RequestData) => void;
 }
 
 export default function DesignerRequestItem({
   index,
   item,
   onChange,
-  onSave
+  onSave,
+  onDetailClick
 }: DesignerRequestItemProps) {
   const formatDate = (timestamp: any) => {
     if (!timestamp) return "-";
@@ -21,6 +23,12 @@ export default function DesignerRequestItem({
       return `${date.getMonth() + 1}/${date.getDate()}`;
     }
     return timestamp;
+  };
+
+  // ✅ 메모/작업항목 클릭 시 상세 Drawer 열기
+  const openDetail = (e: React.MouseEvent) => {
+    e.stopPropagation(); // 행 단위 클릭과 충돌 방지
+    onDetailClick(item);
   };
 
   return (
@@ -36,7 +44,7 @@ export default function DesignerRequestItem({
       <RequestListRequirementTd>
         <RequestListEmergencyWrap>
           {item.emergency ? <EmergencyBadge>긴급</EmergencyBadge> : ""}
-          <RequestListRequirementText>
+          <RequestListRequirementText onClick={openDetail}>
             {item.requirement}
           </RequestListRequirementText>
         </RequestListEmergencyWrap>
@@ -45,7 +53,9 @@ export default function DesignerRequestItem({
         <UrlLink href={item.url} target="_blank" />
       </RequestListTableTd>
       <RequestListMemoTd>
-        <RequestListMemoText>{item.note || ""}</RequestListMemoText>
+        <RequestListMemoText onClick={openDetail}>
+          {item.note || ""}
+        </RequestListMemoText>
       </RequestListMemoTd>
       <RequestListDateInputTd>
         <RequestListDateInput
@@ -155,7 +165,7 @@ const RequestListMemoTd = styled.td`
 `;
 
 const RequestListDateInputTd = styled.td`
-  padding: 0 12px;
+  padding: 0 6px;
 `;
 
 const RequestListEmergencyWrap = styled.div`
@@ -181,6 +191,11 @@ const RequestListRequirementText = styled.span`
   overflow: hidden;
   word-break: break-word;
   text-overflow: ellipsis;
+
+  &:hover {
+    font-weight: 600;
+    text-decoration: underline;
+  }
 `;
 
 const UrlLink = styled.a<{ $disabled?: boolean }>`
@@ -198,6 +213,11 @@ const RequestListMemoText = styled.span`
   overflow: hidden;
   word-break: break-word;
   text-overflow: ellipsis;
+
+  &:hover {
+    font-weight: 600;
+    text-decoration: underline;
+  }
 `;
 
 const RequestListDateInput = styled.input.attrs({ type: "date" })`

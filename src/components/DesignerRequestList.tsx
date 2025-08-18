@@ -6,12 +6,14 @@ interface DesignerRequestListProps {
   formData: { [key: string]: any };
   onChange: (requestId: string, field: string, value: string) => void;
   onSave: (requestId: string) => void;
+  onDetailClick: (item: RequestData) => void;
 }
 
 export default function DesignerRequestList({
   requests,
   onChange,
-  onSave
+  onSave,
+  onDetailClick
 }: DesignerRequestListProps) {
   return (
     <RequestListTableWrap>
@@ -55,6 +57,7 @@ export default function DesignerRequestList({
                 item={item}
                 onChange={onChange}
                 onSave={onSave}
+                onDetailClick={onDetailClick}
               />
             ))
           ) : (

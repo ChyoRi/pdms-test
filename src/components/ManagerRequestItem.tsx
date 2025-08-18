@@ -9,6 +9,7 @@ interface ManagerRequestItemProps {
   onDesignerSelect: (designerName: string) => void;
   onAssignDesigner: () => void;
   onSendToRequester: () => void;
+  onDetailClick: (item: RequestData) => void;
 }
 
 export default function ManagerRequestItem({
@@ -18,7 +19,8 @@ export default function ManagerRequestItem({
   selectedDesigner,
   onDesignerSelect,
   onAssignDesigner,
-  onSendToRequester
+  onSendToRequester,
+  onDetailClick
 }: ManagerRequestItemProps) {
   // 날짜 포맷 함수
   const formatDate = (timestamp: any) => {
@@ -29,6 +31,13 @@ export default function ManagerRequestItem({
     }
     return timestamp;
   };
+
+  // ✅ 메모/작업항목 클릭 시 상세 Drawer 열기
+  const openDetail = (e: React.MouseEvent) => {
+    e.stopPropagation(); // 행 단위 클릭과 충돌 방지
+    onDetailClick(item);
+  };
+  
   return(
     <RequestListTableTr isCanceled={item.status === "취소"}>
       <RequestListTableTd>{index}</RequestListTableTd>
@@ -42,7 +51,7 @@ export default function ManagerRequestItem({
       <RequestListRequirementTd>
         <RequestListEmergencyWrap>
           {item.emergency ? <EmergencyBadge>긴급</EmergencyBadge> : ""}
-        <RequestListRequirementText>
+        <RequestListRequirementText onClick={openDetail}>
           {item.requirement}
         </RequestListRequirementText>
         </RequestListEmergencyWrap>
@@ -51,7 +60,9 @@ export default function ManagerRequestItem({
         <UrlLink href={item.url} target="_blank" />
       </RequestListTableTd>
       <RequestListMemoTd>
-        <RequestListMemoText>{item.note || ""}</RequestListMemoText>
+        <RequestListMemoText onClick={openDetail}>
+          {item.note || ""}
+        </RequestListMemoText>
       </RequestListMemoTd>
       <RequestListTableTd>
         <StautsBadge status={item.status}>
@@ -190,6 +201,11 @@ const RequestListRequirementText = styled.span`
   overflow: hidden;
   word-break: break-word;
   text-overflow: ellipsis;
+
+  &:hover {
+    font-weight: 600;
+    text-decoration: underline;
+  }
 `;
 
 const UrlLink = styled.a<{ $disabled?: boolean }>`
@@ -207,6 +223,11 @@ const RequestListMemoText = styled.span`
   overflow: hidden;
   word-break: break-word;
   text-overflow: ellipsis;
+
+  &:hover {
+    font-weight: 600;
+    text-decoration: underline;
+  }
 `;
 
 const StautsBadge = styled.span<{ status: string }>`

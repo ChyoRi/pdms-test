@@ -268,9 +268,9 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
             <tr>
               <RequestFormTableTh><RequestFormItemLabel htmlFor="note">메모</RequestFormItemLabel></RequestFormTableTh>
               <RequestFormTableTd>
-                <RequestFormTextInput
-                  type="input"
+                <RequestFormTextArea
                   id="note"
+                  rows={4}
                   value={requestData.note}
                   onChange={(e) => requsetForm("note", e.target.value)}
                   placeholder="메모를 입력하세요."

@@ -13,9 +13,9 @@ interface MainProps {
 export default function Main({ userRole, setIsDrawerOpen, setEditData, setDetailData }: MainProps) {
   // ✅ 권한별 컴포넌트 렌더링
   const renderComponent = () => {
-    if (userRole === 1) return <Requester setIsDrawerOpen={setIsDrawerOpen} setEditData={setEditData} setDetailData={setDetailData}/>;
-    if (userRole === 2) return <Designer />;
-    if (userRole === 3) return <Manager />;
+    if (userRole === 1) return <Requester setIsDrawerOpen={setIsDrawerOpen} setEditData={setEditData} setDetailData={setDetailData} />;
+    if (userRole === 2) return <Designer setIsDrawerOpen={setIsDrawerOpen} setDetailData={setDetailData} />;
+    if (userRole === 3) return <Manager setIsDrawerOpen={setIsDrawerOpen} setDetailData={setDetailData} />;
   }
 
   return <Container>{renderComponent()}</Container>;
