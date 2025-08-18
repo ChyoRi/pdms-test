@@ -262,7 +262,7 @@ const ReviewButton = styled.button`
   padding: 4.5px 10px;
   border-radius: 4px;
   color: ${({ theme }) => theme.colors.white01};
-  background-color: ${({ theme }) => theme.colors.black};
+  background-color: green;
 `;
 
 const CompletedText = styled.span`

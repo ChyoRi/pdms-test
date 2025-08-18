@@ -40,11 +40,11 @@ export default function RequestDetail({ data, onClose }: RequestDetailProps) {
           </tr>
           <tr>
             <RequestDetailTableTh>완료 요청일</RequestDetailTableTh>
-            <RequestDetailTableTd>{formatDate(data?.completion_dt)}</RequestDetailTableTd>
+            <RequestListcompletionTd>{formatDate(data?.completion_dt)}</RequestListcompletionTd>
           </tr>
           <tr>
             <RequestDetailTableTh>오픈일</RequestDetailTableTh>
-            <RequestDetailTableTd>{formatDate(data?.open_dt)}</RequestDetailTableTd>
+            <RequestListOpenDtTd>{formatDate(data?.open_dt)}</RequestListOpenDtTd>
           </tr>
           <tr>
             <RequestDetailTableTh>업무 형태</RequestDetailTableTh>
@@ -70,9 +70,9 @@ export default function RequestDetail({ data, onClose }: RequestDetailProps) {
           </tr>
           <tr>
             <RequestDetailTableTh>메모</RequestDetailTableTh>
-            <RequestDetailTableTd>
+            <RequestDetailMemoTd>
               <MemoText>{data.note}</MemoText>
-            </RequestDetailTableTd>
+            </RequestDetailMemoTd>
           </tr>
         </tbody>
       </RequestDetailTable>
@@ -129,14 +129,39 @@ const RequestDetailTableTd = styled.td`
   border-right: none;
 `;
 
+const RequestListcompletionTd = styled.td`
+  padding: 12px 24px;
+  color: ${({ theme }) => theme.colors.red};
+  font-family: 'Pretendard';
+  font-size: 16px;
+  font-weight: 500;
+`;
+
+const RequestListOpenDtTd = styled.td`
+  padding: 12px 24px;
+  color: ${({ theme }) => theme.colors.blue02};
+  font-family: 'Pretendard';
+  font-size: 16px;
+  font-weight: 500;
+`;
+
+const RequestDetailMemoTd = styled.td`
+  padding: 12px 24px;
+  background-color: #fffff1;
+`
+
 const UrlLink = styled.a`
   display: -webkit-box;
+  min-height: 70px;
+  max-height: 70px;
+  overflow-y: auto;
   -webkit-box-orient: vertical;
   word-break: break-word;
 `;
 
 const MemoText = styled.p`
-  max-height: 120px;
+  min-height: 165px;
+  max-height: 165px;
   overflow-y: auto;
   word-break: break-word;
 `;
