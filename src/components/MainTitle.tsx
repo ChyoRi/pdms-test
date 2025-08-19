@@ -15,7 +15,7 @@ export default function MainTitle() {
 
 const MainTitleWrap = styled.div`
   padding: 30px 48px;
-  background-color: ${({ theme }) => theme.colors.gray04};
+  background-color: ${({ theme }) => theme.colors.gray08};
 `;
 
 const MainTitleText = styled.h2`

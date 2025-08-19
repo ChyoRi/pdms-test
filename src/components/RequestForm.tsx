@@ -52,22 +52,22 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
   };
 
   // 문서번호 생성 함수
-  const generateDocNumber = async () => {
-    const now = new Date();
-    const year = now.getFullYear().toString().slice(2);
-    const month = (now.getMonth() + 1).toString().padStart(2, "0");
+  // const generateDocNumber = async () => {
+  //   const now = new Date();
+  //   const year = now.getFullYear().toString().slice(2);
+  //   const month = (now.getMonth() + 1).toString().padStart(2, "0");
 
-    const q = query(
-      collection(db, "design_request"),
-      where("design_request_id", ">=", `H${year}${month}000`),
-      where("design_request_id", "<", `H${year}${month}999`)
-    );
+  //   const q = query(
+  //     collection(db, "design_request"),
+  //     where("design_request_id", ">=", `H${year}${month}000`),
+  //     where("design_request_id", "<", `H${year}${month}999`)
+  //   );
 
-    const snapshot = await getDocs(q);
-    const nextNumber = snapshot.size + 1;
+  //   const snapshot = await getDocs(q);
+  //   const nextNumber = snapshot.size + 1;
 
-    return `H${year}${month}${nextNumber.toString().padStart(3, "0")}`;
-  };
+  //   return `H${year}${month}${nextNumber.toString().padStart(3, "0")}`;
+  // };
 
   // ==== 수정: 다건 등록을 위한 월별 베이스/연속번호 유틸
   const getMonthSeqBase = async () => {
@@ -208,7 +208,7 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
       <RequestFormContainer onSubmit={requestFormSubmit}>
         <RequestFormTableWrap>
           {!isEdit && extras.map((f, idx) => (
-            <div key={idx} style={{ marginTop: 24 }}>
+            <div key={idx} style={{ marginBottom: 24 }}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', margin:'8px 0 4px' }}>
                 <strong>추가 요청 {idx + 1}</strong>
                 <button type="button" onClick={() => removeExtra(idx)}>삭제</button>
@@ -507,15 +507,15 @@ const RequestExitButton = styled.button`
   background-size: contain;
 `;
 
-const RequestFormTableWrap = styled.div`
-  max-height: 690px;
-  overflow: auto;
-`;
-
 const RequestFormTable = styled.table`
   width: 100%;
   color: ${({ theme }) => theme.colors.black};
   border-top: 1px solid ${({ theme }) => theme.colors.black};
+`;
+
+const RequestFormTableWrap = styled.div`
+  max-height: 690px;
+  overflow: auto;
 `;
 
 const RequestFormTableCaption = styled.caption`
@@ -540,11 +540,11 @@ const RequestFormTableTd = styled.td`
   border-right: none;
 `
 
-const RequestFormMemoTableTd = styled.td`
-  padding: 12px 24px;
-  border-right: none;
-  background-color: #fffff1;
-`
+// const RequestFormMemoTableTd = styled.td`
+//   padding: 12px 24px;
+//   border-right: none;
+//   background-color: #fffff1;
+// `
 
 const RequestFormItemLabel = styled.label`
   width: 100%;

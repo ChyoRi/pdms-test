@@ -34,7 +34,9 @@ export default function DesignerRequestItem({
   return (
     <RequestListTableTr isCanceled={item.status === "취소"}>
       <RequestListTableTd>{index}</RequestListTableTd>
-      <RequestListTableTd>{item.design_request_id}</RequestListTableTd>
+      <RequestListTableTd>
+        <RequestListRequestIdText onClick={openDetail} $hasUpdate={!!item.updated_at}>{item.design_request_id}</RequestListRequestIdText>
+      </RequestListTableTd>
       <RequestListTableTd>{formatDate(item.request_date)}</RequestListTableTd>
       <RequestListTableTd>{item.requester}</RequestListTableTd>
       <RequestListcompletionTd>{formatDate(item.completion_dt)}</RequestListcompletionTd>
@@ -102,6 +104,28 @@ const RequestListTableTr = styled.tr<{ isCanceled: boolean }>`
         background-color: #f4f4f4;
       }
     `}
+  
+  ${({ isCanceled, theme }) =>
+    isCanceled &&
+    `
+      ${EmergencyBadge} {
+        background-color: ${theme.colors.gray07};
+        color: ${theme.colors.gray06};
+      }
+      ${SaveButton} {
+        background-color: ${theme.colors.gray07};
+        color: ${theme.colors.gray06};
+        border-color: ${theme.colors.gray06};
+        cursor: default;
+        pointer-events: none;
+      }
+    `}
+  & td {
+    font-family: 'Pretendard';
+    font-size: 14px;
+    font-weight: 500;
+  }
+
   &:hover {
     td, input, select {
       background-color: ${({ theme }) => theme.colors.gray04}
@@ -111,9 +135,6 @@ const RequestListTableTr = styled.tr<{ isCanceled: boolean }>`
 
 const RequestListTableTd = styled.td`
   padding: 11px 0;
-  font-family: 'Pretendard';
-  font-size: 14px;
-  font-weight: 400;
 
   &:first-of-type {
     border-left: none;
@@ -126,46 +147,52 @@ const RequestListTableTd = styled.td`
 
 const RequestListcompletionTd = styled.td`
   color: ${({ theme }) => theme.colors.red};
-  font-family: 'Pretendard';
-  font-size: 14px;
-  font-weight: 500;
 `;
 
 const RequestListOpenDtTd = styled.td`
   color: ${({ theme }) => theme.colors.blue02};
-  font-family: 'Pretendard';
-  font-size: 14px;
-  font-weight: 500;
 `;
 
 const RequestListTaskTypeTd = styled.td`
   padding: 15px 12px;
   line-height: 15px;
-  font-family: 'Pretendard';
-  font-size: 14px;
-  font-weight: 500;
 `;
 
 const RequestListRequirementTd = styled.td`
   line-height: 15px;
   text-align: left;
-  font-family: 'Pretendard';
-  font-size: 14px;
-  font-weight: 500;
 `;
 
 const RequestListMemoTd = styled.td`
   line-height: 15px;
   padding: 0 12px;
   text-align: left;
-  font-family: 'Pretendard';
-  font-size: 14px;
-  font-weight: 500;
   background-color: #fffff1;
 `;
 
 const RequestListDateInputTd = styled.td`
   padding: 0 6px;
+`;
+
+const RequestListRequestIdText = styled.span<{ $hasUpdate: boolean }>`
+  position: relative;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    display: ${({ $hasUpdate }) => ($hasUpdate ? 'block' : 'none')};
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background-color: ${({ theme }) => theme.colors.red};
+  }
+
+  &:hover {
+    font-weight: 600;
+    text-decoration: underline;
+  }
 `;
 
 const RequestListEmergencyWrap = styled.div`

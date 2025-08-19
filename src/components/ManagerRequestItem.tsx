@@ -41,10 +41,12 @@ export default function ManagerRequestItem({
   return(
     <RequestListTableTr isCanceled={item.status === "취소"}>
       <RequestListTableTd>{index}</RequestListTableTd>
-      <RequestListTableTd>{item.design_request_id}</RequestListTableTd>
+      <RequestListTableTd>
+        <RequestListRequestIdText onClick={openDetail} $hasUpdate={!!item.updated_at}>{item.design_request_id}</RequestListRequestIdText>
+      </RequestListTableTd>
       <RequestListTableTd>{formatDate(item.request_date)}</RequestListTableTd>
       <RequestListTableTd>{item.requester}</RequestListTableTd>
-      <RequestListcompletionTd>{formatDate(item.completion_dt)}</RequestListcompletionTd>
+      <RequestListCompletionTd>{formatDate(item.completion_dt)}</RequestListCompletionTd>
       <RequestListOpenDtTd>{formatDate(item.open_dt)}</RequestListOpenDtTd>
       <RequestListTableTd>{item.task_form}</RequestListTableTd>
       <RequestListTaskTypeTd>{item.task_type}</RequestListTaskTypeTd>
@@ -116,6 +118,28 @@ const RequestListTableTr = styled.tr<{ isCanceled: boolean }>`
         background-color: #f4f4f4;
       }
     `}
+  
+  ${({ isCanceled, theme }) =>
+    isCanceled &&
+    `
+      ${EmergencyBadge} {
+        background-color: ${theme.colors.gray07};
+        color: ${theme.colors.gray06};
+      }
+      ${ReviewButton}, ${AssignButton} {
+        background-color: ${theme.colors.gray07};
+        color: ${theme.colors.gray06};
+        border-color: ${theme.colors.gray06};
+        cursor: default;
+        pointer-events: none;
+      }
+    `}
+  & td {
+    font-family: 'Pretendard';
+    font-size: 14px;
+    font-weight: 500;
+  }
+
   &:hover {
     td {
       background-color: ${({ theme }) => theme.colors.gray04}
@@ -125,10 +149,7 @@ const RequestListTableTr = styled.tr<{ isCanceled: boolean }>`
 
 const RequestListTableTd = styled.td`
   padding: 11px 0;
-  font-family: 'Pretendard';
-  font-size: 14px;
-  font-weight: 400;
-
+ 
   &:first-of-type {
     border-left: none;
   }
@@ -138,44 +159,50 @@ const RequestListTableTd = styled.td`
   }
 `;
 
-const RequestListcompletionTd = styled.td`
+const RequestListCompletionTd = styled.td`
   color: ${({ theme }) => theme.colors.red};
-  font-family: 'Pretendard';
-  font-size: 14px;
-  font-weight: 500;
 `;
 
 const RequestListOpenDtTd = styled.td`
   color: ${({ theme }) => theme.colors.blue02};
-  font-family: 'Pretendard';
-  font-size: 14px;
-  font-weight: 500;
 `;
 
 const RequestListTaskTypeTd = styled.td`
   padding: 15px 12px;
   line-height: 15px;
-  font-family: 'Pretendard';
-  font-size: 14px;
-  font-weight: 500;
 `;
 
 const RequestListRequirementTd = styled.td`
   line-height: 15px;
   text-align: left;
-  font-family: 'Pretendard';
-  font-size: 14px;
-  font-weight: 500;
 `;
 
 const RequestListMemoTd = styled.td`
   line-height: 15px;
   padding: 0 12px;
   text-align: left;
-  font-family: 'Pretendard';
-  font-size: 14px;
-  font-weight: 500;
   background-color: #fffff1;
+`;
+
+const RequestListRequestIdText = styled.span<{ $hasUpdate: boolean }>`
+  position: relative;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    display: ${({ $hasUpdate }) => ($hasUpdate ? 'block' : 'none')};
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background-color: ${({ theme }) => theme.colors.red};
+  }
+
+  &:hover {
+    font-weight: 600;
+    text-decoration: underline;
+  }
 `;
 
 const RequestListEmergencyWrap = styled.div`
@@ -249,7 +276,7 @@ const StautsBadge = styled.span<{ status: string }>`
       case "완료":
         return theme.colors.gray06; // 회색
       default:
-        return theme.colors.black; // 기본색
+        return theme.colors.gray06; // 기본색
     }
   }};
   background-color: ${({ status, theme }) => {

@@ -16,6 +16,7 @@ const colors = {
   gray05: '#888',
   gray06: '#666',
   gray07: '#e5e2e2',
+  gray08: '#F0F3F9',
   black: '#212121',
   pink01: '#FFDDDD',
   pink02: '#F48193',

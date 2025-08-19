@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "../firebaseconfig";
 import { collection, onSnapshot, query, where, updateDoc, doc, orderBy, getDoc } from "firebase/firestore";
 import RequesterRequestList from "./RequesterRequestList";
 import MainTitle from "./MainTitle";
+import RequestFilterSearchWrap from "./RequestFilterSearchWrap";
 
 // ✅ 추가된 Props 인터페이스 정의
 interface RequesterProps {
@@ -15,6 +16,7 @@ interface RequesterProps {
 export default function Requester({ setIsDrawerOpen, setEditData, setDetailData }: RequesterProps) {
   const [userName, setUserName] = useState("");
   const [requests, setRequests] = useState<RequestData[]>([]); // request DB 배열
+  const [statusFilter, setStatusFilter] = useState<string>("진행 상태 선택");
 
   // ✅ 로그인 사용자 이름 가져오기
   useEffect(() => {
@@ -42,6 +44,27 @@ export default function Requester({ setIsDrawerOpen, setEditData, setDetailData 
 
     return () => unsubscribe();
   }, [userName]);
+
+  // 필터 적용 콜백 (하위에서 올라옴)
+  const applyStatus = (status: string) => setStatusFilter(status);
+
+  // ⭐ 요청자 화면용 status 매핑 함수
+  const mapStatusForRequester = (status: string) => {
+    if (status === "검수요청") return "진행중";
+    if (status === "검수중") return "검수요청";
+    return status; // 나머지는 그대로
+  };
+
+  // ⭐ 화면에 보여줄 리스트
+  const viewList = useMemo(() => {
+    return requests.map((r) => ({
+      ...r,
+      displayStatus: mapStatusForRequester(r.status), // 화면용 status 추가
+    })).filter((r) => {
+      if (!statusFilter || statusFilter === "진행 상태 선택") return true;
+      return r.displayStatus === statusFilter;
+    });
+  }, [requests, statusFilter]);
 
 
   // ✅ 검수완료 처리
@@ -94,7 +117,8 @@ export default function Requester({ setIsDrawerOpen, setEditData, setDetailData 
   return (
     <>
       <MainTitle />
-      <RequesterRequestList data={requests} onReviewComplete={reviewComplete} onCancel={cancelRequest} onEditClick={editRequest} onDetailClick={openDetail} />
+      <RequestFilterSearchWrap onApplyStatus={applyStatus} />
+      <RequesterRequestList data={viewList} onReviewComplete={reviewComplete} onCancel={cancelRequest} onEditClick={editRequest} onDetailClick={openDetail} />
     </>
   );
 }

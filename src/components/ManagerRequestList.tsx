@@ -109,7 +109,7 @@ const RequestListTableTh = styled.th`
   font-family: 'Pretendard';
   font-size: 14px;
   font-weight: 700;
-  background-color: ${({ theme }) => theme.colors.white02};
+  background-color: ${({ theme }) => theme.colors.gray08};
 
   &:first-of-type {
     border-left: none;

@@ -91,21 +91,21 @@ const RequestListTableTh = styled.th`
   font-family: 'Pretendard';
   font-size: 14px;
   font-weight: 700;
-  background-color: ${({ theme }) => theme.colors.white02};
+  background-color: ${({ theme }) => theme.colors.gray08};
 
   &:first-of-type {
     border-left: none;
   }
 
-  &:nth-of-type(12) {
+  &:nth-of-type(11) {
     border-right: 1px solid ${({ theme }) => theme.colors.black};
   }
 
-  &:nth-of-type(13), &:nth-of-type(14), &:nth-of-type(15), &:nth-of-type(16) {
+  &:nth-of-type(12), &:nth-of-type(13), &:nth-of-type(14), &:nth-of-type(15), &:nth-of-type(16) {
     border-right: 1px solid ${({ theme }) => theme.colors.pink02}
   }
 
-  &:nth-of-type(13), &:nth-of-type(14), &:nth-of-type(15), &:nth-of-type(16), &:nth-of-type(17) {
+  &:nth-of-type(12), &:nth-of-type(13), &:nth-of-type(14), &:nth-of-type(15), &:nth-of-type(16) {
     background-color: ${({ theme }) => theme.colors.pink01};
   }
 `;
