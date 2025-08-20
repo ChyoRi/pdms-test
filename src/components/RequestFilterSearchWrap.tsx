@@ -16,5 +16,6 @@ export default function RequestFilterSearchWrap({
 }
 
 const Container = styled.div`
+  ${({ theme }) => theme.mixin.flex('center', 'space-between')};
   padding: 24px 48px 30px;
 `;

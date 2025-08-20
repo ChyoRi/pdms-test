@@ -4,11 +4,10 @@ export default function MainTitle() {
   const today = new Date();
   const year = today.getFullYear();
   const month = today.getMonth() + 1;
-  const date = today.getDate();
 
   return (
     <MainTitleWrap>
-      <MainTitleText>{year}년 {month}월 {date}일 디자인 편성 요청 스케줄</MainTitleText>
+      <MainTitleText>{year}년 {month}월 디자인 편성 요청 스케줄</MainTitleText>
     </MainTitleWrap>
   )
 }

@@ -1,29 +1,33 @@
 import { useState } from "react";
 import styled from "styled-components"
 import selectBoxArrow from "../assets/selectbox-arrow.svg";
+import DateCalendar from "./DateCalendar";
 
 export default function RequestSearch({
   onApplyStatus,
 }: {
   onApplyStatus: (status: string) => void;
 }) {
+  const [range, setRange] = useState<{ start: Date | null; end: Date | null }>({start: null, end: null });
   const [status, setStatus] = useState("진행 상태 선택");
 
   return (
     <Container>
-      <SelectBox aria-label="요청일 선택">
-        <option>요청일 선택</option>
-        <option>2025-08-01</option>
-        <option>2025-08-02</option>
-        <option>2025-08-03</option>
-      </SelectBox>
+      <DateCalendar
+        value={range}
+        minDate={new Date()}
+        onApply={(r) => {
+          setRange(r);
+          console.log("적용된 기간:", r);
+        }}
+      />
 
-      <SelectBox aria-label="작업 담당자 선택">
+      {/* <SelectBox aria-label="작업 담당자 선택">
         <option>작업 담당자 선택</option>
         <option>이영철</option>
         <option>홍길동</option>
         <option>김디자이너</option>
-      </SelectBox>
+      </SelectBox> */}
 
       <SelectBox value={status} onChange={(e) => setStatus(e.target.value)}>
         <option>진행 상태 선택</option>
@@ -39,7 +43,7 @@ export default function RequestSearch({
 }
 
 const Container = styled.div`
-  
+  ${({ theme }) => theme.mixin.flex('center')};
 `;
 
 const SelectBox = styled.select`
