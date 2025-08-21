@@ -4,12 +4,14 @@ import RequestSearch from "./RequestSearch";
 
 export default function RequestFilterSearchWrap({
   onApplyStatus,
+  onApplyRange
 }: {
   onApplyStatus: (status: string) => void;
+  onApplyRange: (range: { start: Date | null; end: Date | null }) => void;
 }) {
   return (
     <Container>
-      <RequestFilter onApplyStatus={onApplyStatus} />
+      <RequestFilter onApplyStatus={onApplyStatus} onApplyRange={onApplyRange} />
       <RequestSearch />
     </Container>
   )

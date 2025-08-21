@@ -236,7 +236,6 @@ const RequestListMemoText = styled.span`
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
-  line-height: 1.4;
   overflow-wrap: anywhere;
   word-break: break-word;
   text-overflow: ellipsis;

@@ -2,6 +2,7 @@
 import { useMemo, useState, useEffect, useRef } from "react";
 import { DayPicker } from "react-day-picker";
 import styled, { createGlobalStyle } from "styled-components";
+import CalendarArrow from "../assets/calendar-arrow.png";
 
 type Range = { start: Date | null; end: Date | null };
 
@@ -11,12 +12,15 @@ interface Props {
   minDate?: Date;
   maxDate?: Date;
   placeholder?: string;
+  /** 끝 날짜 선택 시 자동 닫기 (기본값: true) */
+  autoCloseOnComplete?: boolean;
 }
 
 export default function DateCalendar({
   value,
   onApply,
   placeholder = "요청 기간 선택",
+  autoCloseOnComplete = true,
 }: Props) {
   const [selected, setSelected] = useState<Range>({
     start: value?.start ?? null,
@@ -39,13 +43,6 @@ export default function DateCalendar({
     if (selected.start) return `${fmt(selected.start)} ~`;
     return "";
   }, [selected]);
-
-  const handleSelect = (range: any) => {
-    setSelected(range);
-    if (range?.from && range?.to) {
-      onApply?.({ start: range.from, end: range.to });
-    }
-  };
 
   // 📌 이번달 index (0 ~ 11)
   const currentMonth = new Date().getMonth();
@@ -77,6 +74,27 @@ export default function DateCalendar({
     };
   }, [open]);
 
+  // 날짜 클릭 로직: 새 시작 → 초기화 / 두 번째 클릭 → end 확정
+  const handleDayClick = (day: Date) => {
+    if (!selected.start || (selected.start && selected.end)) {
+      setSelected({ start: day, end: null });
+      return;
+    }
+    if (selected.start && !selected.end) {
+      if (day < selected.start) {
+        setSelected({ start: day, end: null });
+      } else {
+        const next = { start: selected.start, end: day };
+        setSelected(next);
+        onApply?.(next);
+        if (autoCloseOnComplete) {
+          // 이벤트 버블/리렌더 타이밍 충돌 방지
+          setOpen(false);
+        }
+      }
+    }
+  };
+
   return (
     <Field ref={wrapperRef}>
       <GlobalDayPickerOverride />
@@ -90,9 +108,9 @@ export default function DateCalendar({
       {open && (
         <CalendarWrap>
           <Header>
-            <ArrowBtn onClick={() => setYear((y) => y - 1)}>◀</ArrowBtn>
+            <ArrowPrev dir="prev" onClick={() => setYear((y) => y - 1)} />
             <span>{year}</span>
-            <ArrowBtn onClick={() => setYear((y) => y + 1)}>▶</ArrowBtn>
+            <ArrowNext dir="next" onClick={() => setYear((y) => y + 1)} />
           </Header>
 
           {/* 요일 헤더 */}
@@ -103,40 +121,58 @@ export default function DateCalendar({
           </WeekdaysRow>
 
           {/* 12개월 달력 */}
-          <MonthsContainer ref={monthsRef}>
-            {Array.from({ length: 12 }).map((_, i) => (
-              <MonthBox key={i} className="month-box">
-                <MonthLabel>{String(i + 1).padStart(2, "0")}</MonthLabel>
-                <DayPicker
-                  mode="range"
-                  month={new Date(year, i, 1)}
-                  selected={
-                    selected.start && selected.end
-                      ? { from: selected.start, to: selected.end }
-                      : selected.start
-                      ? { from: selected.start }
-                      : undefined
-                  }
-                  onSelect={(range) => {
-                    if (!range) return;
-                    // 내부 state는 start/end 유지
-                    setSelected({ start: range.from ?? null, end: range.to ?? null });
-                    // 완료 시 부모로 전달
-                    if (range.from && range.to) {
-                      onApply?.({ start: range.from, end: range.to });
-                    }
-                  }}
-                  disabled={[
-                    {
-                      before: new Date(year, i, 1),              // 이번 달 1일 이전
-                      after: new Date(year, i + 1, 0),           // 이번 달 마지막 날 이후
-                    },
-                  ]}
-                  showOutsideDays={false}
-                />
-              </MonthBox>
-            ))}
-          </MonthsContainer>
+          <CalendarContainer>
+            <MonthsContainer ref={monthsRef}>
+              {Array.from({ length: 12 }).map((_, i) => {
+                const monthStart = new Date(year, i, 1);
+                const ts = (d: Date) =>
+                  new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+                const inThisMonth = (d: Date) =>
+                  d.getFullYear() === monthStart.getFullYear() &&
+                  d.getMonth() === monthStart.getMonth();
+  
+                return (
+                  <MonthBox key={i} className="month-box">
+                    <MonthLabel>{String(i + 1).padStart(2, "0")}</MonthLabel>
+  
+                    <DayPicker
+                      mode="single"
+                      month={monthStart}
+                      selected={undefined} // ← 내부 .rdp-selected 완전히 비활성화
+                      onDayClick={handleDayClick}
+                      showOutsideDays={false}
+                      // ✨ 월 한정 함수 modifiers: 이 달 셀만 칠함 → rdp-hidden/outside 배제
+                      modifiers={{
+                        start: (d) =>
+                          !!selected.start &&
+                          inThisMonth(d) &&
+                          ts(d) === ts(selected.start),
+  
+                        end: (d) =>
+                          !!selected.end &&
+                          inThisMonth(d) &&
+                          ts(d) === ts(selected.end),
+  
+                        middle: (d) => {
+                          if (!selected.start || !selected.end) return false;
+                          if (!inThisMonth(d)) return false; // 빈칸/다른 달 제외
+                          const t = ts(d),
+                            s = ts(selected.start),
+                            e = ts(selected.end);
+                          return t > s && t < e;
+                        },
+                      }}
+                      modifiersClassNames={{
+                        start: "sel-start",
+                        end: "sel-end",
+                        middle: "sel-mid",
+                      }}
+                    />
+                  </MonthBox>
+                );
+              })}
+            </MonthsContainer>
+          </CalendarContainer>
         </CalendarWrap>
       )}
     </Field>
@@ -145,18 +181,20 @@ export default function DateCalendar({
 
 /* ===== styled ===== */
 const Field = styled.div`
-  margin-right: 8px;
   position: relative;
+  width: 215px;
+  margin-right: 8px;
+  font-family: 'Pretendard';
 `;
 
 const InputLike = styled.input`
   width: 100%;
-  margin-top: 8px;
-  padding: 11px 12px;
+  padding: 11.5px 12px;
   border: 1px solid ${({ theme }) => theme?.colors?.gray02 || "#d0d5dd"};
   border-radius: 10px;
+  font-family: 'Pretendard';
   font-size: 16px;
-  background: #fff;
+  color: ${({ theme }) => theme?.colors?.black};
   cursor: pointer;
   &:focus {
     outline: none;
@@ -164,45 +202,81 @@ const InputLike = styled.input`
   }
 `;
 
+const CalendarContainer = styled.div`
+  overflow-y: auto;
+  max-height: 385px;
+
+  /* ===== Firefox ===== */
+  scrollbar-width: thin;
+  scrollbar-color: ${({ theme }) => theme?.colors?.gray03 || "#c9ced6"}
+                    transparent;
+
+  &::-webkit-scrollbar {
+    width: 10px !important;
+  }
+
+  /* ===== WebKit (Chrome/Edge/Safari) ===== */
+  &::-webkit-scrollbar-button {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    background: transparent !important;
+    border: none !important;
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background: ${({ theme }) => theme?.colors?.gray04 || "#aeb4be"};
+  }
+`;
+
 const CalendarWrap = styled.div`
   position: absolute;
-  top: 50px;
+  top: 60px;
   left: 0;
   background: #fff;
   border: 1px solid #ddd;
   border-radius: 10px;
   z-index: 100;
-  width: 320px;
-  max-height: 500px;
-  overflow: hidden;
+  width: 380px;
+  max-height: 480px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 `;
 
 const Header = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-weight: 600;
+  ${({ theme }) => theme.mixin.flex('center', 'space-between')};
+  height: 46px;
+  font-weight: 700;
   font-size: 15px;
-  padding: 8px 12px;
+  background-color: ${({ theme }) => theme?.colors?.gray02};
 `;
 
-const ArrowBtn = styled.button`
-  background: none;
-  border: none;
-  font-size: 16px;
-  cursor: pointer;
+/** 공통 베이스 */
+const ArrowBase = styled.button`
+  width: 48px;
+  height: 100%;
+  background-image: url(${CalendarArrow});
+  background-repeat: no-repeat;
+`;
+
+/** 이전/다음 화살표 */
+const ArrowPrev = styled(ArrowBase)``;
+const ArrowNext = styled(ArrowBase)`
+  background-position: -50px 0;  /* 오른쪽 프레임만 노출 */
 `;
 
 const WeekdaysRow = styled.div`
   ${({ theme }) => theme.mixin.flex('center', 'space-between')};
+  height: 46px;
   font-size: 12px;
-  color: #666;
-  padding: 0 12px 6px 12px;
+  padding: 0 11px;
+  border-bottom: 1px solid ${({ theme }) => theme?.colors?.gray03};
 
   span {
     flex: 1;
+    font-size: 15px;
+    font-weight: 700;
     text-align: center;
+    color: #757575;
   }
 `;
 
@@ -210,9 +284,7 @@ const MonthsContainer = styled.div`
   display: flex;
   flex-direction: column;
   gap: 16px;
-  max-height: 430px;
-  padding: 0 12px 12px;
-  overflow-y: auto;
+  padding-left: 12px;
 `;
 
 const MonthBox = styled.div`
@@ -241,13 +313,17 @@ const MonthBox = styled.div`
   }
 
   .rdp-day {
-    width: 28px;
-    height: 28px;
     font-size: 13px;
-    line-height: 28px;
+    line-height: 31px;
     border: none;
     text-align: center;
     cursor: pointer;
+
+    & button {
+      width: 100%;
+      padding: 8px 0;
+      font-family: 'Pretendard';
+    }
   }
 
   /* ✅ 오늘 날짜 강조 */
@@ -260,31 +336,32 @@ const MonthBox = styled.div`
     }
   }
 
-  /* 시작/끝 날짜 */
+  /* ❶ 라이브러리 기본 range 클래스 전부 무력화 (혹시 붙어도 표시 안 되게) */
   .rdp-range_start,
+  .rdp-range_middle,
   .rdp-range_end {
-    background-color: ${({ theme }) => theme?.colors?.red} !important;
-
-    button {
-      color: ${({ theme }) => theme?.colors?.white01};
-    }
+    background: none !important;
+    color: inherit !important;
   }
 
-  /* 중간 날짜 */
-  .rdp-range_middle {
-    background-color: ${({ theme }) => theme?.colors?.red};
+  /* ❷ 우리가 지정한 커스텀 클래스만 색칠 */
+  .sel-start,
+  .sel-end,
+  .sel-mid {
+    background-color: ${({ theme }) => theme?.colors?.red} !important;
 
-    button {
+    & button {
       color: ${({ theme }) => theme?.colors?.white01};
     }
   }
 `;
 
 const MonthLabel = styled.div`
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
-  margin: 4px 0;
-  color: #444;
+  margin-top: 20px;
+  padding-left: 15px;
+  color: ${({ theme }) => theme?.colors?.black};
 `;
 
 const GlobalDayPickerOverride = createGlobalStyle`

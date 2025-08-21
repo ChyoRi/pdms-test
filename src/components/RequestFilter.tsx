@@ -5,8 +5,10 @@ import DateCalendar from "./DateCalendar";
 
 export default function RequestSearch({
   onApplyStatus,
+  onApplyRange
 }: {
   onApplyStatus: (status: string) => void;
+  onApplyRange: (range: { start: Date | null; end: Date | null }) => void;
 }) {
   const [range, setRange] = useState<{ start: Date | null; end: Date | null }>({start: null, end: null });
   const [status, setStatus] = useState("진행 상태 선택");
@@ -15,10 +17,9 @@ export default function RequestSearch({
     <Container>
       <DateCalendar
         value={range}
-        minDate={new Date()}
         onApply={(r) => {
           setRange(r);
-          console.log("적용된 기간:", r);
+          onApplyRange(r);
         }}
       />
 
@@ -53,7 +54,7 @@ const SelectBox = styled.select`
 
   width: 200px;
   margin-right: 8px;
-  padding: 11px 12px;
+  padding: 13.5px 12px;
   border: 1px solid ${({ theme }) => theme.colors.gray02};
   border-radius: 8px;
   font-family: 'Pretendard';
