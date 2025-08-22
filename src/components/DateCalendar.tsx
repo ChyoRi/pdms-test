@@ -74,6 +74,21 @@ export default function DateCalendar({
     };
   }, [open]);
 
+  // ✅ RESET 동기화: 부모에서 value가 바뀌면(selected 초기화 포함) 내부 상태/연도 동기화
+  useEffect(() => {
+    const ts = (d?: Date | null) =>
+      d instanceof Date ? new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() : null;
+
+    const nextStart = value?.start ?? null;
+    const nextEnd = value?.end ?? null;
+
+    if (ts(selected.start) !== ts(nextStart) || ts(selected.end) !== ts(nextEnd)) {
+      setSelected({ start: nextStart, end: nextEnd });
+      // 시작일이 있으면 그 연도로, 없으면 현재 연도로
+      setYear(nextStart?.getFullYear() ?? new Date().getFullYear());
+    }
+  }, [value?.start, value?.end]); // ← 부모 값 변화에만 반응
+
   // 날짜 클릭 로직: 새 시작 → 초기화 / 두 번째 클릭 → end 확정
   const handleDayClick = (day: Date) => {
     if (!selected.start || (selected.start && selected.end)) {
@@ -194,8 +209,12 @@ const InputLike = styled.input`
   border-radius: 10px;
   font-family: 'Pretendard';
   font-size: 16px;
-  color: ${({ theme }) => theme?.colors?.black};
   cursor: pointer;
+
+  &::placeholder {
+    color: ${({ theme }) => theme?.colors?.black};
+  }
+  
   &:focus {
     outline: none;
     border-color: ${({ theme }) => theme?.colors?.black || "#111"};

@@ -1,10 +1,11 @@
 import styled from "styled-components";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "../firebaseconfig";
 import { query, where, collection, onSnapshot, doc, updateDoc, Timestamp, orderBy } from "firebase/firestore";
 import DesignerRequestList from "./DesignerRequestList";
 import MainTitle from "./MainTitle";
+import RequestFilterSearchWrap from "./RequestFilterSearchWrap";
 
 interface RequesterProps {
   setIsDrawerOpen: (value: boolean) => void;
@@ -32,17 +33,29 @@ interface DesignRequest {
   priority?: string;
 }
 
+// 폼 상태 타입 (각 행별로 보관)
+type RowForm = {
+  start_dt?: string;   // 'YYYY-MM-DD'
+  end_dt?: string;     // 'YYYY-MM-DD'
+  result_url?: string;
+  status?: string;
+};
+
 export default function Designer({ setIsDrawerOpen, setDetailData }: RequesterProps) {
   const [assignedRequests, setAssignedRequests] = useState<DesignRequest[]>([]);
   const [designerName, setDesignerName] = useState(""); // ✅ 로그인 디자이너 이름
-  const [formData, setFormData] = useState<{ [key: string]: any }>({});
+  const [formData, setFormData] = useState<{ [key: string]: RowForm  }>({});
+  const [statusFilter, setStatusFilter] = useState<string>("진행 상태 선택");
+  const [dateRange, setDateRange] = useState<{ start: Date | null; end: Date | null }>({ start: null, end: null });
+
+  // 🔍 검색: 입력값과 적용값 분리
+  const [keywordInput, setKeywordInput] = useState<string>(""); // 인풋 바인딩(타이핑용)
+  const [keyword, setKeyword] = useState<string>("");           // 검색 버튼 클릭 시에만 적용
 
   // ✅ 로그인 디자이너 이름 가져오기
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user && user.displayName) {
-        setDesignerName(user.displayName);
-      }
+      if (user?.displayName) setDesignerName(user.displayName);
     });
     return () => unsubscribe();
   }, []);
@@ -58,15 +71,139 @@ export default function Designer({ setIsDrawerOpen, setDetailData }: RequesterPr
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data: DesignRequest[] = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...(doc.data() as Omit<DesignRequest, "id">)
-      }));
+      const data: DesignRequest[] = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as Omit<DesignRequest, "id">)}));
       setAssignedRequests(data);
     });
 
     return () => unsubscribe();
   }, [designerName]); // ✅ 의존성에 designerName 추가
+
+  // 필터 적용 콜백 (하위에서 올라옴)
+  const applyRange  = (r: { start: Date | null; end: Date | null }) => setDateRange(r); // ⬅️ 추가
+  const applyStatus = (status: string) => setStatusFilter(status);
+
+  // ▼ 헬퍼: 요청일 가져오기 (Timestamp | string | Date 모두 대응)
+  const toMidnight = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const parseLoose = (v: any): Date | null => {
+    if (!v) return null;
+    // Firestore Timestamp
+    if (typeof v === "object" && typeof v.toDate === "function") return toMidnight(v.toDate());
+    if (v instanceof Date) return toMidnight(v);
+    if (typeof v === "number") return toMidnight(new Date(v));
+    if (typeof v === "string") {
+      // 'YYYY-MM-DD' | 'YYYY.MM.DD' | 'M/D' 등 관대 파싱
+      const s = v.replace(/\./g, "-").replace(/\//g, "-");
+      const parts = s.split("-");
+      if (parts.length === 3) {
+        const [y, m, d] = parts.map(Number);
+        const year = y > 31 ? y : new Date().getFullYear(); // '8-20-..' 형태 보호
+        return new Date(year, m - 1, d);
+      }
+      if (parts.length === 2) {
+        const [m, d] = parts.map(Number);
+        const year = new Date().getFullYear();
+        return new Date(year, m - 1, d);
+      }
+      const dt = new Date(v);
+      return isNaN(+dt) ? null : toMidnight(dt);
+    }
+    return null;
+  };
+
+  // 요청자 화면에서 쓰던 이름을 그대로 둠 (디자이너는 매핑 없이 그대로 반환)
+  const mapStatusForRequester = (status: string | undefined) => status ?? "대기";
+
+  // 🔧 Date → 'YYYY-MM-DD' 포맷
+  const toYmd = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+
+  // 🔧 다양한 입력(Timestamp | string | Date) → input용 'YYYY-MM-DD'
+  const toInputDate = (v: any): string => {
+    if (!v) return "";
+    if (typeof v === "object" && typeof v.toDate === "function") {
+      return toYmd(v.toDate());
+    }
+    if (v instanceof Date) return toYmd(v);
+    // 문자열/숫자 모두 Date 시도
+    const dt = new Date(v);
+    return isNaN(+dt) ? "" : toYmd(dt);
+  };
+
+  // 화면 표시용으로 정규화(하위 수정 없이도 바로 보이게)
+  const normalizedRequests = useMemo(
+    () =>
+      assignedRequests.map((r) => ({
+        ...r,
+        designer_start_date: toInputDate(r.designer_start_date),
+        designer_end_date: toInputDate(r.designer_end_date),
+        result_url: r.result_url ?? "",
+        status: r.status ?? "대기",
+      })),
+    [assignedRequests]
+  );
+
+  // ⭐ 화면에 보여줄 리스트
+  const viewList = useMemo(() => {
+    const s = dateRange.start ? toMidnight(dateRange.start) : null;
+    const e = dateRange.end ? toMidnight(dateRange.end) : null;
+    const q = keyword.trim().toLowerCase();
+
+    return normalizedRequests
+      .map((r) => ({ ...r, displayStatus: mapStatusForRequester(r.status) }))
+      .filter((r) => {
+        let ok = true;
+
+        // 1) 상태 필터
+        if (statusFilter && statusFilter !== "진행 상태 선택") {
+          ok = ok && r.displayStatus === statusFilter;
+        }
+
+        // 2) 날짜 필터 (inclusive)
+        if (s && e) {
+          const reqDate =
+            parseLoose((r as any).request_date) ||
+            parseLoose((r as any).requested_at) ||
+            parseLoose((r as any).requestDate) ||
+            null;
+          ok = ok && !!reqDate && reqDate >= s && reqDate <= e;
+        }
+
+        // 3) 키워드 필터 (문서번호 / 작업항목)
+        if (q) {
+          const id = String((r as any).design_request_id ?? "").toLowerCase();
+          const req = String((r as any).requirement ?? "").toLowerCase();
+          ok = ok && (id.includes(q) || req.includes(q));
+        }
+
+        return ok;
+      });
+  }, [normalizedRequests, statusFilter, dateRange, keyword]);
+
+  // 🔍 검색 버튼 클릭 시 적용
+  const applySearch = (kw: string) => setKeyword(kw);
+
+  // ✅ 스냅샷 들어올 때 formData 시딩(키 없는 행만 채움 = 사용자의 임시 입력 보호)
+  useEffect(() => {
+    if (!assignedRequests.length) return;
+    setFormData((prev) => {
+      const next = { ...prev };
+      assignedRequests.forEach((r) => {
+        if (next[r.id] === undefined) {
+          next[r.id] = {
+            start_dt: toInputDate(r.designer_start_date),
+            end_dt: toInputDate(r.designer_end_date),
+            result_url: r.result_url || "",
+            status: r.status || "대기",
+          };
+        }
+      });
+      return next;
+    });
+  }, [assignedRequests]);
 
   // ✅ 입력값 변경
   const handleChange = (requestId: string, field: string, value: string) => {
@@ -80,25 +217,24 @@ export default function Designer({ setIsDrawerOpen, setDetailData }: RequesterPr
   };
 
   // ✅ 날짜 변환 함수 (Timestamp로)
-  const toTimestamp = (dateStr: string) => {
-    return dateStr ? Timestamp.fromDate(new Date(dateStr)) : null;
+  const toTimestamp = (dateStr?: string) => {
+    if (!dateStr) return null;
+    const dt = new Date(dateStr);
+    return isNaN(+dt) ? null : Timestamp.fromDate(dt);
   };
 
-  // ✅ Firestore 업데이트 (design_request)
   const saveResponse = async (requestId: string) => {
-    const requestRef = doc(db, "design_request", requestId);
-    const data = formData[requestId];
-
-    if (!data) {
+    const row = formData[requestId];
+    if (!row) {
       alert("변경된 내용이 없습니다.");
       return;
     }
 
-    await updateDoc(requestRef, {
-      designer_start_date: toTimestamp(data.start_dt),
-      designer_end_date: toTimestamp(data.end_dt),
-      result_url: data.result_url || "",
-      status: data.status
+    await updateDoc(doc(db, "design_request", requestId), {
+      designer_start_date: toTimestamp(row.start_dt),
+      designer_end_date: toTimestamp(row.end_dt),
+      result_url: row.result_url ?? "",
+      status: row.status ?? "대기",
     });
 
     alert("저장되었습니다.");
@@ -113,15 +249,21 @@ export default function Designer({ setIsDrawerOpen, setDetailData }: RequesterPr
   return (
     <Container>
       <MainTitle />
-      <DesignerRequestTitle>디자이너 화면</DesignerRequestTitle>
-      <DesignerRequestList requests={assignedRequests} formData={formData} onChange={handleChange} onSave={saveResponse} onDetailClick={openDetail} />
+      <RequestWrap>
+        <DesignerRequestTitle>디자이너 화면</DesignerRequestTitle>
+        <RequestFilterSearchWrap onApplyStatus={applyStatus} onApplyRange={applyRange} onSearch={applySearch} keyword={keywordInput} onKeywordChange={setKeywordInput}/>
+        <DesignerRequestList requests={viewList} formData={formData} onChange={handleChange} onSave={saveResponse} onDetailClick={openDetail} />
+      </RequestWrap>
     </Container>
   )
 }
 
 const Container = styled.div``;
 
-const DesignerRequestTitle = styled.h2`
-  margin-bottom: 20px;
+const RequestWrap = styled.div`
   padding: 0 48px;
+`;
+
+const DesignerRequestTitle = styled.h2`
+  margin-top: 20px;
 `;

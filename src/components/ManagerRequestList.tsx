@@ -52,7 +52,7 @@ export default function ManagerRequestList({
             <RequestListTableTh>산출물 URL</RequestListTableTh>
             <RequestListTableTh>디자인<br />시작일</RequestListTableTh>
             <RequestListTableTh>디자인<br />종료일</RequestListTableTh>
-            <RequestListTableTh>배정</RequestListTableTh>
+            <RequestListTableTh>디자이너 배정</RequestListTableTh>
             <RequestListTableTh>검수</RequestListTableTh>
           </tr>
         </thead>
@@ -83,7 +83,9 @@ export default function ManagerRequestList({
 }
 
 const RequestListTableWrap = styled.div`
-  padding: 0 48px;
+  max-height: 609px;
+  overflow-y: auto;
+  scrollbar-width: thin;
 `
 
 const RequestListTable = styled.table`

@@ -1,9 +1,17 @@
 import styled from "styled-components";
 import DesignerRequestItem from "./DesignerRequestItem";
 
+type RowForm = {
+  start_dt?: string;
+  end_dt?: string;
+  result_url?: string;
+  status?: string;
+};
+
+
 interface DesignerRequestListProps {
   requests: any[];
-  formData: { [key: string]: any };
+  formData: Record<string, RowForm>;
   onChange: (requestId: string, field: string, value: string) => void;
   onSave: (requestId: string) => void;
   onDetailClick: (item: RequestData) => void;
@@ -12,6 +20,7 @@ interface DesignerRequestListProps {
 export default function DesignerRequestList({
   requests,
   onChange,
+  formData,
   onSave,
   onDetailClick
 }: DesignerRequestListProps) {
@@ -55,6 +64,7 @@ export default function DesignerRequestList({
                 key={item.id}
                 index={index + 1}
                 item={item}
+                row={formData[item.id] ?? {}}
                 onChange={onChange}
                 onSave={onSave}
                 onDetailClick={onDetailClick}
@@ -74,7 +84,9 @@ export default function DesignerRequestList({
 }
 
 const RequestListTableWrap = styled.div`
-  padding: 0 48px;
+  max-height: 609px;
+  overflow-y: auto;
+  scrollbar-width: thin;
 `
 
 const RequestListTable = styled.table`

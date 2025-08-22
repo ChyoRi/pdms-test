@@ -1,3 +1,4 @@
+import styled from "styled-components";
 import { useState, useEffect, useMemo } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "../firebaseconfig";
@@ -18,6 +19,10 @@ export default function Requester({ setIsDrawerOpen, setEditData, setDetailData 
   const [requests, setRequests] = useState<RequestData[]>([]); // request DB 배열
   const [statusFilter, setStatusFilter] = useState<string>("진행 상태 선택");
   const [dateRange, setDateRange] = useState<{ start: Date | null; end: Date | null }>({ start: null, end: null });
+
+  // 🔍 검색: 입력값과 적용값 분리
+  const [keywordInput, setKeywordInput] = useState<string>(""); // 인풋 바인딩(타이핑용)
+  const [keyword, setKeyword] = useState<string>("");           // 검색 버튼 클릭 시에만 적용
 
   // ✅ 로그인 사용자 이름 가져오기
   useEffect(() => {
@@ -49,6 +54,9 @@ export default function Requester({ setIsDrawerOpen, setEditData, setDetailData 
   // 필터 적용 콜백 (하위에서 올라옴)
   const applyRange  = (r: { start: Date | null; end: Date | null }) => setDateRange(r); // ⬅️ 추가
   const applyStatus = (status: string) => setStatusFilter(status);
+
+  // 🔍 검색 버튼 클릭 시 적용
+  const applySearch = (kw: string) => setKeyword(kw);
 
   // ⭐ 요청자 화면용 status 매핑 함수
   const mapStatusForRequester = (status: string) => {
@@ -89,27 +97,38 @@ export default function Requester({ setIsDrawerOpen, setEditData, setDetailData 
   const viewList = useMemo(() => {
     const s = dateRange.start ? toMidnight(dateRange.start) : null;
     const e = dateRange.end   ? toMidnight(dateRange.end)   : null;
+    const q = keyword.trim().toLowerCase(); // ← 활성 검색어(버튼 클릭 시에만 변경)
 
     return requests
       .map((r) => ({ ...r, displayStatus: mapStatusForRequester(r.status) }))
       .filter((r) => {
-        // 상태 필터
+        let ok = true;
+
+        // 1) 상태 필터
         if (statusFilter && statusFilter !== "진행 상태 선택") {
-          if (r.displayStatus !== statusFilter) return false;
+          ok = ok && r.displayStatus === statusFilter;
         }
-        // 날짜 필터 (요청일 컬럼 기준: 필드명 예시 request_date / requested_at 등)
+
+        // 2) 날짜 필터 (inclusive)
         if (s && e) {
           const reqDate =
             parseLoose((r as any).request_date) ||
             parseLoose((r as any).requested_at) ||
             parseLoose((r as any).requestDate) ||
             null;
-          if (!reqDate) return false;
-          return reqDate >= s && reqDate <= e; // inclusive
+          ok = ok && !!reqDate && reqDate >= s && reqDate <= e;
         }
-        return true;
+
+        // 3) 키워드 필터 (두 필드만)
+        if (q) {
+          const id  = String((r as any).design_request_id ?? "").toLowerCase();
+          const req = String((r as any).requirement ?? "").toLowerCase();
+          ok = ok && (id.includes(q) || req.includes(q));
+        }
+
+        return ok;
       });
-  }, [requests, statusFilter, dateRange]);
+  }, [requests, statusFilter, dateRange, keyword]);
 
 
   // ✅ 검수완료 처리
@@ -162,8 +181,14 @@ export default function Requester({ setIsDrawerOpen, setEditData, setDetailData 
   return (
     <>
       <MainTitle />
-      <RequestFilterSearchWrap onApplyStatus={applyStatus} onApplyRange={applyRange} />
-      <RequesterRequestList data={viewList} onReviewComplete={reviewComplete} onCancel={cancelRequest} onEditClick={editRequest} onDetailClick={openDetail} />
+      <RequestWrap>
+        <RequestFilterSearchWrap onApplyStatus={applyStatus} onApplyRange={applyRange} onSearch={applySearch} keyword={keywordInput} onKeywordChange={setKeywordInput}/>
+        <RequesterRequestList data={viewList} onReviewComplete={reviewComplete} onCancel={cancelRequest} onEditClick={editRequest} onDetailClick={openDetail} />
+      </RequestWrap>
     </>
   );
 }
+
+const RequestWrap = styled.div`
+  padding: 0 48px;
+`;

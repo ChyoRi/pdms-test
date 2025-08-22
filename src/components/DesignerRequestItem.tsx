@@ -1,9 +1,17 @@
 import styled from "styled-components";
 import urlIcon from "../assets/url-icon.svg";
 
+type RowForm = {
+  start_dt?: string;
+  end_dt?: string;
+  result_url?: string;
+  status?: string;
+};
+
 interface DesignerRequestItemProps {
   index: number;
   item: any;
+  row: RowForm;
   onChange: (id: string, field: string, value: string) => void;
   onSave: (id: string) => void;
   onDetailClick: (item: RequestData) => void;
@@ -12,6 +20,7 @@ interface DesignerRequestItemProps {
 export default function DesignerRequestItem({
   index,
   item,
+  row,
   onChange,
   onSave,
   onDetailClick
@@ -62,6 +71,7 @@ export default function DesignerRequestItem({
       <RequestListDateInputTd>
         <RequestListDateInput
           type="date"
+          value={row.start_dt ?? ""} 
           onChange={(e) => onChange(item.id, "start_dt", e.target.value)}
           disabled={item.status === "취소"}
         />
@@ -69,6 +79,7 @@ export default function DesignerRequestItem({
       <RequestListDateInputTd>
         <RequestListDateInput
           type="date"
+          value={row.end_dt ?? ""}
           onChange={(e) => onChange(item.id, "end_dt", e.target.value)}
           disabled={item.status === "취소"}
         />
@@ -76,13 +87,14 @@ export default function DesignerRequestItem({
       <RequestListTableTd>
         <RequestListTextInput
           type="text"
+          value={row.result_url ?? ""}
           placeholder="산출물 URL을 입력해주세요."
           onChange={(e) => onChange(item.id, "result_url", e.target.value)}
           disabled={item.status === "취소"}
         />
       </RequestListTableTd>
       <RequestListTableTd>
-        <select onChange={(e) => onChange(item.id, "status", e.target.value)} disabled={item.status === "취소"}>
+        <select value={row.status ?? "대기"} onChange={(e) => onChange(item.id, "status", e.target.value)} disabled={item.status === "취소"}>
           <option value="대기중">대기</option>
           <option value="진행중">진행중</option>
           <option value="검수요청">검수요청</option>

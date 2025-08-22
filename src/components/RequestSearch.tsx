@@ -1,11 +1,29 @@
 import styled from "styled-components"
 import searchIcon from "../assets/search-icon.svg";
 
-export default function RequestSearch() {
+export default function RequestSearch({
+  keyword,
+  onKeywordChange,
+  onSearch,
+}: {
+  keyword: string;                         // ← 부모가 내려주는 값(입력값)
+  onKeywordChange: (v: string) => void;    // ← 타이핑 시 부모로 올림
+  onSearch: (keyword: string) => void;     // ← 버튼 클릭 시만 실행
+}) {
+
+  const handleSearchClick = () => onSearch(keyword.trim());
+
   return (
     <Container>
-      <SearchInput placeholder="검색어를 입력해 주세요."/>
-      <SearchButton type="button" />
+      <SearchInput 
+        placeholder="문서번호와 작업항목을 검색해 주세요."
+        value={keyword}
+        onChange={(e) => onKeywordChange(e.target.value)}
+      />
+      <SearchButton 
+        type="button"
+        onClick={handleSearchClick}
+      />
     </Container>
   )
 }

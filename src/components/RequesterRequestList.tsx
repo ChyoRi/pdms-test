@@ -65,7 +65,9 @@ export default function RequesterRequestList({ data, onReviewComplete, onCancel,
 }
 
 const RequestListTableWrap = styled.div`
-  padding: 0 48px;
+  max-height: 609px;
+  overflow-y: auto;
+  scrollbar-width: thin;
 `
 
 const RequestListTable = styled.table`
