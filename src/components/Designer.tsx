@@ -6,6 +6,7 @@ import { query, where, collection, onSnapshot, doc, updateDoc, Timestamp, orderB
 import DesignerRequestList from "./DesignerRequestList";
 import MainTitle from "./MainTitle";
 import RequestFilterSearchWrap from "./RequestFilterSearchWrap";
+import { makeSearchIndex, matchesQuery } from "../utils/search";
 
 interface RequesterProps {
   setIsDrawerOpen: (value: boolean) => void;
@@ -40,6 +41,8 @@ type RowForm = {
   result_url?: string;
   status?: string;
 };
+
+const DEFAULT_STATUS = "진행 상태 선택";
 
 export default function Designer({ setIsDrawerOpen, setDetailData }: RequesterProps) {
   const [assignedRequests, setAssignedRequests] = useState<DesignRequest[]>([]);
@@ -111,7 +114,7 @@ export default function Designer({ setIsDrawerOpen, setDetailData }: RequesterPr
   };
 
   // 요청자 화면에서 쓰던 이름을 그대로 둠 (디자이너는 매핑 없이 그대로 반환)
-  const mapStatusForRequester = (status: string | undefined) => status ?? "대기";
+  // const mapStatusForRequester = (status: string | undefined) => status ?? "대기";
 
   // 🔧 Date → 'YYYY-MM-DD' 포맷
   const toYmd = (d: Date) => {
@@ -146,42 +149,48 @@ export default function Designer({ setIsDrawerOpen, setDetailData }: RequesterPr
     [assignedRequests]
   );
 
+  // ✅ 디자이너 화면용 status 매핑 (검수중 → 검수요청)
+  const mapStatusForDesigner = (status: string | undefined) => {
+    if (status === "검수중") return "검수요청";
+    return status ?? "대기";
+  };
+
+  // ① 준비단계: 검색 인덱스/표시상태 세팅 (문서번호 + 작업항목)
+  const preparedNormalized = useMemo(() => {
+    return normalizedRequests.map((r) => {
+      const displayStatus = mapStatusForDesigner(r.status);
+      return makeSearchIndex({ ...r, displayStatus });
+    });
+  }, [normalizedRequests]);
+
   // ⭐ 화면에 보여줄 리스트
   const viewList = useMemo(() => {
     const s = dateRange.start ? toMidnight(dateRange.start) : null;
     const e = dateRange.end ? toMidnight(dateRange.end) : null;
-    const q = keyword.trim().toLowerCase();
 
-    return normalizedRequests
-      .map((r) => ({ ...r, displayStatus: mapStatusForRequester(r.status) }))
-      .filter((r) => {
-        let ok = true;
+    return preparedNormalized.filter((r: any) => {
+      let ok = true;
 
-        // 1) 상태 필터
-        if (statusFilter && statusFilter !== "진행 상태 선택") {
-          ok = ok && r.displayStatus === statusFilter;
-        }
+      // 1) 상태(표시값 기준) 필터
+      if (statusFilter && statusFilter !== DEFAULT_STATUS) {
+        if (mapStatusForDesigner(r.status) !== statusFilter) ok = false;
+      }
 
-        // 2) 날짜 필터 (inclusive)
-        if (s && e) {
-          const reqDate =
-            parseLoose((r as any).request_date) ||
-            parseLoose((r as any).requested_at) ||
-            parseLoose((r as any).requestDate) ||
-            null;
-          ok = ok && !!reqDate && reqDate >= s && reqDate <= e;
-        }
+      // 2) 날짜 필터
+      if (ok && s && e) {
+        const rd =
+          parseLoose(r.request_date) ||
+          parseLoose(r.requested_at) ||
+          parseLoose(r.requestDate);
+        if (!rd || rd < s || rd > e) ok = false;
+      }
 
-        // 3) 키워드 필터 (문서번호 / 작업항목)
-        if (q) {
-          const id = String((r as any).design_request_id ?? "").toLowerCase();
-          const req = String((r as any).requirement ?? "").toLowerCase();
-          ok = ok && (id.includes(q) || req.includes(q));
-        }
+      // 3) 검색(문서번호 + 작업항목 / 초성 + 일반)
+      if (ok && keyword && !matchesQuery(r, keyword)) ok = false;
 
-        return ok;
-      });
-  }, [normalizedRequests, statusFilter, dateRange, keyword]);
+      return ok;
+    });
+  }, [preparedNormalized, statusFilter, dateRange, keyword]);
 
   // 🔍 검색 버튼 클릭 시 적용
   const applySearch = (kw: string) => setKeyword(kw);
@@ -251,7 +260,7 @@ export default function Designer({ setIsDrawerOpen, setDetailData }: RequesterPr
       <MainTitle />
       <RequestWrap>
         <DesignerRequestTitle>디자이너 화면</DesignerRequestTitle>
-        <RequestFilterSearchWrap onApplyStatus={applyStatus} onApplyRange={applyRange} onSearch={applySearch} keyword={keywordInput} onKeywordChange={setKeywordInput}/>
+        <RequestFilterSearchWrap roleNumber={2} onApplyStatus={applyStatus} onApplyRange={applyRange} onSearch={applySearch} keyword={keywordInput} onKeywordChange={setKeywordInput}/>
         <DesignerRequestList requests={viewList} formData={formData} onChange={handleChange} onSave={saveResponse} onDetailClick={openDetail} />
       </RequestWrap>
     </Container>

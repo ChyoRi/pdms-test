@@ -14,6 +14,7 @@ export default function RequestFilterSearchWrap({
   onApplyRequester,
   designerOptions = [],
   onApplyDesigner,
+  roleNumber,
 }: {
   onApplyStatus: (status: string) => void;
   onApplyRange: (range: { start: Date | null; end: Date | null }) => void;
@@ -25,6 +26,7 @@ export default function RequestFilterSearchWrap({
   onApplyRequester?: (name: string) => void;
   designerOptions?: string[];
   onApplyDesigner?: (name: string) => void;
+  roleNumber?: number | null;
 }) {
   return (
     <Container>
@@ -36,6 +38,7 @@ export default function RequestFilterSearchWrap({
         onApplyRequester={onApplyRequester}
         designerOptions={designerOptions}
         onApplyDesigner={onApplyDesigner}
+        roleNumber={roleNumber}
       />
       <RequestSearch keyword={keyword} onKeywordChange={onKeywordChange} onSearch={onSearch} />
     </Container>

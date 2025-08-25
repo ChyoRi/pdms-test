@@ -28,14 +28,15 @@ export default function DesignerRequestList({
     <RequestListTableWrap>
       <RequestListTable>
         <colgroup>
-          <col style={{ width: '50px' }} /><col style={{ width: '100px' }} />
+          <col style={{ width: '40px' }} /><col style={{ width: '90px' }} />
           <col style={{ width: '60px' }} /><col style={{ width: '60px' }} />
           <col style={{ width: '60px' }} /><col style={{ width: '60px' }} />
           <col style={{ width: '80px' }} /><col style={{ width: '120px' }}/>
-          <col /><col style={{ width: '90px' }} />
+          <col /><col style={{ width: '70px' }} />
           <col style={{ width: '160px' }} /><col style={{ width: '120px' }} />
           <col style={{ width: '120px' }}/><col />
           <col style={{ width: '100px' }} /><col style={{ width: '80px' }} />
+          <col style={{ width: '60px' }} />
         </colgroup>
         <thead>
           <tr>
@@ -48,13 +49,14 @@ export default function DesignerRequestList({
             <RequestListTableTh>업무형태</RequestListTableTh>
             <RequestListTableTh>업무타입</RequestListTableTh>
             <RequestListTableTh>작업항목</RequestListTableTh>
-            <RequestListTableTh>요청서 URL</RequestListTableTh>
+            <RequestListTableTh>요청서<br />URL</RequestListTableTh>
             <RequestListTableTh>메모</RequestListTableTh>
             <RequestListTableTh>디자인 시작일</RequestListTableTh>
             <RequestListTableTh>디자인 종료일</RequestListTableTh>
             <RequestListTableTh>산출물 링크</RequestListTableTh>
             <RequestListTableTh>진행상태</RequestListTableTh>
             <RequestListTableTh>저장</RequestListTableTh>
+            <RequestListTableTh>공수</RequestListTableTh>
           </tr>
         </thead>
         <tbody>
@@ -72,7 +74,7 @@ export default function DesignerRequestList({
             ))
           ) : (
             <tr>
-              <td colSpan={16} style={{ textAlign: "center" }}>
+              <td colSpan={17} style={{ textAlign: "center" }}>
                 배정된 요청이 없습니다.
               </td>
             </tr>
@@ -113,11 +115,11 @@ const RequestListTableTh = styled.th`
     border-right: 1px solid ${({ theme }) => theme.colors.black};
   }
 
-  &:nth-of-type(12), &:nth-of-type(13), &:nth-of-type(14), &:nth-of-type(15) {
+  &:nth-of-type(12), &:nth-of-type(13), &:nth-of-type(14), &:nth-of-type(15), &:nth-of-type(16) {
     border-right: 1px solid ${({ theme }) => theme.colors.pink02}
   }
 
-  &:nth-of-type(12), &:nth-of-type(13), &:nth-of-type(14), &:nth-of-type(15), &:nth-of-type(16) {
+  &:nth-of-type(12), &:nth-of-type(13), &:nth-of-type(14), &:nth-of-type(15), &:nth-of-type(16), &:nth-of-type(17) {
     background-color: ${({ theme }) => theme.colors.pink01};
   }
 `;

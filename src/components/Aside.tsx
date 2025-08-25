@@ -14,34 +14,85 @@ interface AsideProps {
   onRequestButtonClick: () => void;
 }
 
-export default function Aside({ requests, role, userName, onRequestButtonClick }: AsideProps) {
-  const statusList = [
-    {
-      status: "대기중",
-      count: requests.filter(r => r.status === "대기").length
-    },
-    {
-      status: "작업중",
-      count: requests.filter(r => r.status === "진행중").length
-    },
-    {
-      status: "완료",
-      count: requests.filter(r => r.status === "완료").length
-    }
-  ];
+type Bucket = { status: string; count: number };
 
-  const getRoleTitle = (role: number | null, name: string): string => {
-    switch (role) {
-      case 1:
-        return `${name}님의 요청`;
-      case 2:
-        return `${name}님의 작업 현황`;
-      case 3:
-        return "전체 요청 현황";
-      default:
-        return "요청 현황";
-    }
-  };
+// 모든 화면에서 공통으로 쓸 원본 상태 라벨(서버/DB 기준)
+const RAW = {
+  WAIT: "대기",
+  PROG: "진행중",
+  REQ:  "검수요청",
+  REV:  "검수중",
+  DONE: "완료",
+  CAN:  "취소",
+} as const;
+
+const makeStatusBuckets = (
+  role: number | null,
+  requests: { status?: string }[]
+): Bucket[] => {
+  const getCount = (labels: string[]) =>
+    requests.reduce((acc, r) => (r.status && labels.includes(r.status) ? acc + 1 : acc), 0);
+
+  switch (role) {
+    // 요청자: 대기 / 진행중(진행중+검수요청) / 검수중 / 완료 / 취소
+    case 1:
+      return [
+        { status: "대기",     count: getCount([RAW.WAIT]) },
+        { status: "진행중",   count: getCount([RAW.PROG, RAW.REQ]) },
+        { status: "검수중",   count: getCount([RAW.REV]) },
+        { status: "완료",     count: getCount([RAW.DONE]) },
+        { status: "취소",     count: getCount([RAW.CAN]) },
+      ];
+
+    // 디자이너: 대기 / 진행중 / 검수요청(검수요청+검수중) / 완료 / 취소
+    case 2:
+      return [
+        { status: "대기",     count: getCount([RAW.WAIT]) },
+        { status: "진행중",   count: getCount([RAW.PROG]) },
+        { status: "검수요청", count: getCount([RAW.REQ, RAW.REV]) },
+        { status: "완료",     count: getCount([RAW.DONE]) },
+        { status: "취소",     count: getCount([RAW.CAN]) },
+      ];
+
+    // 매니저: 대기 / 진행중 / 검수요청(=raw 검수중) / 검수중(=raw 검수요청) / 완료 / 취소
+    case 3:
+      return [
+        { status: "대기",     count: getCount([RAW.WAIT]) },
+        { status: "진행중",   count: getCount([RAW.PROG]) },
+        { status: "검수중",   count: getCount([RAW.REQ]) }, // flip
+        { status: "검수요청", count: getCount([RAW.REV]) }, // flip
+        { status: "완료",     count: getCount([RAW.DONE]) },
+        { status: "취소",     count: getCount([RAW.CAN]) },
+      ];
+
+    // 기타/초기값: 그냥 원본 상태 그대로 6종 집계
+    default:
+      return [
+        { status: "대기",     count: getCount([RAW.WAIT]) },
+        { status: "진행중",   count: getCount([RAW.PROG]) },
+        { status: "검수요청", count: getCount([RAW.REQ]) },
+        { status: "검수중",   count: getCount([RAW.REV]) },
+        { status: "완료",     count: getCount([RAW.DONE]) },
+        { status: "취소",     count: getCount([RAW.CAN]) },
+      ];
+  }
+};
+
+const getRoleTitle = (role: number | null, name: string): string => {
+  switch (role) {
+    case 1:
+      return `${name}님의 요청`;
+    case 2:
+      return `${name}님의 작업 현황`;
+    case 3:
+      return "전체 요청 현황";
+    default:
+      return "요청 현황";
+  }
+};
+
+export default function Aside({ requests, role, userName, onRequestButtonClick }: AsideProps) {
+  const statusList = makeStatusBuckets(role, requests);
 
   return (
     <AsideFrame>

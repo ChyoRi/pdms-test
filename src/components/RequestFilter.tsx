@@ -8,6 +8,27 @@ const DEFAULT_REQUESTER = "요청자 선택";
 const DEFAULT_DESIGNER = "디자이너 선택";
 const EMPTY_RANGE = { start: null, end: null };
 
+type RoleKey = "requester" | "designer" | "manager";
+
+const toRoleKey = (num?: number | null): RoleKey =>
+  num === 3 ? "manager" : num === 2 ? "designer" : "requester";
+
+// 역할별 셀렉트 옵션 (요청자는 5개)
+const STATUS_OPTIONS: Record<RoleKey, string[]> = {
+  requester: [DEFAULT_STATUS, "대기", "진행중", "검수중", "완료", "취소"],
+  manager:   [DEFAULT_STATUS, "대기", "진행중", "검수중", "검수요청", "완료", "취소"],
+  designer:  [DEFAULT_STATUS, "대기", "진행중", "검수요청", "완료", "취소"],
+};
+
+// ★ 추가: 역할별(=매니저) 셀렉트 표시값 → 실제 필터값 매핑
+const mapSelectToFilterValue = (role: RoleKey, v: string) => {
+  if (role === "manager") {
+    if (v === "검수중") return "검수요청";
+    if (v === "검수요청") return "검수중";
+  }
+  return v;
+};
+
 export default function RequestSearch({
   onApplyStatus,
   onApplyRange,
@@ -16,6 +37,7 @@ export default function RequestSearch({
   onApplyRequester,
   designerOptions = [],
   onApplyDesigner,
+  roleNumber
 }: {
   onApplyStatus: (status: string) => void;
   onApplyRange: (range: { start: Date | null; end: Date | null }) => void;
@@ -24,6 +46,7 @@ export default function RequestSearch({
   onApplyRequester?: (name: string) => void;
   designerOptions?: string[];
   onApplyDesigner?: (name: string) => void;
+  roleNumber?: number | null;
 }) {
   const [range, setRange] = useState<{ start: Date | null; end: Date | null }>(EMPTY_RANGE);
   const [status, setStatus] = useState(DEFAULT_STATUS);
@@ -40,6 +63,9 @@ export default function RequestSearch({
     onApplyRequester?.(DEFAULT_REQUESTER);
     onApplyDesigner?.(DEFAULT_DESIGNER);          // ★ 추가
   };
+
+  const roleKey = toRoleKey(roleNumber);
+  const visibleStatuses = STATUS_OPTIONS[roleKey];
 
   return (
     <Container>
@@ -91,18 +117,17 @@ export default function RequestSearch({
       <SelectBox
         value={status}
         onChange={(e) => {
-          const v = e.target.value;
-          setStatus(v);
-          onApplyStatus(v); // ★ 즉시 적용
-        }}>
-        <option value={DEFAULT_STATUS}>{DEFAULT_STATUS}</option>
-        <option value="대기">대기</option>
-        <option value="진행중">진행중</option>
-        <option value="검수요청">검수요청</option>
-        <option value="완료">완료</option>
-        <option value="취소">취소</option>
+          const uiValue = e.target.value;              // 화면에 보이는 값
+          const filterValue = mapSelectToFilterValue(roleKey, uiValue); // DB 비교용
+          setStatus(uiValue);
+          onApplyStatus(filterValue);
+        }}
+      >
+        {visibleStatuses.map((s) => (
+          <option key={s} value={s}>{s}</option>
+        ))}
       </SelectBox>
-      <ResetButton type="button" onClick={reset}>초기화</ResetButton>
+      <ResetButton type="button" onClick={reset}>필터 초기화</ResetButton>
     </Container>
   )
 }
@@ -138,7 +163,7 @@ const SelectBox = styled.select`
 `;
 
 const ResetButton = styled.button`
-  padding: 12.5px 10px;
+  padding: 11.5px 10px;
   border-radius: 4px;
   font-family: 'Pretendard';
   font-size: 16px;

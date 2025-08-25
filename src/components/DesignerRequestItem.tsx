@@ -34,6 +34,12 @@ export default function DesignerRequestItem({
     return timestamp;
   };
 
+  // ✅ 표시↔저장 매핑 (디자이너 규칙)
+  const uiFromDbStatus = (s?: string) => (s === "검수중" ? "검수요청" : (s ?? "대기"));
+  const dbFromUiStatus = (s: string) => (s === "검수요청" ? "검수중" : s);
+
+  const uiStatusValue = uiFromDbStatus(row.status);
+
   // ✅ 메모/작업항목 클릭 시 상세 Drawer 열기
   const openDetail = (e: React.MouseEvent) => {
     e.stopPropagation(); // 행 단위 클릭과 충돌 방지
@@ -94,14 +100,24 @@ export default function DesignerRequestItem({
         />
       </RequestListTableTd>
       <RequestListTableTd>
-        <select value={row.status ?? "대기"} onChange={(e) => onChange(item.id, "status", e.target.value)} disabled={item.status === "취소"}>
-          <option value="대기중">대기</option>
+        <select
+          value={uiStatusValue}                            // ← UI 표시값
+          onChange={(e) => onChange(item.id, "status", dbFromUiStatus(e.target.value))} // ← DB 저장값
+          disabled={item.status === "취소"}
+        >
+          {/* 🔧 value를 '대기'로 맞춰서 불일치 해결 (기존 '대기중' → '대기') */}
+          <option value="대기">대기</option>
           <option value="진행중">진행중</option>
           <option value="검수요청">검수요청</option>
+          <option value="완료">완료</option>
+          <option value="취소">취소</option>
         </select>
       </RequestListTableTd>
       <RequestListTableTd>
         <SaveButton onClick={() => onSave(item.id)} disabled={item.status === "취소"}>저장</SaveButton>
+      </RequestListTableTd>
+      <RequestListTableTd>
+        
       </RequestListTableTd>
     </RequestListTableTr>
   );
@@ -151,10 +167,6 @@ const RequestListTableTd = styled.td`
   &:first-of-type {
     border-left: none;
   }
-
-  &:nth-of-type(11) {
-    border-right: 1px solid ${({ theme }) => theme.colors.black};
-  }
 `;
 
 const RequestListcompletionTd = styled.td`
@@ -178,8 +190,10 @@ const RequestListRequirementTd = styled.td`
 const RequestListMemoTd = styled.td`
   line-height: 15px;
   padding: 0 12px;
+  border-right: 1px solid ${({ theme }) => theme.colors.black};
   text-align: left;
   background-color: #fffff1;
+
 `;
 
 const RequestListDateInputTd = styled.td`

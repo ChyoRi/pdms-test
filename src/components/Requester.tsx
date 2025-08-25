@@ -6,6 +6,7 @@ import { collection, onSnapshot, query, where, updateDoc, doc, orderBy, getDoc }
 import RequesterRequestList from "./RequesterRequestList";
 import MainTitle from "./MainTitle";
 import RequestFilterSearchWrap from "./RequestFilterSearchWrap";
+import { makeSearchIndex, matchesQuery } from "../utils/search.ts";
 
 // ✅ 추가된 Props 인터페이스 정의
 interface RequesterProps {
@@ -13,6 +14,8 @@ interface RequesterProps {
   setEditData: (data: RequestData) => void;
   setDetailData: (data: RequestData) => void;
 }
+
+const DEFAULT_STATUS = "진행 상태 선택";
 
 export default function Requester({ setIsDrawerOpen, setEditData, setDetailData }: RequesterProps) {
   const [userName, setUserName] = useState("");
@@ -55,13 +58,12 @@ export default function Requester({ setIsDrawerOpen, setEditData, setDetailData 
   const applyRange  = (r: { start: Date | null; end: Date | null }) => setDateRange(r); // ⬅️ 추가
   const applyStatus = (status: string) => setStatusFilter(status);
 
-  // 🔍 검색 버튼 클릭 시 적용
+  // 🔍 실시간 검색 (버튼 개념 X)
   const applySearch = (kw: string) => setKeyword(kw);
 
   // ⭐ 요청자 화면용 status 매핑 함수
   const mapStatusForRequester = (status: string) => {
     if (status === "검수요청") return "진행중";
-    if (status === "검수중") return "검수요청";
     return status; // 나머지는 그대로
   };
 
@@ -93,42 +95,40 @@ export default function Requester({ setIsDrawerOpen, setEditData, setDetailData 
     return null;
   };
 
+  // ① 준비 단계: 표시상태 + 검색 인덱스 세팅
+  const prepared = useMemo(() => {
+    return requests.map((r) => {
+      const displayStatus = mapStatusForRequester(r.status);
+      return makeSearchIndex({ ...r, displayStatus });
+    });
+  }, [requests]);
+
   // ⭐ 화면에 보여줄 리스트
+  // ② 뷰 리스트(기간 + 상태 + 실시간 검색)
   const viewList = useMemo(() => {
     const s = dateRange.start ? toMidnight(dateRange.start) : null;
-    const e = dateRange.end   ? toMidnight(dateRange.end)   : null;
-    const q = keyword.trim().toLowerCase(); // ← 활성 검색어(버튼 클릭 시에만 변경)
+    const e = dateRange.end ? toMidnight(dateRange.end) : null;
+    const q = keyword.trim(); // matchesQuery 내부에서 소문자/초성 처리는 끝남
 
-    return requests
-      .map((r) => ({ ...r, displayStatus: mapStatusForRequester(r.status) }))
-      .filter((r) => {
-        let ok = true;
+    return prepared.filter((r: any) => {
+      // 상태 필터(표시 상태 기준)
+      if (statusFilter !== DEFAULT_STATUS && r.displayStatus !== statusFilter) return false;
 
-        // 1) 상태 필터
-        if (statusFilter && statusFilter !== "진행 상태 선택") {
-          ok = ok && r.displayStatus === statusFilter;
-        }
+      // 날짜 필터(inclusive)
+      if (s && e) {
+        const reqDate =
+          parseLoose(r.request_date) ||
+          parseLoose(r.requested_at) ||
+          parseLoose(r.requestDate);
+        if (!reqDate || reqDate < s || reqDate > e) return false;
+      }
 
-        // 2) 날짜 필터 (inclusive)
-        if (s && e) {
-          const reqDate =
-            parseLoose((r as any).request_date) ||
-            parseLoose((r as any).requested_at) ||
-            parseLoose((r as any).requestDate) ||
-            null;
-          ok = ok && !!reqDate && reqDate >= s && reqDate <= e;
-        }
+      // 키워드(초성/영문/숫자 즉시 매칭)
+      if (!matchesQuery(r, q)) return false;
 
-        // 3) 키워드 필터 (두 필드만)
-        if (q) {
-          const id  = String((r as any).design_request_id ?? "").toLowerCase();
-          const req = String((r as any).requirement ?? "").toLowerCase();
-          ok = ok && (id.includes(q) || req.includes(q));
-        }
-
-        return ok;
-      });
-  }, [requests, statusFilter, dateRange, keyword]);
+      return true;
+    });
+  }, [prepared, statusFilter, dateRange, keyword]);
 
 
   // ✅ 검수완료 처리
@@ -182,7 +182,7 @@ export default function Requester({ setIsDrawerOpen, setEditData, setDetailData 
     <>
       <MainTitle />
       <RequestWrap>
-        <RequestFilterSearchWrap onApplyStatus={applyStatus} onApplyRange={applyRange} onSearch={applySearch} keyword={keywordInput} onKeywordChange={setKeywordInput}/>
+        <RequestFilterSearchWrap roleNumber={1} onApplyStatus={applyStatus} onApplyRange={applyRange} onSearch={applySearch} keyword={keywordInput} onKeywordChange={setKeywordInput}/>
         <RequesterRequestList data={viewList} onReviewComplete={reviewComplete} onCancel={cancelRequest} onEditClick={editRequest} onDetailClick={openDetail} />
       </RequestWrap>
     </>

@@ -6,33 +6,48 @@ export default function RequestSearch({
   onKeywordChange,
   onSearch,
 }: {
-  keyword: string;                         // ← 부모가 내려주는 값(입력값)
-  onKeywordChange: (v: string) => void;    // ← 타이핑 시 부모로 올림
-  onSearch: (keyword: string) => void;     // ← 버튼 클릭 시만 실행
+  keyword: string;
+  onKeywordChange: (v: string) => void;
+  onSearch: (keyword: string) => void;
 }) {
-
-  const handleSearchClick = () => onSearch(keyword.trim());
+  const push = (v: string) => {
+    onKeywordChange(v);      // 인풋 바인딩
+    onSearch(v.trim());      // 타이핑 즉시 검색 (빈 문자열이면 전체 표시)
+  };
 
   return (
     <Container>
-      <SearchInput 
+      <SearchInput
         placeholder="문서번호와 작업항목을 검색해 주세요."
         value={keyword}
-        onChange={(e) => onKeywordChange(e.target.value)}
-      />
-      <SearchButton 
-        type="button"
-        onClick={handleSearchClick}
+        onChange={(e) => push(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") push(""); // 선택: ESC로 빠른 초기화
+        }}
       />
     </Container>
-  )
+  );
 }
 
 const Container = styled.div`
+  position: relative;
   ${({ theme }) => theme.mixin.flex('center', 'space-between')};
   padding: 11px 14.5px;
   border: 1px solid ${({ theme }) => theme.colors.gray02};
   border-radius: 8px;
+
+  /* 🔍 아이콘: 버튼 제거하고 래퍼에 ::after로 표시 */
+  &::after {
+    content: "";
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    display: block;
+    width: 24px;
+    height: 24px;
+    background: url(${searchIcon}) no-repeat center / contain;
+    transform: translateY(-50%);
+  }
 `;
 
 const SearchInput = styled.input`
@@ -41,10 +56,4 @@ const SearchInput = styled.input`
   font-family: 'Pretendard';
   font-size: 16px;
   font-weight: 500;
-`;
-
-const SearchButton = styled.button`
-  width: 24px;
-  height: 24px;
-  background-image: url(${searchIcon});
 `;

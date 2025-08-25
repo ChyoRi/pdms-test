@@ -60,7 +60,7 @@ export default function RequesterRequestItem({ item, index, onReviewComplete, on
           {item.status === "검수요청"
             ? "진행중"
             : item.status === "검수중"
-            ? "검수요청"
+            ? "검수중"
             : (item.status || "대기")
           }
         </StautsBadge>

@@ -7,7 +7,6 @@ interface MyRequestItemProps {
   };
 }
 
-
 export default function MyRequestItem({ item }: MyRequestItemProps) {
   return (
     <ItemWrap status={item.status}>
@@ -16,6 +15,43 @@ export default function MyRequestItem({ item }: MyRequestItemProps) {
     </ItemWrap>
   )
 }
+
+/** 상태별 사이드바 색상 톤 */
+const getBgColor = (status: string, theme: any) => {
+  switch (status) {
+    case "대기":
+      return theme.colors.beige01;      // 연한 주황
+    case "진행중":
+      return theme.colors.lightpupple;  // 연한 파랑
+    case "검수요청":
+    case "검수중":
+      return theme.colors.pink03;       // 연한 핑크
+    case "완료":
+      return theme.colors.gray04;       // 연한 회색
+    case "취소":
+      return theme.colors.gray07;       // 더 옅은 회색
+    default:
+      return "#f9f9f9";
+  }
+};
+
+const getBarColor = (status: string, theme: any) => {
+  switch (status) {
+    case "대기":
+      return theme.colors.orange;
+    case "진행중":
+      return theme.colors.blue01;
+    case "검수요청":
+    case "검수중":
+      return theme.colors.red;
+    case "완료":
+      return theme.colors.gray02;
+    case "취소":
+      return theme.colors.gray03;
+    default:
+      return theme.colors.gray03;
+  }
+};
 
 const ItemWrap = styled.li<{ status: string }>`
   display: flex;
@@ -27,19 +63,7 @@ const ItemWrap = styled.li<{ status: string }>`
   border-radius: 4px;
   font-family: 'Pretendard';
   color: ${({ theme }) => theme.colors.black};
-
-  background-color: ${({ status, theme }) => {
-    switch (status) {
-      case "대기중":
-        return theme.colors.beige01; // 연한 주황
-      case "작업중":
-        return theme.colors.lightpupple; // 연한 파랑
-      case "완료":
-        return theme.colors.gray04; // 연한 회색
-      default:
-        return "#f9f9f9"; // 기본 회색
-    }
-  }};
+  background-color: ${({ status, theme }) => getBgColor(status, theme)};
 `;
 
 const Status = styled.span`
@@ -49,6 +73,7 @@ const Status = styled.span`
 
 const StatusCount = styled.span<{ status: string }>`
   position: relative;
+  width: 10px;
   font-size: 14px;
   font-weight: 700;
 
@@ -61,18 +86,6 @@ const StatusCount = styled.span<{ status: string }>`
     width: 1px;
     height: 18px;
     transform: translateY(-50%);
-
-    background-color: ${({ status, theme }) => {
-      switch (status) {
-        case "대기중":
-          return theme.colors.orange;
-        case "작업중":
-          return theme.colors.blue01;
-        case "완료":
-          return theme.colors.gray02;
-        default:
-          return theme.colors.gray03;
-      }
-    }};
+    background-color: ${({ status, theme }) => getBarColor(status, theme)};
   }
 `;

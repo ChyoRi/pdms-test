@@ -22,6 +22,12 @@ export default function ManagerRequestItem({
   onSendToRequester,
   onDetailClick
 }: ManagerRequestItemProps) {
+  // 🔁 매니저 화면 표시 전용 매핑
+  const displayStatusForManager = (s: string) =>
+    s === "검수요청" ? "검수중" : s === "검수중" ? "검수요청" : s;
+
+  const viewStatus = displayStatusForManager(item.status);
+
   // 날짜 포맷 함수
   const formatDate = (timestamp: any) => {
     if (!timestamp) return "-";
@@ -67,8 +73,8 @@ export default function ManagerRequestItem({
         </RequestListMemoText>
       </RequestListMemoTd>
       <RequestListTableTd>
-        <StautsBadge status={item.status}>
-          {item.status === "검수요청" ? "검수중" : (item.status || "대기")}
+        <StautsBadge status={viewStatus}>
+          {viewStatus}
         </StautsBadge>
       </RequestListTableTd>
       <RequestListTableTd>
@@ -104,6 +110,10 @@ export default function ManagerRequestItem({
         ) : (
           ""
         )}
+      </RequestListTableTd>
+      <RequestListTableTd>
+        <WorkHourInput type="text" placeholder="공수 입력"/>
+        <WorkHourSaveButton type="button">저장</WorkHourSaveButton>
       </RequestListTableTd>
     </RequestListTableTr>
   )
@@ -306,6 +316,7 @@ const AssignButton = styled.button`
 `;
 
 const AssignSelect = styled.select`
+  width: 90px;
   padding: 6px;
   border: 1px solid #ccc;
   border-radius: 4px;
@@ -322,4 +333,23 @@ const CompletedText = styled.span`
   color: green;
   font-size: 13px;
   font-weight: bold;
+`;
+
+const WorkHourInput = styled.input`
+  width: 40px;
+  font-family: 'Pretendard';
+  font-size: 16px;
+  font-weight: 500;
+
+  &::placeholder {
+    font-size: 11px;
+  }
+`;
+
+const WorkHourSaveButton = styled.button`
+  margin: 6px 0 0 10px;
+  padding: 4.5px 10px;
+  border-radius: 4px;
+  background-color: ${({ theme }) => theme.colors.black};
+  color: ${({ theme }) => theme.colors.white01};
 `;

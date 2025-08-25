@@ -5,6 +5,7 @@ import { doc, updateDoc, collection, getDocs, onSnapshot, query, where, orderBy 
 import ManagerRequestList from "./ManagerRequestList";
 import MainTitle from "./MainTitle";
 import RequestFilterSearchWrap from "./RequestFilterSearchWrap";
+import { makeSearchIndex, matchesQuery } from "../utils/search";
 
 interface RequesterProps {
   setIsDrawerOpen: (value: boolean) => void;
@@ -28,10 +29,9 @@ export default function Manager({ setIsDrawerOpen, setDetailData }: RequesterPro
   const [keywordInput, setKeywordInput] = useState<string>("");
   const [keyword, setKeyword] = useState<string>("");
 
-  // 매니저 전용: 요청자 필터
+  // 매니저 전용: 요청자/디자이너 필터
   const [requesterOptions, setRequesterOptions] = useState<string[]>([]);
   const [requesterFilter, setRequesterFilter] = useState<string>(DEFAULT_REQUESTER);
-  // 매니저 전용: 디자이너 필터
   const [designerOptions, setDesignerOptions] = useState<string[]>([]); // ★ 추가
   const [designerFilter, setDesignerFilter] = useState<string>(DEFAULT_DESIGNER); // ★ 추가
 
@@ -153,7 +153,6 @@ export default function Manager({ setIsDrawerOpen, setDetailData }: RequesterPro
 
   // ===== 헬퍼: 날짜 파싱(요청자/디자이너와 동일 로직) =====
   const toMidnight = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
-
   const parseLoose = (v: any): Date | null => {
     if (!v) return null;
     if (typeof v === "object" && typeof v.toDate === "function") return toMidnight(v.toDate());
@@ -179,34 +178,51 @@ export default function Manager({ setIsDrawerOpen, setDetailData }: RequesterPro
   };
 
 
-  // ===== 화면에 보여줄 리스트 (기간 + 상태 + 검색) =====
+  // ✅ (표시용) 매니저 상태 매핑: 검수요청 ↔ 검수중
+  const mapStatusForManager = (status?: string) => {
+    if (status === "검수요청") return "검수중";
+    if (status === "검수중") return "검수요청";
+    return status ?? "대기";
+  };
+
+  // ① 준비단계: 검색 인덱스/표시상태 세팅 (검색 대상: 문서번호 + 작업항목)
+  const prepared = useMemo(() => {
+    return requests.map((r) => {
+      const displayStatus = mapStatusForManager(r.status);
+      return makeSearchIndex({ ...r, displayStatus });
+    });
+  }, [requests]);
+
+  // ===== 화면에 보여줄 리스트 (기간 + 상태 + 요청자/디자이너 + 검색) =====
   const viewList = useMemo(() => {
     const s = dateRange.start ? toMidnight(dateRange.start) : null;
     const e = dateRange.end ? toMidnight(dateRange.end) : null;
-    const q = keyword.toLowerCase();
 
-    return requests.filter((r: any) => {
-      if (statusFilter !== DEFAULT_STATUS && r.status !== statusFilter) return false;
-      if (requesterFilter !== DEFAULT_REQUESTER && r.requester !== requesterFilter) return false;
-      // ★ 여기 추가: assigned_designer 기준
-      if (designerFilter !== DEFAULT_DESIGNER && r.assigned_designer !== designerFilter) return false;
+    return prepared.filter((r: any) => {
+      let ok = true;
 
-      if (s && e) {
+      // 1) 상태(DB 값) 필터
+      if (statusFilter !== DEFAULT_STATUS && r.status !== statusFilter) ok = false;
+
+      // 2) 요청자/디자이너 필터
+      if (ok && requesterFilter !== DEFAULT_REQUESTER && r.requester !== requesterFilter) ok = false;
+      if (ok && designerFilter !== DEFAULT_DESIGNER && r.assigned_designer !== designerFilter) ok = false;
+
+      // 3) 날짜 필터
+      if (ok && s && e) {
         const rd =
           parseLoose(r.request_date) ||
           parseLoose(r.requested_at) ||
           parseLoose(r.requestDate);
-        if (!rd || rd < s || rd > e) return false;
+        if (!rd || rd < s || rd > e) ok = false;
       }
 
-      if (q) {
-        const id  = String(r.design_request_id ?? "").toLowerCase();
-        const req = String(r.requirement ?? "").toLowerCase();
-        if (!id.includes(q) && !req.includes(q)) return false;
-      }
-      return true;
+      // 4) 검색(문서번호 + 작업항목 / 초성 + 일반)
+      if (ok && keyword && !matchesQuery(r, keyword)) ok = false;
+
+      return ok;
     });
-  }, [requests, statusFilter, requesterFilter, designerFilter, dateRange, keyword]);
+  }, [prepared, statusFilter, requesterFilter, designerFilter, dateRange, keyword]);
 
   return (
     <Container>
@@ -214,6 +230,7 @@ export default function Manager({ setIsDrawerOpen, setDetailData }: RequesterPro
       <RequestWrap>
         <ManagerRequestTitle>매니저 요청리스트</ManagerRequestTitle>
         <RequestFilterSearchWrap 
+          roleNumber={3}
           onApplyStatus={applyStatus} 
           onApplyRange={applyRange} 
           onSearch={applySearch} 
