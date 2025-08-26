@@ -20,6 +20,8 @@ export default function Manager({ setIsDrawerOpen, setDetailData }: RequesterPro
   const [requests, setRequests] = useState<RequestData[]>([]);
   const [designerList, setDesignerList] = useState<any[]>([]);
   const [selectedDesigners, setSelectedDesigners] = useState<{ [key: string]: string }>({});
+  // [NEW] 공수 입력칸(행별) 컨트롤드 상태
+  const [workHours, setWorkHours] = useState<{ [id: string]: string }>({});
   // 필터/검색
   const [statusFilter, setStatusFilter] = useState<string>(DEFAULT_STATUS);
   const [dateRange, setDateRange] = useState<{ start: Date | null; end: Date | null }>({
@@ -32,8 +34,8 @@ export default function Manager({ setIsDrawerOpen, setDetailData }: RequesterPro
   // 매니저 전용: 요청자/디자이너 필터
   const [requesterOptions, setRequesterOptions] = useState<string[]>([]);
   const [requesterFilter, setRequesterFilter] = useState<string>(DEFAULT_REQUESTER);
-  const [designerOptions, setDesignerOptions] = useState<string[]>([]); // ★ 추가
-  const [designerFilter, setDesignerFilter] = useState<string>(DEFAULT_DESIGNER); // ★ 추가
+  const [designerOptions, setDesignerOptions] = useState<string[]>([]);
+  const [designerFilter, setDesignerFilter] = useState<string>(DEFAULT_DESIGNER);
 
   // ✅ Firestore에서 요청 리스트 가져오기
   useEffect(() => {
@@ -61,6 +63,20 @@ export default function Manager({ setIsDrawerOpen, setDetailData }: RequesterPro
       requests.forEach((r: any) => {
         if (next[r.id] === undefined) {
           next[r.id] = r.assigned_designer ?? ""; // DB 필드명: assigned_designer
+        }
+      });
+      return next;
+    });
+  }, [requests]);
+
+  // [NEW] 스냅샷으로 받은 리스트로 공수 입력칸 seed (in_work_hour가 있으면 표시)
+  useEffect(() => {
+    if (!requests.length) return;
+    setWorkHours((prev) => {
+      const next = { ...prev };
+      requests.forEach((r: any) => {
+        if (next[r.id] === undefined) {
+          next[r.id] = r.out_work_hour != null ? String(r.out_work_hour) : "";
         }
       });
       return next;
@@ -224,6 +240,89 @@ export default function Manager({ setIsDrawerOpen, setDetailData }: RequesterPro
     });
   }, [prepared, statusFilter, requesterFilter, designerFilter, dateRange, keyword]);
 
+  // [EXISTING] 공수 입력값 변경
+  const changeWorkHour = (requestId: string, val: string) => {
+    const cleaned = val.replace(/[^0-9.]/g, "");
+    setWorkHours((prev) => ({ ...prev, [requestId]: cleaned }));
+  };
+
+  // [ADDED/CHANGED] 편집 시작: work_hour_edit_state -> true + 입력칸 값 seed
+  const startEditWorkHour = async (requestId: string) => {
+    const req = requests.find((r) => r.id === requestId);
+    await updateDoc(doc(db, "design_request", requestId), {
+      work_hour_edit_state: true,
+    });
+    setRequests((prev) =>
+      prev.map((r) =>
+        r.id === requestId ? { ...r, work_hour_edit_state: true } : r
+      )
+    );
+    // 입력칸에 현재 out_work_hour가 없다면 채워줌
+    setWorkHours((prev) => ({
+      ...prev,
+      [requestId]:
+        prev[requestId] !== undefined && prev[requestId] !== ""
+          ? prev[requestId]
+          : req?.out_work_hour != null
+          ? String(req.out_work_hour)
+          : "",
+    }));
+  };
+
+  /**
+   * [CHANGED] 공수 저장:
+   * - 입력값 → out_work_hour(그대로 저장)
+   * - 입력값 × 배율 → in_work_hour(계산 저장)
+   * - 저장 후 work_hour_edit_state = false
+   */
+  const saveWorkHour = async (requestId: string) => {
+    const req = requests.find((r) => r.id === requestId);
+    if (!req) return;
+
+    const raw = (workHours[requestId] ?? "").trim();
+    const input = Number(raw.replace(",", "."));
+    if (!Number.isFinite(input) || input < 0) {
+      alert("유효한 공수를 입력하세요.");
+      return;
+    }
+
+    // 배율 조회 (task_work_times)
+    const twQuery = query(
+      collection(db, "task_work_hour"),
+      where("task_form", "==", req.task_form),
+      where("task_type", "==", req.task_type)
+    );
+    const twSnap = await getDocs(twQuery);
+    let multiplier = 1;
+    if (!twSnap.empty) {
+      const found = twSnap.docs[0].data() as any;
+      multiplier = Number(found.task_work_times) || 1;
+    }
+
+    const computedIn = Number((input * multiplier).toFixed(2));
+
+    await updateDoc(doc(db, "design_request", requestId), {
+      out_work_hour: input,       // ⬅ 입력값 그대로
+      in_work_hour: computedIn,   // ⬅ 계산값
+      work_hour_edit_state: false,
+    });
+
+    setRequests((prev) =>
+      prev.map((r) =>
+        r.id === requestId
+          ? {
+              ...r,
+              out_work_hour: input,
+              in_work_hour: computedIn,
+              work_hour_edit_state: false,
+            }
+          : r
+      )
+    );
+
+    alert("공수 수정 완료");
+  };
+
   return (
     <Container>
       <MainTitle />
@@ -251,6 +350,11 @@ export default function Manager({ setIsDrawerOpen, setDetailData }: RequesterPro
           assignDesigner={assignDesigner}
           sendToRequester={sendToRequester}
           onDetailClick={openDetail}
+          // [NEW] 공수 입력/저장 프롭스 전달
+          workHours={workHours}
+          onChangeWorkHour={changeWorkHour}
+          onSaveWorkHour={saveWorkHour}
+          onStartEditWorkHour={startEditWorkHour}
         />
       </RequestWrap>
     </Container>

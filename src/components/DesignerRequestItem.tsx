@@ -36,7 +36,7 @@ export default function DesignerRequestItem({
 
   // ✅ 표시↔저장 매핑 (디자이너 규칙)
   const uiFromDbStatus = (s?: string) => (s === "검수중" ? "검수요청" : (s ?? "대기"));
-  const dbFromUiStatus = (s: string) => (s === "검수요청" ? "검수중" : s);
+  const dbFromUiStatus = (s: string) => s; // 변환 없음
 
   const uiStatusValue = uiFromDbStatus(row.status);
 
@@ -115,9 +115,6 @@ export default function DesignerRequestItem({
       </RequestListTableTd>
       <RequestListTableTd>
         <SaveButton onClick={() => onSave(item.id)} disabled={item.status === "취소"}>저장</SaveButton>
-      </RequestListTableTd>
-      <RequestListTableTd>
-        
       </RequestListTableTd>
     </RequestListTableTr>
   );

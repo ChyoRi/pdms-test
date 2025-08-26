@@ -36,7 +36,6 @@ export default function DesignerRequestList({
           <col style={{ width: '160px' }} /><col style={{ width: '120px' }} />
           <col style={{ width: '120px' }}/><col />
           <col style={{ width: '100px' }} /><col style={{ width: '80px' }} />
-          <col style={{ width: '60px' }} />
         </colgroup>
         <thead>
           <tr>
@@ -56,7 +55,6 @@ export default function DesignerRequestList({
             <RequestListTableTh>산출물 링크</RequestListTableTh>
             <RequestListTableTh>진행상태</RequestListTableTh>
             <RequestListTableTh>저장</RequestListTableTh>
-            <RequestListTableTh>공수</RequestListTableTh>
           </tr>
         </thead>
         <tbody>
@@ -74,7 +72,7 @@ export default function DesignerRequestList({
             ))
           ) : (
             <tr>
-              <td colSpan={17} style={{ textAlign: "center" }}>
+              <td colSpan={16} style={{ textAlign: "center" }}>
                 배정된 요청이 없습니다.
               </td>
             </tr>
@@ -115,11 +113,11 @@ const RequestListTableTh = styled.th`
     border-right: 1px solid ${({ theme }) => theme.colors.black};
   }
 
-  &:nth-of-type(12), &:nth-of-type(13), &:nth-of-type(14), &:nth-of-type(15), &:nth-of-type(16) {
+  &:nth-of-type(12), &:nth-of-type(13), &:nth-of-type(14), &:nth-of-type(15) {
     border-right: 1px solid ${({ theme }) => theme.colors.pink02}
   }
 
-  &:nth-of-type(12), &:nth-of-type(13), &:nth-of-type(14), &:nth-of-type(15), &:nth-of-type(16), &:nth-of-type(17) {
+  &:nth-of-type(12), &:nth-of-type(13), &:nth-of-type(14), &:nth-of-type(15), &:nth-of-type(16) {
     background-color: ${({ theme }) => theme.colors.pink01};
   }
 `;

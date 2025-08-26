@@ -10,6 +10,10 @@ interface ManagerRequestItemProps {
   onAssignDesigner: () => void;
   onSendToRequester: () => void;
   onDetailClick: (item: RequestData) => void;
+  workHourValue: string;
+  onChangeWorkHour: (val: string) => void;
+  onSaveWorkHour: () => void;
+  onStartEditWorkHour: () => void;
 }
 
 export default function ManagerRequestItem({
@@ -20,7 +24,11 @@ export default function ManagerRequestItem({
   onDesignerSelect,
   onAssignDesigner,
   onSendToRequester,
-  onDetailClick
+  onDetailClick,
+  workHourValue,
+  onChangeWorkHour,
+  onSaveWorkHour,
+  onStartEditWorkHour
 }: ManagerRequestItemProps) {
   // 🔁 매니저 화면 표시 전용 매핑
   const displayStatusForManager = (s: string) =>
@@ -43,6 +51,8 @@ export default function ManagerRequestItem({
     e.stopPropagation(); // 행 단위 클릭과 충돌 방지
     onDetailClick(item);
   };
+
+  const isEditingWorkHour = !!item.work_hour_edit_state;
   
   return(
     <RequestListTableTr isCanceled={item.status === "취소"}>
@@ -112,8 +122,44 @@ export default function ManagerRequestItem({
         )}
       </RequestListTableTd>
       <RequestListTableTd>
-        <WorkHourInput type="text" placeholder="공수 입력"/>
-        <WorkHourSaveButton type="button">저장</WorkHourSaveButton>
+        {isEditingWorkHour ? (
+          <>
+            <WorkHourInput
+              type="text"
+              placeholder="공수 입력"
+              value={workHourValue}
+              onChange={(e) => onChangeWorkHour(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+              disabled={item.status === "취소"}
+            />
+            <WorkHourSaveButton
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSaveWorkHour();
+              }}
+              disabled={item.status === "취소"}
+            >
+              수정
+            </WorkHourSaveButton>
+          </>
+        ) : (
+          <WorkHourReadOnly
+            tabIndex={0}
+            onClick={(e) => {
+              e.stopPropagation();
+              onStartEditWorkHour();
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onStartEditWorkHour();
+              }
+            }}
+          >
+            {item.out_work_hour ?? ""}
+          </WorkHourReadOnly>
+        )}
       </RequestListTableTd>
     </RequestListTableTr>
   )
@@ -352,4 +398,17 @@ const WorkHourSaveButton = styled.button`
   border-radius: 4px;
   background-color: ${({ theme }) => theme.colors.black};
   color: ${({ theme }) => theme.colors.white01};
+`;
+
+const WorkHourReadOnly = styled.span`
+  display: inline-block;
+  min-width: 24px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+  &:hover {
+    text-decoration: underline;
+    font-weight: 600;
+  }
 `;

@@ -9,6 +9,11 @@ interface ManagerRequestListProps {
   assignDesigner: (requestId: string) => void;
   sendToRequester: (requestId: string) => void;
   onDetailClick: (item: RequestData) => void;
+  // ★ 추가
+  workHours: { [id: string]: string };
+  onChangeWorkHour: (requestId: string, val: string) => void;
+  onSaveWorkHour: (requestId: string) => void;
+  onStartEditWorkHour: (requestId: string) => void
 }
 
 export default function ManagerRequestList({
@@ -18,7 +23,11 @@ export default function ManagerRequestList({
   designerSelect,
   assignDesigner,
   sendToRequester,
-  onDetailClick
+  onDetailClick,
+  workHours,
+  onChangeWorkHour,
+  onSaveWorkHour,
+  onStartEditWorkHour
 }: ManagerRequestListProps) {
   return (
     <RequestListTableWrap>
@@ -68,7 +77,12 @@ export default function ManagerRequestList({
                                   onDesignerSelect={(name) => designerSelect(item.id, name)}
                                   onAssignDesigner={() => assignDesigner(item.id)}
                                   onSendToRequester={() => sendToRequester(item.id)} 
-                                  onDetailClick={onDetailClick} />
+                                  onDetailClick={onDetailClick}
+                                  workHourValue={workHours[item.id] ?? ""}
+                                  onChangeWorkHour={(v) => onChangeWorkHour(item.id, v)}
+                                  onSaveWorkHour={() => onSaveWorkHour(item.id)}
+                                  onStartEditWorkHour={() => onStartEditWorkHour(item.id)}
+              />
             ))
           ) : (
             <tr>

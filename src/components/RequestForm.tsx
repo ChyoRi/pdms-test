@@ -51,24 +51,6 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
     return dateStr ? Timestamp.fromDate(new Date(dateStr)) : null;
   };
 
-  // 문서번호 생성 함수
-  // const generateDocNumber = async () => {
-  //   const now = new Date();
-  //   const year = now.getFullYear().toString().slice(2);
-  //   const month = (now.getMonth() + 1).toString().padStart(2, "0");
-
-  //   const q = query(
-  //     collection(db, "design_request"),
-  //     where("design_request_id", ">=", `H${year}${month}000`),
-  //     where("design_request_id", "<", `H${year}${month}999`)
-  //   );
-
-  //   const snapshot = await getDocs(q);
-  //   const nextNumber = snapshot.size + 1;
-
-  //   return `H${year}${month}${nextNumber.toString().padStart(3, "0")}`;
-  // };
-
   // ==== 수정: 다건 등록을 위한 월별 베이스/연속번호 유틸
   const getMonthSeqBase = async () => {
     const now = new Date();
@@ -85,6 +67,25 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
   };
   const buildDocNumber = (y: string, m: string, seq: number) =>
     `H${y}${m}${seq.toString().padStart(3, "0")}`;
+
+  // 업무 형태/유형으로 task_work_hour 문서의 기본 공수와 배율 둘 다 조회
+  const fetchWorkHourPreset = async (
+    task_form?: string,
+    task_type?: string
+  ): Promise<{ base: number | null; times: number | null }> => {
+    if (!task_form || !task_type) return { base: null, times: null };
+    const qy = query(
+      collection(db, "task_work_hour"),
+      where("task_form", "==", task_form),
+      where("task_type", "==", task_type)
+    );
+    const snap = await getDocs(qy);
+    if (snap.empty) return { base: null, times: null };
+    const data = snap.docs[0].data() as any;
+    const base = typeof data.task_work_hour === "number" ? data.task_work_hour : null;
+    const times = typeof data.task_work_times === "number" ? data.task_work_times : null;
+    return { base, times };
+  };
   
   // ✅ 요청 등록
   const requestFormSubmit = async (e: React.FormEvent) => {
@@ -130,17 +131,19 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
 
     const today = new Date();
 
-    /**
-    addDoc(collection(db, "design_history"), {
-      date: new Date(),
-      text: "OOOOOO OOOO OOOO."
-    })
-     */
-
     // 순서 보장을 위해 for..of + await (맨 위 폼이 더 이른 번호)
     for (const f of forms) {
       seq += 1;
       const design_request_id = buildDocNumber(year, month, seq);
+
+      // 기본 공수/배율 조회 → out_work_hour & in_work_hour 계산
+      const { base: baseHour, times } = await fetchWorkHourPreset(
+        f.task_form as string,
+        f.task_type as string
+      );
+      const computedIn = (baseHour != null && times != null)
+        ? Number((baseHour * times).toFixed(2))
+        : null;
 
       await addDoc(collection(db, "design_request"), {
         design_request_id,
@@ -163,10 +166,12 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
         emergency: f.emergency,
         requester_edit_state: false,
         designer_edit_state: false,
+        in_work_hour: computedIn,
+        out_work_hour: baseHour,
+        work_hour_edit_state: false,
         created_at: serverTimestamp(),
         updated_at: null,
         delete_at: null,
-        work_hour: ""
       });
     }
 
@@ -539,12 +544,6 @@ const RequestFormTableTd = styled.td`
   padding: 12px 24px;
   border-right: none;
 `
-
-// const RequestFormMemoTableTd = styled.td`
-//   padding: 12px 24px;
-//   border-right: none;
-//   background-color: #fffff1;
-// `
 
 const RequestFormItemLabel = styled.label`
   width: 100%;
