@@ -4,7 +4,9 @@ declare global {
   interface RequestData {
     id: string; // firestore 문서 고유번호
     design_request_id: string; // 문서 고유 번호
+    company?: string; // 회사
     request_date: string; // 요청일
+    merchandiser: string; // 담당 MD
     requester: string; // 요청자
     completion_dt: string; // 완료 요청일
     open_dt: string; // 오픈일

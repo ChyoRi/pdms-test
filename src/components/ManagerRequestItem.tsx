@@ -75,10 +75,12 @@ export default function ManagerRequestItem({
       <RequestListTableTd>
         <RequestListRequestIdText onClick={openDetail} $hasUpdate={!!item.updated_at}>{item.design_request_id}</RequestListRequestIdText>
       </RequestListTableTd>
+      <RequestListTableTd>{item.company}</RequestListTableTd>
       <RequestListTableTd>{formatDate(item.request_date)}</RequestListTableTd>
-      <RequestListTableTd>{item.requester}</RequestListTableTd>
       <RequestListCompletionTd>{formatDate(item.completion_dt)}</RequestListCompletionTd>
       <RequestListOpenDtTd>{formatDate(item.open_dt)}</RequestListOpenDtTd>
+      <RequestListTableTd>{item.merchandiser}</RequestListTableTd>
+      <RequestListTableTd>{item.requester}</RequestListTableTd>
       <RequestListTableTd>{item.task_form}</RequestListTableTd>
       <RequestListTaskTypeTd>{item.task_type}</RequestListTaskTypeTd>
       <RequestListRequirementTd>
@@ -228,7 +230,7 @@ const RequestListTableTd = styled.td`
     border-left: none;
   }
 
-  &:nth-of-type(12) {
+  &:nth-of-type(14) {
     border-right: 1px solid ${({ theme }) => theme.colors.black};
   }
 `;
@@ -265,7 +267,7 @@ const RequestListRequestIdText = styled.span<{ $hasUpdate: boolean }>`
     content: '';
     position: absolute;
     top: -5px;
-    right: -5px;
+    right: -2px;
     display: ${({ $hasUpdate }) => ($hasUpdate ? 'block' : 'none')};
     width: 5px;
     height: 5px;
@@ -372,7 +374,7 @@ const StautsBadge = styled.span<{ status: string }>`
 `;
 
 const AssignButton = styled.button`
-  margin: 6px 0 0 10px;
+  margin-left:10px;
   padding: 4.5px 10px;
   border-radius: 4px;
   background-color: ${({ theme }) => theme.colors.black};

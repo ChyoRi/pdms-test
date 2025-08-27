@@ -28,12 +28,13 @@ export default function DesignerRequestList({
     <RequestListTableWrap>
       <RequestListTable>
         <colgroup>
-          <col style={{ width: '40px' }} /><col style={{ width: '90px' }} />
-          <col style={{ width: '60px' }} /><col style={{ width: '60px' }} />
-          <col style={{ width: '60px' }} /><col style={{ width: '60px' }} />
+          <col style={{ width: '40px' }} /><col style={{ width: '80px' }} />
+          <col style={{ width: '80px' }} /><col style={{ width: '50px' }} />
+          <col style={{ width: '50px' }} /><col style={{ width: '50px' }} />
+          <col style={{ width: '50px' }} /><col style={{ width: '50px' }} />
           <col style={{ width: '80px' }} /><col style={{ width: '120px' }}/>
-          <col /><col style={{ width: '70px' }} />
-          <col style={{ width: '160px' }} /><col style={{ width: '120px' }} />
+          <col /><col style={{ width: '50px' }} />
+          <col style={{ width: '140px' }} /><col style={{ width: '120px' }} />
           <col style={{ width: '120px' }}/><col />
           <col style={{ width: '100px' }} /><col style={{ width: '80px' }} />
         </colgroup>
@@ -41,12 +42,14 @@ export default function DesignerRequestList({
           <tr>
             <RequestListTableTh>번호</RequestListTableTh>
             <RequestListTableTh>문서번호</RequestListTableTh>
+            <RequestListTableTh>회사</RequestListTableTh>
             <RequestListTableTh>요청일</RequestListTableTh>
-            <RequestListTableTh>요청자</RequestListTableTh>
             <RequestListTableTh>완료<br />요청일</RequestListTableTh>
             <RequestListTableTh>오픈일</RequestListTableTh>
-            <RequestListTableTh>업무형태</RequestListTableTh>
-            <RequestListTableTh>업무타입</RequestListTableTh>
+            <RequestListTableTh>담당 MD</RequestListTableTh>
+            <RequestListTableTh>요청자</RequestListTableTh>
+            <RequestListTableTh>업무부서</RequestListTableTh>
+            <RequestListTableTh>업무유형</RequestListTableTh>
             <RequestListTableTh>작업항목</RequestListTableTh>
             <RequestListTableTh>요청서<br />URL</RequestListTableTh>
             <RequestListTableTh>메모</RequestListTableTh>
@@ -109,15 +112,15 @@ const RequestListTableTh = styled.th`
     border-left: none;
   }
 
-  &:nth-of-type(11) {
+  &:nth-of-type(13) {
     border-right: 1px solid ${({ theme }) => theme.colors.black};
   }
 
-  &:nth-of-type(12), &:nth-of-type(13), &:nth-of-type(14), &:nth-of-type(15) {
+  &:nth-of-type(14), &:nth-of-type(15), &:nth-of-type(16), &:nth-of-type(17) {
     border-right: 1px solid ${({ theme }) => theme.colors.pink02}
   }
 
-  &:nth-of-type(12), &:nth-of-type(13), &:nth-of-type(14), &:nth-of-type(15), &:nth-of-type(16) {
+  &:nth-of-type(14), &:nth-of-type(15), &:nth-of-type(16), &:nth-of-type(17), &:nth-of-type(18) {
     background-color: ${({ theme }) => theme.colors.pink01};
   }
 `;

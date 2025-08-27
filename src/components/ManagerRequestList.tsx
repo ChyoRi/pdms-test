@@ -36,26 +36,29 @@ export default function ManagerRequestList({
       <RequestListTable>
         <RequestListTableCaption>매니저 요청 리스트</RequestListTableCaption>
         <colgroup>
-          <col style={{ width: '40px' }} /><col style={{ width: '90px' }}/>
-          <col style={{ width: '60px' }} /><col style={{ width: '60px' }} />
-          <col style={{ width: '60px' }} /><col style={{ width: '60px' }} />
+          <col style={{ width: '40px' }} /><col style={{ width: '80px' }}/>
+          <col style={{ width: '80px' }}/><col style={{ width: '50px' }} />
+          <col style={{ width: '50px' }} /><col style={{ width: '50px' }} />
+          <col style={{ width: '50px' }} /><col style={{ width: '50px' }} />
           <col style={{ width: '80px' }} /><col style={{ width: '120px' }} />
-          <col /><col style={{ width: '70px' }} />
+          <col /><col style={{ width: '50px' }} />
           <col style={{ width: '150px' }} /><col style={{ width: '85px' }} />
-          <col style={{ width: '70px' }} /><col style={{ width: '60px' }} />
-          <col style={{ width: '60px' }} /><col style={{ width: '160px' }} />
+          <col style={{ width: '50px' }} /><col style={{ width: '50px' }} />
+          <col style={{ width: '50px' }} /><col style={{ width: '160px' }} />
           <col style={{ width: '80px' }} /><col style={{ width: '110px' }} />
         </colgroup>
         <thead>
           <tr>
             <RequestListTableTh>번호</RequestListTableTh>
             <RequestListTableTh>문서번호</RequestListTableTh>
+            <RequestListTableTh>회사</RequestListTableTh>
             <RequestListTableTh>요청일</RequestListTableTh>
-            <RequestListTableTh>요청자</RequestListTableTh>
             <RequestListTableTh>완료<br/>요청일</RequestListTableTh>
             <RequestListTableTh>오픈일</RequestListTableTh>
+            <RequestListTableTh>담당 MD</RequestListTableTh>
+            <RequestListTableTh>요청자</RequestListTableTh>
+            <RequestListTableTh>업무부서</RequestListTableTh>
             <RequestListTableTh>업무형태</RequestListTableTh>
-            <RequestListTableTh>업무타입</RequestListTableTh>
             <RequestListTableTh>작업항목</RequestListTableTh>
             <RequestListTableTh>요청서<br />URL</RequestListTableTh>
             <RequestListTableTh>메모</RequestListTableTh>
@@ -89,7 +92,7 @@ export default function ManagerRequestList({
             ))
           ) : (
             <tr>
-              <td colSpan={18} style={{ textAlign: "center", padding: "20px" }}>
+              <td colSpan={20} style={{ textAlign: "center", padding: "20px" }}>
                 등록된 요청이 없습니다.
               </td>
             </tr>
@@ -135,15 +138,15 @@ const RequestListTableTh = styled.th`
     border-left: none;
   }
 
-  &:nth-of-type(12) {
+  &:nth-of-type(14) {
     border-right: 1px solid ${({ theme }) => theme.colors.black};
   }
 
-  &:nth-of-type(13), &:nth-of-type(14), &:nth-of-type(15), &:nth-of-type(16), &:nth-of-type(17) {
+  &:nth-of-type(15), &:nth-of-type(16), &:nth-of-type(17), &:nth-of-type(18), &:nth-of-type(19) {
     border-right: 1px solid ${({ theme }) => theme.colors.pink02}
   }
 
-  &:nth-of-type(13), &:nth-of-type(14), &:nth-of-type(15), &:nth-of-type(16), &:nth-of-type(17), &:nth-of-type(18) {
+  &:nth-of-type(15), &:nth-of-type(16), &:nth-of-type(17), &:nth-of-type(18), &:nth-of-type(19), &:nth-of-type(20) {
     background-color: ${({ theme }) => theme.colors.pink01};
   }
 `;

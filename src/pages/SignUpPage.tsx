@@ -1,23 +1,27 @@
 import styled from "styled-components"
-import logo from "../assets/logo.svg";
 import { useState } from "react";
 import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { auth, db } from "../firebaseconfig";
-import { doc, setDoc } from "firebase/firestore";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 
 export default function SignUpPage() {
   const [name, setName] = useState("");
+  const [company, setCompany] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [passwordCheck, setPasswordCheck] = useState("");
   const navigate = useNavigate();
 
   const signUp = async () => {
-    if (password !== passwordCheck) {
-      alert("비밀번호가 일치하지 않습니다.");
-      return;
-    }
+    const nameTrim = name.trim();
+    const companyTrim = company.trim();
+    const emailTrim = email.trim();
+
+    if (!nameTrim) { alert("이름을 입력해주세요."); return; }
+    if (!companyTrim) { alert("회사명을 입력해주세요."); return; }
+    if (!emailTrim) { alert("이메일을 입력해주세요."); return; }
+    if (password !== passwordCheck) { alert("비밀번호가 일치하지 않습니다."); return; }
 
     createUserWithEmailAndPassword(auth, email, password)
       .then(async (userCredential) => {
@@ -27,9 +31,10 @@ export default function SignUpPage() {
 
         // ✅ Firestore에 role 저장 (users/{uid})
         await setDoc(doc(db, "users", user.uid), {
-          name: name,
-          role: 2, // 기본값: 요청자
-          createdAt: new Date(),
+          name: nameTrim,
+          company: companyTrim,
+          role: 1, // 기본값: 요청자
+          createdAt: serverTimestamp(),
         });
       })
       .then(() => {
@@ -48,11 +53,9 @@ export default function SignUpPage() {
           <Logo>PDMS</Logo>
           <SubTitle>Pushcomz Design Management System</SubTitle>
         </SignUpHeader>
-        <LogoWrap>
-          <LogoImg src={logo} />
-        </LogoWrap>
         <LoginWrap>
           <Name_input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="이름을 입력해주세요." />
+          <Company_input type="text" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="회사명을 입력해주세요." /> {/* ⬅ 추가 */}
           <Id_input type="text" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="이메일을 입력해주세요." />
           <Pw_input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="비밀번호를 입력해주세요." />
           <PwCheck_input type="password" value={passwordCheck} onChange={(e) => setPasswordCheck(e.target.value)} placeholder="비밀번호 확인을 입력해주세요." />
@@ -97,14 +100,6 @@ const SubTitle = styled.span`
   color: #999;
 `;
 
-const LogoWrap = styled.div`
-  margin-right: auto;
-`;
-
-const LogoImg = styled.img`
-  
-`;
-
 const LoginWrap = styled.div`
   ${({ theme }) => theme.mixin.flex('center', 'center')};
   flex-direction: column;
@@ -112,6 +107,16 @@ const LoginWrap = styled.div`
 `;
 
 const Name_input = styled.input`
+  width: 460px;
+  padding: 14px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  line-height: 20px;
+  color: #333;
+`;
+
+const Company_input = styled.input`
   width: 460px;
   padding: 14px;
   border: 1px solid #ddd;

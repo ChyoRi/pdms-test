@@ -1,7 +1,8 @@
 import styled from "styled-components";
 import { useState, useEffect } from "react";
-import { db } from "../firebaseconfig";
-import { collection, addDoc, updateDoc, doc, serverTimestamp, Timestamp, query, where, getDocs } from "firebase/firestore";
+import { auth, db } from "../firebaseconfig";
+import { onAuthStateChanged } from "firebase/auth";
+import { collection, addDoc, updateDoc, doc, getDoc, serverTimestamp, Timestamp, query, where, getDocs } from "firebase/firestore";
 import requestFormExitButton from "../assets/requestformexit-button.svg";
 import checkBoxChecked from "../assets/checkbox-checked.svg";
 import selectBoxArrow from "../assets/selectbox-arrow.svg";
@@ -31,6 +32,9 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
 
   // ==== 수정: 추가 폼 세트 상태 (등록 모드에서 같은 폼을 아래로 추가)
   const [extras, setExtras] = useState<Partial<RequestData>[]>([]);
+
+  // 회사 상태
+  const [userCompany, setUserCompany] = useState<string>("");
 
   // ✅ 입력 변경 핸들러
   const requsetForm = (field: string, value: string | boolean) => {
@@ -148,7 +152,9 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
       await addDoc(collection(db, "design_request"), {
         design_request_id,
         request_date: toTimestamp(today.toISOString()),
+        merchandiser: null,
         requester: userName,
+        company: userCompany,
         completion_dt: toTimestamp(f.completion_dt as any),
         open_dt: toTimestamp(f.open_dt as any),
         task_form: f.task_form,
@@ -204,6 +210,18 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
     setExtras([]);                                  // ==== 수정: 등록 모드에서 드로어 열릴 때 추가 폼 초기화
   }, [isDrawerOpen]);
 
+  useEffect(() => {
+      const unsub = onAuthStateChanged(auth, async (u) => {
+        if (!u) {
+          setUserCompany("");
+          return;
+        }
+        const snap = await getDoc(doc(db, "users", u.uid));
+        setUserCompany((snap.data() as any)?.company ?? "");
+      });
+      return () => unsub();
+    }, []);
+
   return (
     <>
       <RequestTitleWrap>
@@ -250,7 +268,7 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
                     </RequestFormTableTd>
                   </tr>
                   <tr>
-                    <RequestFormTableTh><RequestFormItemLabel htmlFor={`task_form_ex_${idx}`}>업무 형태</RequestFormItemLabel></RequestFormTableTh>
+                    <RequestFormTableTh><RequestFormItemLabel htmlFor={`task_form_ex_${idx}`}>업무 부서</RequestFormItemLabel></RequestFormTableTh>
                     <RequestFormTableTd>
                       <RequestFormSelectBox
                         id={`task_form_ex_${idx}`}
@@ -383,7 +401,7 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
                 </RequestFormTableTd>
               </tr>
               <tr>
-                <RequestFormTableTh><RequestFormItemLabel htmlFor="task_form">업무 형태</RequestFormItemLabel></RequestFormTableTh>
+                <RequestFormTableTh><RequestFormItemLabel htmlFor="task_form">업무 부서</RequestFormItemLabel></RequestFormTableTh>
                 <RequestFormTableTd>
                   <RequestFormSelectBox id="task_form" value={requestData.task_form} onChange={(e) => requsetForm("task_form", e.target.value)}>
                     <option value="GHS">GHS</option>

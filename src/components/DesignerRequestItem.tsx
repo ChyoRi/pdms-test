@@ -52,10 +52,12 @@ export default function DesignerRequestItem({
       <RequestListTableTd>
         <RequestListRequestIdText onClick={openDetail} $hasUpdate={!!item.updated_at}>{item.design_request_id}</RequestListRequestIdText>
       </RequestListTableTd>
+      <RequestListTableTd>{item.company}</RequestListTableTd>
       <RequestListTableTd>{formatDate(item.request_date)}</RequestListTableTd>
-      <RequestListTableTd>{item.requester}</RequestListTableTd>
       <RequestListcompletionTd>{formatDate(item.completion_dt)}</RequestListcompletionTd>
       <RequestListOpenDtTd>{formatDate(item.open_dt)}</RequestListOpenDtTd>  
+      <RequestListTableTd>{item.merchandiser}</RequestListTableTd>
+      <RequestListTableTd>{item.requester}</RequestListTableTd>
       <RequestListTableTd>{item.task_form}</RequestListTableTd>
       <RequestListTaskTypeTd>{item.task_type}</RequestListTaskTypeTd>
       <RequestListRequirementTd>
@@ -204,7 +206,7 @@ const RequestListRequestIdText = styled.span<{ $hasUpdate: boolean }>`
     content: '';
     position: absolute;
     top: -5px;
-    right: -5px;
+    right: -2px;
     display: ${({ $hasUpdate }) => ($hasUpdate ? 'block' : 'none')};
     width: 5px;
     height: 5px;

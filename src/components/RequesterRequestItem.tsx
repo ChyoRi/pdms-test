@@ -37,6 +37,7 @@ export default function RequesterRequestItem({ item, index, onReviewComplete, on
       <RequestListTableTd>{formatDate(item.request_date)}</RequestListTableTd>
       <RequestListCompletionTd>{formatDate(item.completion_dt)}</RequestListCompletionTd>
       <RequestListOpenDtTd>{formatDate(item.open_dt)}</RequestListOpenDtTd>
+      <RequestListTableTd>{item.merchandiser}</RequestListTableTd>
       <RequestListTableTd>{item.task_form}</RequestListTableTd>
       <RequestListTaskTypeTd>{item.task_type}</RequestListTaskTypeTd>
       <RequestListRequirementTd>
@@ -140,7 +141,7 @@ const RequestListTableTd = styled.td`
     border-left: none;
   }
 
-  &:nth-of-type(11) {
+  &:nth-of-type(12) {
     border-right: 1px solid ${({ theme }) => theme.colors.black};
   }
 `;
@@ -177,7 +178,7 @@ const RequestListRequestIdText = styled.span<{ $hasUpdate: boolean }>`
     content: '';
     position: absolute;
     top: -5px;
-    right: -5px;
+    right: -2px;
     display: ${({ $hasUpdate }) => ($hasUpdate ? 'block' : 'none')};
     width: 5px;
     height: 5px;

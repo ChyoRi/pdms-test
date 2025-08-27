@@ -81,7 +81,7 @@ const StatusCount = styled.span<{ status: string }>`
     content: "";
     position: absolute;
     top: 50%;
-    left: -41px;
+    left: -40px;
     display: block;
     width: 1px;
     height: 18px;

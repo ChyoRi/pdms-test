@@ -8,6 +8,7 @@ import { useNavigate } from "react-router-dom";
 
 export default function Header() {
   const [userName, setUserName] = useState("");
+  const [userCompany, setUserCompany] = useState("");
   const [userRole, setUserRole] = useState<number | null>(null); // ✅ role 상태
   const navigate = useNavigate(); 
 
@@ -19,15 +20,19 @@ export default function Header() {
         }
 
         // ✅ Firestore에서 role 가져오기
-        const userDoc = await getDoc(doc(db, "users", user.uid));
-        if (userDoc.exists()) {
-          setUserRole(userDoc.data().role);
+        const snap = await getDoc(doc(db, "users", user.uid));
+        if (snap.exists()) {
+          const data = snap.data() as any;
+          setUserRole(data.role ?? null);
+          setUserCompany(data.company ?? "");  
         } else {
           setUserRole(null);
+          setUserCompany("");
         }
       } else {
         setUserName("");
         setUserRole(null);
+        setUserCompany("");
       }
     });
 
@@ -57,7 +62,7 @@ export default function Header() {
     <HeaderElement>
       <HomePlusLogo src={logo}></HomePlusLogo>
       <UtilWrap>
-        <UserNameWrap><UserName>{userName}</UserName>님({getRoleName(userRole)}) 환영합니다.</UserNameWrap>
+        <UserNameWrap><UserName>{userName}</UserName>님({getRoleName(userRole)}) {userCompany}환영합니다.</UserNameWrap>
         <LogoutButton onClick={logout}>로그아웃</LogoutButton>
         <Lole></Lole>
       </UtilWrap>

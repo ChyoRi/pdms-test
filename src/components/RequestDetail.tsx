@@ -47,7 +47,7 @@ export default function RequestDetail({ data, onClose }: RequestDetailProps) {
             <RequestListOpenDtTd>{formatDate(data?.open_dt)}</RequestListOpenDtTd>
           </tr>
           <tr>
-            <RequestDetailTableTh>업무 형태</RequestDetailTableTh>
+            <RequestDetailTableTh>업무 부서</RequestDetailTableTh>
             <RequestDetailTableTd>{data?.task_form}</RequestDetailTableTd>
           </tr>
           <tr>

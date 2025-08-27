@@ -5,7 +5,9 @@ import { doc, updateDoc, collection, getDocs, onSnapshot, query, where, orderBy 
 import ManagerRequestList from "./ManagerRequestList";
 import MainTitle from "./MainTitle";
 import RequestFilterSearchWrap from "./RequestFilterSearchWrap";
+import ExportCSV from "./ExportCSV";
 import { makeSearchIndex, matchesQuery } from "../utils/search";
+import { downloadArrayToCSV } from "../utils/firestoreToCSV";
 
 interface RequesterProps {
   setIsDrawerOpen: (value: boolean) => void;
@@ -30,12 +32,13 @@ export default function Manager({ setIsDrawerOpen, setDetailData }: RequesterPro
   });
   const [keywordInput, setKeywordInput] = useState<string>("");
   const [keyword, setKeyword] = useState<string>("");
-
   // 매니저 전용: 요청자/디자이너 필터
   const [requesterOptions, setRequesterOptions] = useState<string[]>([]);
   const [requesterFilter, setRequesterFilter] = useState<string>(DEFAULT_REQUESTER);
   const [designerOptions, setDesignerOptions] = useState<string[]>([]);
   const [designerFilter, setDesignerFilter] = useState<string>(DEFAULT_DESIGNER);
+  // CSV로 추출 상태
+  const [exporting, setExporting] = useState(false);
 
   // ✅ Firestore에서 요청 리스트 가져오기
   useEffect(() => {
@@ -323,6 +326,52 @@ export default function Manager({ setIsDrawerOpen, setDetailData }: RequesterPro
     alert("공수 수정 완료");
   };
 
+  const handleExportCSV = async () => {
+    setExporting(true);
+    try {
+      const fields = [
+        "id",
+        "design_request_id",
+        "request_date",
+        "requester",
+        "task_form",
+        "task_type",
+        "requirement",
+        "status",
+        "assigned_designer",
+        "designer_start_date",
+        "designer_end_date",
+        "out_work_hour",
+        "in_work_hour",
+      ];
+
+      const headers: Record<string, string> = {
+        id: "문서ID",
+        design_request_id: "문서번호",
+        request_date: "요청일",
+        requester: "요청자",
+        task_form: "업무형태",
+        task_type: "업무타입",
+        requirement: "작업항목",
+        status: "진행상태",
+        assigned_designer: "디자이너",
+        designer_start_date: "디자인 시작일",
+        designer_end_date: "디자인 종료일",
+        out_work_hour: "공수(외부)",
+        in_work_hour: "공수(내부)",
+      };
+
+      downloadArrayToCSV({
+        rows: viewList,                         // ✅ 재조회 없음
+        fields,
+        headers,
+        filename: "design_request_current_view.csv",
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   // [NEW] 공수 편집 취소(바깥 클릭 등)
   const cancelEditWorkHour = async (requestId: string) => {
     await updateDoc(doc(db, "design_request", requestId), {
@@ -354,6 +403,7 @@ export default function Manager({ setIsDrawerOpen, setDetailData }: RequesterPro
           designerOptions={designerOptions}
           onApplyDesigner={applyDesigner}
         />
+        <ExportCSV onClick={handleExportCSV} loading={exporting} />
         <ManagerRequestList 
           data={viewList}
           designerList={designerList}
