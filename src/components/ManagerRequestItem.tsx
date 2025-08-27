@@ -1,5 +1,6 @@
 import styled from "styled-components";
 import urlIcon from "../assets/url-icon.svg";
+import { useCallback } from "react";
 
 interface ManagerRequestItemProps {
   index: number;
@@ -14,6 +15,7 @@ interface ManagerRequestItemProps {
   onChangeWorkHour: (val: string) => void;
   onSaveWorkHour: () => void;
   onStartEditWorkHour: () => void;
+  onCancelEditWorkHour: () => void;
 }
 
 export default function ManagerRequestItem({
@@ -28,7 +30,8 @@ export default function ManagerRequestItem({
   workHourValue,
   onChangeWorkHour,
   onSaveWorkHour,
-  onStartEditWorkHour
+  onStartEditWorkHour,
+  onCancelEditWorkHour
 }: ManagerRequestItemProps) {
   // 🔁 매니저 화면 표시 전용 매핑
   const displayStatusForManager = (s: string) =>
@@ -53,6 +56,18 @@ export default function ManagerRequestItem({
   };
 
   const isEditingWorkHour = !!item.work_hour_edit_state;
+
+   // 스코프를 벗어나는 blur만 취소로 처리
+  const handleScopeBlur = useCallback(
+    (e: React.FocusEvent<HTMLDivElement>) => {
+      const next = e.relatedTarget as Node | null; // 포커스가 이동한 대상
+      // next가 없거나, 현재 스코프 밖이면 편집 취소
+      if (!next || !e.currentTarget.contains(next)) {
+        onCancelEditWorkHour();
+      }
+    },
+    [onCancelEditWorkHour]
+  );
   
   return(
     <RequestListTableTr isCanceled={item.status === "취소"}>
@@ -123,7 +138,7 @@ export default function ManagerRequestItem({
       </RequestListTableTd>
       <RequestListTableTd>
         {isEditingWorkHour ? (
-          <>
+          <WorkHourScope tabIndex={-1} onBlur={handleScopeBlur}>
             <WorkHourInput
               type="text"
               placeholder="공수 입력"
@@ -131,6 +146,7 @@ export default function ManagerRequestItem({
               onChange={(e) => onChangeWorkHour(e.target.value)}
               onClick={(e) => e.stopPropagation()}
               disabled={item.status === "취소"}
+              autoFocus
             />
             <WorkHourSaveButton
               type="button"
@@ -142,23 +158,25 @@ export default function ManagerRequestItem({
             >
               수정
             </WorkHourSaveButton>
-          </>
+          </WorkHourScope>
         ) : (
-          <WorkHourReadOnly
-            tabIndex={0}
-            onClick={(e) => {
-              e.stopPropagation();
-              onStartEditWorkHour();
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
+          item.out_work_hour != null ? (
+            <WorkHourReadOnly
+              tabIndex={0}
+              onClick={(e) => {
+                e.stopPropagation();
                 onStartEditWorkHour();
-              }
-            }}
-          >
-            {item.out_work_hour ?? ""}
-          </WorkHourReadOnly>
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onStartEditWorkHour();
+                }
+              }}
+            >
+              {item.out_work_hour}
+            </WorkHourReadOnly>
+          ) : null
         )}
       </RequestListTableTd>
     </RequestListTableTr>
@@ -411,4 +429,10 @@ const WorkHourReadOnly = styled.span`
     text-decoration: underline;
     font-weight: 600;
   }
+`;
+
+const WorkHourScope = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 `;

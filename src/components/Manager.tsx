@@ -323,6 +323,18 @@ export default function Manager({ setIsDrawerOpen, setDetailData }: RequesterPro
     alert("공수 수정 완료");
   };
 
+  // [NEW] 공수 편집 취소(바깥 클릭 등)
+  const cancelEditWorkHour = async (requestId: string) => {
+    await updateDoc(doc(db, "design_request", requestId), {
+      work_hour_edit_state: false,
+    });
+    setRequests(prev =>
+      prev.map(r =>
+        r.id === requestId ? { ...r, work_hour_edit_state: false } : r
+      )
+    );
+  };
+
   return (
     <Container>
       <MainTitle />
@@ -355,6 +367,7 @@ export default function Manager({ setIsDrawerOpen, setDetailData }: RequesterPro
           onChangeWorkHour={changeWorkHour}
           onSaveWorkHour={saveWorkHour}
           onStartEditWorkHour={startEditWorkHour}
+          onCancelEditWorkHour={cancelEditWorkHour}
         />
       </RequestWrap>
     </Container>

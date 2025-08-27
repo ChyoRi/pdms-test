@@ -13,7 +13,8 @@ interface ManagerRequestListProps {
   workHours: { [id: string]: string };
   onChangeWorkHour: (requestId: string, val: string) => void;
   onSaveWorkHour: (requestId: string) => void;
-  onStartEditWorkHour: (requestId: string) => void
+  onStartEditWorkHour: (requestId: string) => void;
+  onCancelEditWorkHour: (requestId: string) => void;
 }
 
 export default function ManagerRequestList({
@@ -27,7 +28,8 @@ export default function ManagerRequestList({
   workHours,
   onChangeWorkHour,
   onSaveWorkHour,
-  onStartEditWorkHour
+  onStartEditWorkHour,
+  onCancelEditWorkHour
 }: ManagerRequestListProps) {
   return (
     <RequestListTableWrap>
@@ -82,6 +84,7 @@ export default function ManagerRequestList({
                                   onChangeWorkHour={(v) => onChangeWorkHour(item.id, v)}
                                   onSaveWorkHour={() => onSaveWorkHour(item.id)}
                                   onStartEditWorkHour={() => onStartEditWorkHour(item.id)}
+                                  onCancelEditWorkHour={() => onCancelEditWorkHour(item.id)}
               />
             ))
           ) : (

@@ -13,6 +13,7 @@ const GlobalStyle = createGlobalStyle`
 
   body {
     height: 100vh;
+    overflow: hidden;
   }
 
   li {
