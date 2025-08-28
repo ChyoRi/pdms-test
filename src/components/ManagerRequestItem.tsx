@@ -118,7 +118,7 @@ export default function ManagerRequestItem({
       <RequestListTableTd>{formatDate(item.designer_end_date)}</RequestListTableTd>
       {/* ✅ 디자이너 선택 + 배정 */}
       <RequestListTableTd>
-        <AssignSelect value={selectedDesigner} onChange={(e) => onDesignerSelect(e.target.value)} disabled={item.status === "취소"}>
+        <AssignSelect value={selectedDesigner} onChange={(e) => onDesignerSelect(e.target.value)} disabled={item.status === "취소" || item.status === "완료"}>
           <option value="">디자이너 선택</option>
           {designerList.map((designer) => (
             <option key={designer.id} value={designer.name}>
@@ -126,7 +126,7 @@ export default function ManagerRequestItem({
             </option>
           ))}
         </AssignSelect>
-        <AssignButton onClick={onAssignDesigner} disabled={item.status === "취소"}>배정</AssignButton>
+        <AssignButton onClick={onAssignDesigner} disabled={item.status === "취소" || item.status === "완료"}>배정</AssignButton>
       </RequestListTableTd>
       {/* ✅ 요청자 전달 버튼 */}
       <RequestListTableTd>
@@ -379,6 +379,14 @@ const AssignButton = styled.button`
   border-radius: 4px;
   background-color: ${({ theme }) => theme.colors.black};
   color: ${({ theme }) => theme.colors.white01};
+
+  &:disabled {
+    background-color: ${({ theme }) => theme.colors.gray07};
+    color: ${({ theme }) => theme.colors.gray06};
+    border-color: ${({ theme }) => theme.colors.gray06};
+    cursor: default;
+    pointer-events: none;
+  }
 `;
 
 const AssignSelect = styled.select`

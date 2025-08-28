@@ -81,7 +81,7 @@ export default function DesignerRequestItem({
           type="date"
           value={row.start_dt ?? ""} 
           onChange={(e) => onChange(item.id, "start_dt", e.target.value)}
-          disabled={item.status === "취소"}
+          disabled={item.status === "취소" || item.status === "완료"}
         />
       </RequestListDateInputTd>
       <RequestListDateInputTd>
@@ -89,7 +89,7 @@ export default function DesignerRequestItem({
           type="date"
           value={row.end_dt ?? ""}
           onChange={(e) => onChange(item.id, "end_dt", e.target.value)}
-          disabled={item.status === "취소"}
+          disabled={item.status === "취소" || item.status === "완료"}
         />
       </RequestListDateInputTd>
       <RequestListTableTd>
@@ -98,14 +98,14 @@ export default function DesignerRequestItem({
           value={row.result_url ?? ""}
           placeholder="산출물 URL을 입력해주세요."
           onChange={(e) => onChange(item.id, "result_url", e.target.value)}
-          disabled={item.status === "취소"}
+          disabled={item.status === "취소" || item.status === "완료"}
         />
       </RequestListTableTd>
       <RequestListTableTd>
         <select
           value={uiStatusValue}                            // ← UI 표시값
           onChange={(e) => onChange(item.id, "status", dbFromUiStatus(e.target.value))} // ← DB 저장값
-          disabled={item.status === "취소"}
+          disabled={item.status === "취소" || item.status === "완료"}
         >
           {/* 🔧 value를 '대기'로 맞춰서 불일치 해결 (기존 '대기중' → '대기') */}
           <option value="대기">대기</option>
@@ -116,7 +116,7 @@ export default function DesignerRequestItem({
         </select>
       </RequestListTableTd>
       <RequestListTableTd>
-        <SaveButton onClick={() => onSave(item.id)} disabled={item.status === "취소"}>저장</SaveButton>
+        <SaveButton onClick={() => onSave(item.id)} disabled={item.status === "취소" || item.status === "완료"}>저장</SaveButton>
       </RequestListTableTd>
     </RequestListTableTr>
   );

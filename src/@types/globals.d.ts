@@ -12,6 +12,7 @@ declare global {
     open_dt: string; // 오픈일
     task_form: string; // 업무 형태
     task_type: string; // 업무 타입
+    task_type_detail: string; // 상세 업무 타입
     requirement: string; // 작성 항목
     url: string; // 기획안 URL
     note: string; // 메모

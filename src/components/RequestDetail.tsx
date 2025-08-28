@@ -47,6 +47,10 @@ export default function RequestDetail({ data, onClose }: RequestDetailProps) {
             <RequestListOpenDtTd>{formatDate(data?.open_dt)}</RequestListOpenDtTd>
           </tr>
           <tr>
+            <RequestDetailTableTh>담당 MD</RequestDetailTableTh>
+            <RequestDetailTableTd>{data?.merchandiser || ""}</RequestDetailTableTd>
+          </tr>
+          <tr>
             <RequestDetailTableTh>업무 부서</RequestDetailTableTh>
             <RequestDetailTableTd>{data?.task_form}</RequestDetailTableTd>
           </tr>
@@ -131,6 +135,7 @@ const RequestDetailTableTd = styled.td`
 
 const RequestListcompletionTd = styled.td`
   padding: 12px 24px;
+  border-right: none;
   color: ${({ theme }) => theme.colors.red};
   font-family: 'Pretendard';
   font-size: 16px;
@@ -139,6 +144,7 @@ const RequestListcompletionTd = styled.td`
 
 const RequestListOpenDtTd = styled.td`
   padding: 12px 24px;
+  border-right: none;
   color: ${({ theme }) => theme.colors.blue02};
   font-family: 'Pretendard';
   font-size: 16px;
@@ -147,6 +153,7 @@ const RequestListOpenDtTd = styled.td`
 
 const RequestDetailMemoTd = styled.td`
   padding: 12px 24px;
+  border-right: none;
   background-color: #fffff1;
 `
 
@@ -160,8 +167,8 @@ const UrlLink = styled.a`
 `;
 
 const MemoText = styled.p`
-  min-height: 165px;
-  max-height: 165px;
+  min-height: 100px;
+  max-height: 100px;
   overflow-y: auto;
   word-break: break-word;
 `;

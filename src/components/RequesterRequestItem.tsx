@@ -87,10 +87,10 @@ export default function RequesterRequestItem({ item, index, onReviewComplete, on
         )}
       </RequestListTableTd>
       <RequestListTableTd>
-        <EditButton onClick={() => onEditClick(item.id)} disabled={item.status === "취소"}>수정</EditButton>
+        <EditButton onClick={() => onEditClick(item.id)} disabled={item.status === "취소" || item.status === "완료"}>수정</EditButton>
       </RequestListTableTd>
       <RequestListTableTd>
-        <CancelButton onClick={() => onCancel(item.id)}>취소</CancelButton>
+        <CancelButton onClick={() => onCancel(item.id)} disabled={item.status === "취소" || item.status === "완료"}>취소</CancelButton>
       </RequestListTableTd>
     </RequestListTableTr>
   );
@@ -303,6 +303,14 @@ const EditButton = styled.button`
   border-radius: 4px;
   color: ${({ theme }) => theme.colors.white01};
   background-color: ${({ theme }) => theme.colors.black};
+
+  &:disabled {
+    background-color: ${({ theme }) => theme.colors.gray07};
+    color: ${({ theme }) => theme.colors.gray06};
+    border-color: ${({ theme }) => theme.colors.gray06};
+    cursor: default;
+    pointer-events: none;
+  }
 `;
 
 const CancelButton = styled.button`
@@ -310,4 +318,12 @@ const CancelButton = styled.button`
   border-radius: 4px;
   color: ${({ theme }) => theme.colors.white01};
   background-color: ${({ theme }) => theme.colors.black};
+
+  &:disabled {
+    background-color: ${({ theme }) => theme.colors.gray07};
+    color: ${({ theme }) => theme.colors.gray06};
+    border-color: ${({ theme }) => theme.colors.gray06};
+    cursor: default;
+    pointer-events: none;
+  }
 `;
