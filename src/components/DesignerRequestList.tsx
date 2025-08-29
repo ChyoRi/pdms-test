@@ -28,7 +28,7 @@ export default function DesignerRequestList({
     <RequestListTableWrap>
       <RequestListTable>
         <colgroup>
-          <col style={{ width: '40px' }} /><col style={{ width: '80px' }} />
+          <col style={{ width: '40px' }} /><col style={{ width: '85px' }} />
           <col style={{ width: '80px' }} /><col style={{ width: '50px' }} />
           <col style={{ width: '50px' }} /><col style={{ width: '50px' }} />
           <col style={{ width: '50px' }} /><col style={{ width: '50px' }} />

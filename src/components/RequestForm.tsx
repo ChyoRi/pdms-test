@@ -27,7 +27,7 @@ const defaultRequestData: Partial<RequestData> = {
   emergency: false
 }
 
-// ★ 변경: 회사별 옵션 정의
+// 회사별 옵션 정의
 const HOMEPLUS_FORMS = ["GHS", "MHC", "MHC/GHS"] as readonly string[];
 const HOMEPLUS_TYPES = [
   "프론트테마","별도기획전","일자별배너","핫새배너","큐레이션배너",
@@ -44,21 +44,13 @@ const NSMALL_TYPES = [
   "프로모션","배너(프로모션,연관)","배너(마케팅)","배너(상품)","배너(etv/etcom)","배너(엔라방)","썸네일(그룹)"
 ] as readonly string[];
 const NSMALL_DETAIL_MAP: Record<string, string[]> = {
-  프로모션: [
-    "마케팅",
-    "L-FULL",
-    "L-템플릿",
-    "상품(식품/공산품)",
-    "브랜드템플릿",
-    "etv/etcom",
-    "프로모션 수정",
-  ],
-  "배너(프로모션,연관)": ["템플릿", "N썸네일형", "공통", "기타"],
-  "배너(마케팅)": ["템플릿", "N썸네일형", "공통", "광고성", "몰전단기간성"],
-  "배너(상품)": ["템플릿", "공통"],
-  "배너(etv/etcom)": ["템플릿", "공통"],
-  "배너(엔라방)": ["템플릿", "공통", "마케팅"],
-  "썸네일(그룹)": ["그룹코드_프로모", "1팀", "2팀", "3팀", "etv/etcom", "엔라방"],
+  프로모션: ["마케팅","마케팅-FULL","마케팅-템플릿","마케팅-모션적용","상품(식품/공산품)","상품(식품/공산품)-브랜드템플릿","etv/etcom","프로모션 수정"],
+  "배너(프로모션,연관)": ["템플릿","템플릿-모션","템플릿-썸네일형","공통","기타"],
+  "배너(마케팅)": ["템플릿","템플릿-썸네일형","공통","광고성","홈전단지컨셉"],
+  "배너(상품)": ["템플릿","공통"],
+  "배너(etv/etcom)": ["템플릿","공통"],
+  "배너(엔라방)": ["템플릿","공통"],
+  "썸네일(그룹)": ["마케팅","그룹코드_프로모션","1팀","2팀","3팀","etv/etcom","엔라방"],
 };
 
 const normalize = (s?: string) => (s ?? "").trim().toLowerCase();
@@ -66,44 +58,42 @@ const isNSMall = (company?: string) => normalize(company) === "nsmall";
 
 const getCompanyConfig = (company?: string) => {
   if (isNSMall(company)) {
-    // NSmall: 업무유형은 "선택해주세요" placeholder가 기본
     return {
       forms: [...NSMALL_FORMS],
       types: [...NSMALL_TYPES],
       formDefault: NSMALL_FORMS[0],
-      typeDefault: "업무유형을 선택해주세요.", // ← select 기본값(placeholder)
+      typeDefault: "" as string
     };
   }
-  // 기본: HomePlus
   return {
     forms: [...HOMEPLUS_FORMS],
     types: [...HOMEPLUS_TYPES],
     formDefault: HOMEPLUS_FORMS[0],
-    typeDefault: HOMEPLUS_TYPES[0],
+    typeDefault: HOMEPLUS_TYPES[0]
   };
 };
 
 export default function RequestForm({ userName, editData, isDrawerOpen, onClose }: RequestFormProps) {
-  const isEdit = editData?.requester_edit_state === true; // ✅ 수정모드 판별
+  const isEdit = editData?.requester_edit_state === true;
 
   const [requestData, setRequestData] = useState<Partial<RequestData>>(defaultRequestData);
-
-  // ==== 수정: 추가 폼 세트 상태 (등록 모드에서 같은 폼을 아래로 추가)
   const [extras, setExtras] = useState<Partial<RequestData>[]>([]);
-
-  // 회사 상태
   const [userCompany, setUserCompany] = useState<string>("");
 
-  // ★ 변경: 회사별 설정 메모
   const companyCfg = useMemo(() => getCompanyConfig(userCompany), [userCompany]);
 
-  // ★ 추가: 현재 선택된 업무유형에 따른 NSmall 상세옵션 (메인 폼)
+  // 상세옵션 안전 헬퍼
+  const getNSmallDetails = (type?: string) => {
+    const t = (type ?? "").trim();
+    return NSMALL_DETAIL_MAP[t] ?? [];
+  };
+
   const mainDetailOptions = useMemo(() => {
     if (!isNSMall(userCompany)) return [];
-    return NSMALL_DETAIL_MAP[requestData.task_type as string] ?? [];
+    return getNSmallDetails(requestData.task_type as string);
   }, [userCompany, requestData.task_type]);
 
-  // ★ 변경: 수정모드에서 현재 값 보존(현 회사 옵션에 없어도 상단에 표시)
+  // 수정모드 보존 렌더 목록
   const renderForms = useMemo(() => {
     const list = [...companyCfg.forms];
     if (isEdit && requestData.task_form && !list.includes(requestData.task_form as string)) {
@@ -120,9 +110,8 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
     return list;
   }, [companyCfg.types, isEdit, requestData.task_type]);
 
-  // ✅ 입력 변경 핸들러
+  // 입력 변경
   const requsetForm = (field: string, value: string | boolean) => {
-    // ★ 변경: NSmall에서 업무유형이 바뀌면 상세유형 초기화
     if (field === "task_type" && isNSMall(userCompany)) {
       setRequestData((prev) => ({
         ...prev,
@@ -134,14 +123,25 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
     setRequestData((prev) => ({ ...prev, [field]: value }));
   };
 
-  // ==== 수정: 추가 폼 세트용 변경/추가/삭제 핸들러
+  // ★ 추가: 공통 유효성 검사 헬퍼
+  const isEmpty = (v?: any) => (typeof v !== "string" || v.trim() === "");
+  const validateDesignForm = (f: Partial<RequestData>, ns: boolean): string | null => {
+    if (isEmpty(f.completion_dt)) return "완료 요청일을 선택하세요.";
+    if (isEmpty(f.open_dt)) return "오픈일을 선택하세요.";
+    if (isEmpty(f.task_form)) return "업무 부서를 선택하세요.";
+    if (isEmpty(f.task_type)) return "업무 유형을 선택하세요.";
+    if (ns && isEmpty(f.task_type_detail)) return "업무 유형 상세를 선택하세요.";
+    if (isEmpty(f.requirement)) return "작업 항목을 입력하세요.";
+    return null;
+  };
+
   // 추가 폼 세트
   const addExtra = () => setExtras(prev => [
     ...prev,
     {
       ...defaultRequestData,
       task_form: companyCfg.formDefault,
-      task_type: companyCfg.typeDefault,
+      task_type: companyCfg.typeDefault, // ★ 변경: NSMALL이면 ""
       task_type_detail: ""
     }
   ]);
@@ -149,20 +149,17 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
   const updateExtra = (idx: number, field: keyof RequestData, value: any) =>
     setExtras((prev) => {
       const next = [...prev];
-      // ★ 변경: NSmall에서 업무유형이 바뀌면 해당 extra의 상세유형 초기화
       if (field === "task_type" && isNSMall(userCompany)) {
-        next[idx] = { ...next[idx], task_type: value, task_type_detail: "" };
+        next[idx] = { ...next[idx], task_type: value, task_type_detail: "" }; // ★ 변경
       } else {
         next[idx] = { ...next[idx], [field]: value };
       }
       return next;
     });
 
-  const toTimestamp = (dateStr: string | undefined) => {
-    return dateStr ? Timestamp.fromDate(new Date(dateStr)) : null;
-  };
+  const toTimestamp = (dateStr: string | undefined) => dateStr ? Timestamp.fromDate(new Date(dateStr)) : null;
 
-  // ==== 수정: 다건 등록을 위한 월별 베이스/연속번호 유틸
+  // ==== 월별 베이스/연속번호 유틸
   const getMonthSeqBase = async () => {
     const now = new Date();
     const year = now.getFullYear().toString().slice(2);
@@ -170,50 +167,96 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
 
     const q = query(
       collection(db, "design_request"),
-      where("design_request_id", ">=", `H${year}${month}000`),
-      where("design_request_id", "<",  `H${year}${month}999`)
+      // ★ 변경: 3자리에서 4자리 시퀀스로 경계값 확장
+      where("design_request_id", ">=", `H${year}${month}0000`), // ★ 변경
+      where("design_request_id", "<",  `H${year}${month}9999`)  // ★ 변경
     );
     const snapshot = await getDocs(q);
     return { year, month, base: snapshot.size };
   };
   const buildDocNumber = (y: string, m: string, seq: number) =>
-    `H${y}${m}${seq.toString().padStart(3, "0")}`;
+    `H${y}${m}${seq.toString().padStart(4, "0")}`; // ★ 변경: padStart(4, "0")
 
-  // 업무 형태/유형으로 task_work_hour 문서의 기본 공수와 배율 둘 다 조회
-  const fetchWorkHourPreset = async (
-    task_form?: string,
-    task_type?: string
-  ): Promise<{ base: number | null; times: number | null }> => {
-    if (!task_form || !task_type) return { base: null, times: null };
+  // ◎ 수정: Homeplus 폴백 쿼리 유틸
+  const _queryHomeplusPreset = async (task_form: string, task_type: string) => {
     const qy = query(
-      collection(db, "task_work_hour"),
-      where("task_form", "==", task_form),
-      where("task_type", "==", task_type)
+      collection(db, "homeplus_task_work_hour"),
+      where("homeplus_task_form", "==", task_form),
+      where("homeplus_task_type", "==", task_type)
     );
     const snap = await getDocs(qy);
+    return snap;
+  };
+
+  // ◎ 수정: 회사별 공수 프리셋 조회 로직으로 업데이트 (시그니처에 optional detail 추가)
+  const fetchWorkHourPreset = async (
+    task_form?: string,
+    task_type?: string,
+    task_type_detail?: string
+  ): Promise<{ base: number | null; times: number | null }> => {
+    // NSMall 분기: type + detail 매칭
+    if (isNSMall(userCompany)) { // ◎ 수정
+      if (!task_type || !task_type_detail) return { base: null, times: null }; // ◎ 수정
+      const qy = query(
+        collection(db, "nsmall_task_work_hour"), // ◎ 수정
+        where("nsmall_task_type", "==", task_type), // ◎ 수정
+        where("nsmall_task_type_detail", "==", task_type_detail) // ◎ 수정
+      );
+      const snap = await getDocs(qy);
+      if (snap.empty) return { base: null, times: null };
+      const data = snap.docs[0].data() as any;
+      const base = typeof data.nsmall_task_work_hour === "number" ? data.nsmall_task_work_hour : null; // ◎ 수정: 필드명 교정
+      const times = typeof data.nsmall_task_work_times === "number" ? data.nsmall_task_work_times : null; // ◎ 수정
+      console.log("[NSMALL preset]", { task_type, task_type_detail, base, times, docId: snap.docs[0].id }); // ◎ 수정: 디버그
+      return { base, times };
+    }
+
+    // Homeplus 분기: form + type 매칭 (+ 폴백)
+    if (!task_form || !task_type) return { base: null, times: null }; // ◎ 수정
+
+    // 1차: 정확 매칭
+    let snap = await _queryHomeplusPreset(task_form, task_type); // ◎ 수정
+    // 2차 폴백: MHC/GHS
+    if (snap.empty && task_form !== "MHC/GHS") {
+      snap = await _queryHomeplusPreset("MHC/GHS", task_type); // ◎ 수정
+    }
+    // 3차 폴백(선택): GHS↔MHC 상호 폴백
+    if (snap.empty && (task_form === "GHS" || task_form === "MHC")) {
+      const alt = task_form === "GHS" ? "MHC" : "GHS";
+      snap = await _queryHomeplusPreset(alt, task_type); // ◎ 수정
+    }
+
     if (snap.empty) return { base: null, times: null };
     const data = snap.docs[0].data() as any;
-    const base = typeof data.task_work_hour === "number" ? data.task_work_hour : null;
-    const times = typeof data.task_work_times === "number" ? data.task_work_times : null;
+    const base = typeof data.homeplus_task_work_hour === "number" ? data.homeplus_task_work_hour : null; // ◎ 수정: 필드명 교정
+    const times = typeof data.homeplus_task_work_times === "number" ? data.homeplus_task_work_times : null; // ◎ 수정
+    console.log("[HOMEPLUS preset]", { task_form, task_type, base, times, docId: snap.docs[0].id }); // ◎ 수정: 디버그
     return { base, times };
   };
-  
-  // ✅ 요청 등록
+
+  // 등록/수정 submit
   const requestFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!requestData.requirement) {
-      alert("요청 내용을 입력하세요.");
-      return;
+    if (isEdit) {
+      const msg = validateDesignForm(requestData, isNSMall(userCompany));
+      if (msg) { alert(msg); return; }
     }
 
     if (isEdit && editData?.id) {
-      await updateDoc(doc(db, "design_request", editData.id), {
+      // ★ 추가: 부서/유형 변경 시 공수 재계산
+      const formChanged = (requestData.task_form || "") !== (editData.task_form || "");
+      const typeChanged = (requestData.task_type || "") !== (editData.task_type || "");
+      const detailChanged = isNSMall(userCompany) && ( // ◎ 수정: NSMall 상세 변경도 감지
+        (requestData.task_type_detail || "") !== ((editData as any).task_type_detail || "")
+      ); // ◎ 수정
+
+      const patch: any = {
         completion_dt: toTimestamp(requestData.completion_dt),
         open_dt: toTimestamp(requestData.open_dt),
         merchandiser: requestData.merchandiser ?? "",
-        task_form: requestData.task_form || companyCfg.formDefault,   // ★ 변경: 빈 값 방어
-        task_type: requestData.task_type || companyCfg.typeDefault,   // ★ 변경
+        task_form: requestData.task_form || companyCfg.formDefault,
+        task_type: isNSMall(userCompany) ? (requestData.task_type ?? "") : (requestData.task_type || companyCfg.typeDefault), // ★ 변경
         task_type_detail: requestData.task_type_detail ?? "",
         requirement: requestData.requirement,
         url: requestData.url,
@@ -221,45 +264,58 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
         emergency: requestData.emergency,
         requester_edit_state: false,
         updated_at: serverTimestamp()
-      });
+      };
 
+      if (formChanged || typeChanged || detailChanged) { // ◎ 수정
+        const { base: baseHour, times } = await fetchWorkHourPreset(
+          patch.task_form,
+          patch.task_type,
+          patch.task_type_detail // ◎ 수정: 상세 전달
+        );
+        patch.out_work_hour = baseHour;
+        patch.in_work_hour = (baseHour != null && times != null) ? Number((baseHour * times).toFixed(2)) : null;
+        patch.work_hour_edit_state = false;
+      }
+
+      await updateDoc(doc(db, "design_request", editData.id), patch);
       alert("요청이 수정되었습니다!");
       onClose();
       return;
     }
 
-    // ==== 수정: 등록 모드 — 상단 폼 + 추가 폼 세트를 한 번에 등록
+    // 등록 모드 — 상단 + 추가 폼 일괄 등록
     const forms = [requestData, ...extras];
 
-    // 필수값 검증 (상단 폼부터 순서대로)
-    const missing = forms.findIndex(f => !f.requirement);
-    if (missing !== -1) {
-      alert(`${missing + 1}번째 폼의 "작업 항목"을 입력하세요.`);
-      return;
+    // ★ 변경: 모든 필수값 종합 검사 (폼별 메시지)
+    for (let i = 0; i < forms.length; i++) {
+      const f = forms[i];
+      const msg = validateDesignForm(f, isNSMall(userCompany));
+      if (msg) {
+        alert(`${i === 0 ? "메인 폼" : `추가 요청 ${i}`} ${msg}`);
+        return;
+      }
     }
 
-    // 월별 베이스 개수 읽고, 상단 폼부터 연속 번호 부여
     const { year, month, base } = await getMonthSeqBase();
     let seq = base;
-
     const today = new Date();
 
-    // 순서 보장을 위해 for..of + await (맨 위 폼이 더 이른 번호)
     for (const f of forms) {
       seq += 1;
       const design_request_id = buildDocNumber(year, month, seq);
 
-      const formValue = (f.task_form as string) || companyCfg.formDefault;   // ★ 변경
-      const typeValue = (f.task_type as string) || companyCfg.typeDefault;
+      const formValue = (f.task_form as string) || companyCfg.formDefault;
+      const typeValue = isNSMall(userCompany)
+        ? ((f.task_type as string) || "") // ★ 변경: 등록 모드에서 placeholder는 ""
+        : ((f.task_type as string) || companyCfg.typeDefault);
 
-      // 기본 공수/배율 조회 → out_work_hour & in_work_hour 계산
+      // ◎ 수정: 회사별 프리셋 조회에 상세 전달
       const { base: baseHour, times } = await fetchWorkHourPreset(
         f.task_form as string,
-        f.task_type as string
+        f.task_type as string,
+        f.task_type_detail as string // ◎ 수정
       );
-      const computedIn = (baseHour != null && times != null)
-        ? Number((baseHour * times).toFixed(2))
-        : null;
+      const computedIn = (baseHour != null && times != null) ? Number((baseHour * times).toFixed(2)) : null; // ◎ 수정(계산 동일)
 
       await addDoc(collection(db, "design_request"), {
         design_request_id,
@@ -295,21 +351,20 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
     }
 
     alert(`${forms.length}건이 등록되었습니다!`);
-    // 초기화
-    setExtras([]);                                  // ==== 수정: 추가 폼 비우기
+    setExtras([]);
     setRequestData(defaultRequestData);
     onClose();
   };
 
-  // ✅ 수정 모드일 경우 editData로 초기값 설정
+  // 수정 모드 초기값
   useEffect(() => {
     if (isEdit && editData) {
       setRequestData({
         completion_dt: editData.completion_dt ? (editData.completion_dt as any).toDate().toISOString().slice(0, 10) : "",
         open_dt: editData.open_dt ? (editData.open_dt as any).toDate().toISOString().slice(0, 10) : "",
         merchandiser: editData.merchandiser ?? "",
-        task_form: editData.task_form ?? "",     // ★ 변경
-        task_type: editData.task_type ?? "", 
+        task_form: editData.task_form ?? "",
+        task_type: editData.task_type ?? "",
         task_type_detail: (editData as any).task_type_detail ?? "",
         requirement: editData.requirement ?? "",
         url: editData.url ?? "",
@@ -319,19 +374,19 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
     }
   }, [isEdit, editData]);
 
-  // 드로어 열릴 때(등록 모드) 회사별 기본값 주입
+  // 드로어 열릴 때(등록 모드) 기본값 주입
   useEffect(() => {
     if (!isDrawerOpen || isEdit) return;
     setRequestData({
       ...defaultRequestData,
-      task_form: companyCfg.formDefault, // ★ 변경
-      task_type: companyCfg.typeDefault,  // ★ 변경
+      task_form: companyCfg.formDefault,
+      task_type: companyCfg.typeDefault, // ★ 변경: NSMALL이면 "", placeholder 사용
       task_type_detail: ""
     });
     setExtras([]);
   }, [isDrawerOpen, isEdit, companyCfg.formDefault, companyCfg.typeDefault]);
 
-  // 로그인 사용자 company 읽기
+  // 로그인 사용자 company
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (!u) {
@@ -344,7 +399,7 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
     return () => unsub();
   }, []);
 
-  // 회사 변경 시(등록 모드) 선택값 보정
+  // 회사 변경 시(등록 모드) 보정
   useEffect(() => {
     if (isEdit) return;
     setRequestData(prev => {
@@ -353,7 +408,7 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
         next.task_form = companyCfg.formDefault;
       }
       if (!companyCfg.types.includes((next.task_type as string) || "")) {
-        next.task_type = companyCfg.typeDefault;
+        next.task_type = companyCfg.typeDefault; // ★ 변경: NSMALL이면 ""
         next.task_type_detail = "";
       }
       return next;
@@ -370,208 +425,84 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
         <RequestFormTableWrap>
           {!isEdit && 
             extras.map((f, idx) => {
-              const detailOptions = isNSMall(userCompany)
-                ? NSMALL_DETAIL_MAP[f.task_type as string] ?? []
-                : [];
-              const showDetail =
-                isNSMall(userCompany) &&
-                (f.task_type as string) &&
-                f.task_type !== companyCfg.typeDefault;
+              const detailOptions = isNSMall(userCompany) ? getNSmallDetails(f.task_type as string) : [];
+              const showDetail = isNSMall(userCompany) && !!f.task_type; // ★ 변경: truthy 체크
               return (
                 <div key={idx} style={{ marginBottom: 24 }}>
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      margin: "8px 0 4px",
-                    }}
-                  >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "8px 0 4px" }}>
                     <strong>추가 요청 {idx + 1}</strong>
-                    <button type="button" onClick={() => removeExtra(idx)}>
-                      삭제
-                    </button>
+                    <button type="button" onClick={() => removeExtra(idx)}>삭제</button>
                   </div>
 
                   <RequestFormTable>
-                    <RequestFormTableCaption>
-                      디자인 요청 추가 등록
-                    </RequestFormTableCaption>
-                    <colgroup>
-                      <col style={{ width: "120px" }} />
-                    </colgroup>
+                    <RequestFormTableCaption>디자인 요청 추가 등록</RequestFormTableCaption>
+                    <colgroup><col style={{ width: "120px" }} /></colgroup>
                     <tbody>
+                      <tr><RequestFormTableTh>문서번호</RequestFormTableTh><RequestFormTableTd /></tr>
                       <tr>
-                        <RequestFormTableTh>문서번호</RequestFormTableTh>
-                        <RequestFormTableTd></RequestFormTableTd>
-                      </tr>
-                      <tr>
-                        <RequestFormTableTh>
-                          <RequestFormItemLabel htmlFor={`merchandiser_ex_${idx}`}>
-                            담당 MD
-                          </RequestFormItemLabel>
-                        </RequestFormTableTh>
+                        <RequestFormTableTh><RequestFormItemLabel htmlFor={`merchandiser_ex_${idx}`}>담당 MD</RequestFormItemLabel></RequestFormTableTh>
                         <RequestFormTableTd>
-                          <RequestFormTextInput
-                            id={`merchandiser_ex_${idx}`}
-                            type="text"
-                            value={(f.merchandiser as string) || ""}
-                            onChange={(e) =>
-                              updateExtra(idx, "merchandiser", e.target.value)
-                            }
-                            placeholder="담당 MD 이름 또는 ID를 입력하세요."
-                          />
+                          <RequestFormTextInput id={`merchandiser_ex_${idx}`} type="text" value={(f.merchandiser as string) || ""} onChange={(e) => updateExtra(idx, "merchandiser", e.target.value)} placeholder="담당 MD 이름 또는 ID를 입력하세요." />
                         </RequestFormTableTd>
                       </tr>
                       <tr>
-                        <RequestFormTableTh>
-                          <RequestFormItemLabel htmlFor={`completion_dt_ex_${idx}`}>
-                            완료 요청일
-                          </RequestFormItemLabel>
-                        </RequestFormTableTh>
+                        <RequestFormTableTh><RequestFormItemLabel htmlFor={`completion_dt_ex_${idx}`}>완료 요청일</RequestFormItemLabel></RequestFormTableTh>
                         <RequestFormTableTd>
-                          <RequestFormDateInput
-                            id={`completion_dt_ex_${idx}`}
-                            type="date"
-                            value={(f.completion_dt as string) || ""}
-                            onChange={(e) =>
-                              updateExtra(idx, "completion_dt", e.target.value)
-                            }
-                          />
+                          <RequestFormDateInput id={`completion_dt_ex_${idx}`} type="date" value={(f.completion_dt as string) || ""} onChange={(e) => updateExtra(idx, "completion_dt", e.target.value)} />
                         </RequestFormTableTd>
                       </tr>
                       <tr>
-                        <RequestFormTableTh>
-                          <RequestFormItemLabel htmlFor={`open_dt_ex_${idx}`}>
-                            오픈일
-                          </RequestFormItemLabel>
-                        </RequestFormTableTh>
+                        <RequestFormTableTh><RequestFormItemLabel htmlFor={`open_dt_ex_${idx}`}>오픈일</RequestFormItemLabel></RequestFormTableTh>
                         <RequestFormTableTd>
-                          <RequestFormDateInput
-                            id={`open_dt_ex_${idx}`}
-                            type="date"
-                            value={(f.open_dt as string) || ""}
-                            onChange={(e) =>
-                              updateExtra(idx, "open_dt", e.target.value)
-                            }
-                          />
+                          <RequestFormDateInput id={`open_dt_ex_${idx}`} type="date" value={(f.open_dt as string) || ""} onChange={(e) => updateExtra(idx, "open_dt", e.target.value)} />
                         </RequestFormTableTd>
                       </tr>
                       <tr>
-                        <RequestFormTableTh>
-                          <RequestFormItemLabel htmlFor={`task_form_ex_${idx}`}>
-                            업무 부서
-                          </RequestFormItemLabel>
-                        </RequestFormTableTh>
+                        <RequestFormTableTh><RequestFormItemLabel htmlFor={`task_form_ex_${idx}`}>업무 부서</RequestFormItemLabel></RequestFormTableTh>
                         <RequestFormTableTd>
-                          <RequestFormSelectBox
-                            id={`task_form_ex_${idx}`}
-                            $wide={isNSMall(userCompany)}
-                            value={f.task_form || companyCfg.formDefault}
-                            onChange={(e) =>
-                              updateExtra(idx, "task_form", e.target.value)
-                            }
-                          >
-                            {companyCfg.forms.map((v) => (
-                              <option key={v} value={v}>
-                                {v}
-                              </option>
-                            ))}
+                          <RequestFormSelectBox id={`task_form_ex_${idx}`} $wide={isNSMall(userCompany)} value={f.task_form || companyCfg.formDefault} onChange={(e) => updateExtra(idx, "task_form", e.target.value)}>
+                            {companyCfg.forms.map((v) => <option key={v} value={v}>{v}</option>)}
                           </RequestFormSelectBox>
                         </RequestFormTableTd>
                       </tr>
                       <tr>
-                        <RequestFormTableTh>
-                          <RequestFormItemLabel htmlFor={`task_type_ex_${idx}`}>
-                            업무 유형
-                          </RequestFormItemLabel>
-                        </RequestFormTableTh>
+                        <RequestFormTableTh><RequestFormItemLabel htmlFor={`task_type_ex_${idx}`}>업무 유형</RequestFormItemLabel></RequestFormTableTh>
                         <RequestFormTableTd>
                           <RequestFormSelectBox
                             id={`task_type_ex_${idx}`}
                             $wide={isNSMall(userCompany)}
-                            value={f.task_type || companyCfg.typeDefault}
-                            onChange={(e) =>
-                              updateExtra(idx, "task_type", e.target.value)
-                            }
+                            value={isNSMall(userCompany) ? ((f.task_type as string) || "") : ((f.task_type as string) || companyCfg.typeDefault)} // ★ 변경
+                            onChange={(e) => updateExtra(idx, "task_type", e.target.value)}
                           >
-                            {isNSMall(userCompany) && (
-                              <option value="">
-                                업무 유형을 선택해주세요
-                              </option>
-                            )}
-                            {companyCfg.types.map((v) => (
-                              <option key={v as string} value={v as string}>
-                                {v as string}
-                              </option>
-                            ))}
+                            {isNSMall(userCompany) && <option value="">업무 유형을 선택해주세요</option>} {/* ★ 변경: 등록에서만 placeholder */}
+                            {companyCfg.types.map((v) => <option key={v as string} value={v as string}>{v as string}</option>)}
                           </RequestFormSelectBox>
-                        </RequestFormTableTd>
-                      </tr>
 
-                      {/* ★ 추가: NSmall 등록 모드일 때 업무유형 상세 셀렉트 */}
-                      {showDetail && (
-                        <tr>
-                          <RequestFormTableTh>
-                            <RequestFormItemLabel htmlFor={`task_type_detail_ex_${idx}`}>
-                              업무 유형 상세
-                            </RequestFormItemLabel>
-                          </RequestFormTableTh>
-                          <RequestFormTableTd>
+                          {showDetail && (
                             <RequestFormSelectBox
                               id={`task_type_detail_ex_${idx}`}
                               $wide={isNSMall(userCompany)}
                               value={(f.task_type_detail as string) || ""}
-                              onChange={(e) =>
-                                updateExtra(idx, "task_type_detail", e.target.value)
-                              }
+                              onChange={(e) => updateExtra(idx, "task_type_detail", e.target.value)}
                             >
                               <option value="">상세 유형을 선택해주세요</option>
-                              {detailOptions.map((opt) => (
-                                <option key={opt} value={opt}>
-                                  {opt}
-                                </option>
-                              ))}
+                              {detailOptions.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
                             </RequestFormSelectBox>
-                          </RequestFormTableTd>
-                        </tr>
-                      )}
-
-                      <tr>
-                        <RequestFormTableTh>
-                          <RequestFormItemLabel htmlFor={`requirement_ex_${idx}`}>
-                            작업 항목
-                          </RequestFormItemLabel>
-                        </RequestFormTableTh>
-                        <RequestFormTableTd>
-                          <RequestFormTextInput
-                            id={`requirement_ex_${idx}`}
-                            type="text"
-                            value={f.requirement || ""}
-                            onChange={(e) =>
-                              updateExtra(idx, "requirement", e.target.value)
-                            }
-                            placeholder="작업 항목을 입력하세요."
-                          />
+                          )}
                         </RequestFormTableTd>
                       </tr>
                       <tr>
-                        <RequestFormTableTh>
-                          <RequestFormItemLabel htmlFor={`emergency_ex_${idx}`}>
-                            긴급 일정
-                          </RequestFormItemLabel>
-                        </RequestFormTableTh>
+                        <RequestFormTableTh><RequestFormItemLabel htmlFor={`requirement_ex_${idx}`}>작업 항목</RequestFormItemLabel></RequestFormTableTh>
+                        <RequestFormTableTd>
+                          <RequestFormTextInput id={`requirement_ex_${idx}`} type="text" value={f.requirement || ""} onChange={(e) => updateExtra(idx, "requirement", e.target.value)} placeholder="작업 항목을 입력하세요." />
+                        </RequestFormTableTd>
+                      </tr>
+                      <tr>
+                        <RequestFormTableTh><RequestFormItemLabel htmlFor={`emergency_ex_${idx}`}>긴급 일정</RequestFormItemLabel></RequestFormTableTh>
                         <RequestFormTableTd>
                           <EmergencyWrap>
                             <RequestFormChackBoxLabel htmlFor={`emergency_ex_${idx}`}>
-                              <RequestFormChackBoxInput
-                                id={`emergency_ex_${idx}`}
-                                type="checkbox"
-                                checked={!!f.emergency}
-                                onChange={(e) =>
-                                  updateExtra(idx, "emergency", e.target.checked)
-                                }
-                              />
+                              <RequestFormChackBoxInput id={`emergency_ex_${idx}`} type="checkbox" checked={!!f.emergency} onChange={(e) => updateExtra(idx, "emergency", e.target.checked)} />
                               <RequestFormChackBox />
                               <span>긴급 일정으로 설정</span>
                             </RequestFormChackBoxLabel>
@@ -579,38 +510,15 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
                         </RequestFormTableTd>
                       </tr>
                       <tr>
-                        <RequestFormTableTh>
-                          <RequestFormItemLabel htmlFor={`url_ex_${idx}`}>
-                            요청서 URL
-                          </RequestFormItemLabel>
-                        </RequestFormTableTh>
+                        <RequestFormTableTh><RequestFormItemLabel htmlFor={`url_ex_${idx}`}>요청서 URL</RequestFormItemLabel></RequestFormTableTh>
                         <RequestFormTableTd>
-                          <RequestFormTextArea
-                            id={`url_ex_${idx}`}
-                            value={f.url || ""}
-                            onChange={(e) =>
-                              updateExtra(idx, "url", e.target.value)
-                            }
-                            placeholder="요청 기획안 URL을 입력하세요."
-                          />
+                          <RequestFormTextArea id={`url_ex_${idx}`} value={f.url || ""} onChange={(e) => updateExtra(idx, "url", e.target.value)} placeholder="요청 기획안 URL을 입력하세요." />
                         </RequestFormTableTd>
                       </tr>
                       <tr>
-                        <RequestFormTableTh>
-                          <RequestFormItemLabel htmlFor={`note_ex_${idx}`}>
-                            메모
-                          </RequestFormItemLabel>
-                        </RequestFormTableTh>
+                        <RequestFormTableTh><RequestFormItemLabel htmlFor={`note_ex_${idx}`}>메모</RequestFormItemLabel></RequestFormTableTh>
                         <RequestFormTableTd>
-                          <RequestFormMemoTextArea
-                            id={`note_ex_${idx}`}
-                            rows={4}
-                            value={f.note || ""}
-                            onChange={(e) =>
-                              updateExtra(idx, "note", e.target.value)
-                            }
-                            placeholder="메모를 입력하세요."
-                          />
+                          <RequestFormMemoTextArea id={`note_ex_${idx}`} rows={4} value={f.note || ""} onChange={(e) => updateExtra(idx, "note", e.target.value)} placeholder="메모를 입력하세요." />
                         </RequestFormTableTd>
                       </tr>
                     </tbody>
@@ -621,9 +529,7 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
 
           <RequestFormTable>
             <RequestFormTableCaption>디자인 요청 등록</RequestFormTableCaption>
-            <colgroup>
-              <col style={{ width: '120px' }} />
-            </colgroup>
+            <colgroup><col style={{ width: '120px' }} /></colgroup>
             <tbody>
               <tr>
                 <RequestFormTableTh>문서번호</RequestFormTableTh>
@@ -632,48 +538,25 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
               <tr>
                 <RequestFormTableTh><RequestFormItemLabel htmlFor="completion_dt">완료 요청일</RequestFormItemLabel></RequestFormTableTh>
                 <RequestFormTableTd>
-                  <RequestFormDateInput
-                    type="date"
-                    id="completion_dt"
-                    value={requestData.completion_dt}
-                    onChange={(e) => requsetForm("completion_dt", e.target.value)}
-                  />
+                  <RequestFormDateInput type="date" id="completion_dt" value={requestData.completion_dt} onChange={(e) => requsetForm("completion_dt", e.target.value)} />
                 </RequestFormTableTd>
               </tr>
               <tr>
                 <RequestFormTableTh><RequestFormItemLabel htmlFor="open_dt">오픈일</RequestFormItemLabel></RequestFormTableTh>
                 <RequestFormTableTd>
-                  <RequestFormDateInput
-                    type="date"
-                    id="open_dt"
-                    value={requestData.open_dt}
-                    onChange={(e) => requsetForm("open_dt", e.target.value)}
-                  />
+                  <RequestFormDateInput type="date" id="open_dt" value={requestData.open_dt} onChange={(e) => requsetForm("open_dt", e.target.value)} />
                 </RequestFormTableTd>
               </tr>
               <tr>
-                <RequestFormTableTh>
-                  <RequestFormItemLabel htmlFor="merchandiser">담당 MD</RequestFormItemLabel>
-                </RequestFormTableTh>
+                <RequestFormTableTh><RequestFormItemLabel htmlFor="merchandiser">담당 MD</RequestFormItemLabel></RequestFormTableTh>
                 <RequestFormTableTd>
-                  <RequestFormTextInput
-                    type="text"
-                    id="merchandiser"
-                    value={requestData.merchandiser || ""}
-                    onChange={(e) => requsetForm("merchandiser", e.target.value)}
-                    placeholder="담당 MD 이름을 입력하세요."
-                  />
+                  <RequestFormTextInput type="text" id="merchandiser" value={requestData.merchandiser || ""} onChange={(e) => requsetForm("merchandiser", e.target.value)} placeholder="담당 MD 이름을 입력하세요." />
                 </RequestFormTableTd>
               </tr>
               <tr>
                 <RequestFormTableTh><RequestFormItemLabel htmlFor="task_form">업무 부서</RequestFormItemLabel></RequestFormTableTh>
                 <RequestFormTableTd>
-                  <RequestFormSelectBox
-                    id="task_form"
-                    $wide={isNSMall(userCompany)}
-                    value={requestData.task_form || companyCfg.formDefault} // ★ 변경
-                    onChange={(e) => requsetForm("task_form", e.target.value)}
-                  >
+                  <RequestFormSelectBox id="task_form" $wide={isNSMall(userCompany)} value={requestData.task_form || companyCfg.formDefault} onChange={(e) => requsetForm("task_form", e.target.value)}>
                     {renderForms.map(v => <option key={v} value={v}>{v}</option>)}
                   </RequestFormSelectBox>
                 </RequestFormTableTd>
@@ -681,79 +564,39 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
               <tr>
                 <RequestFormTableTh><RequestFormItemLabel htmlFor="task_type">업무 유형</RequestFormItemLabel></RequestFormTableTh>
                 <RequestFormTableTd>
+                  {/* ★ 변경: 등록 모드에서만 placeholder 옵션을 노출, 수정 모드에선 숨김 */}
                   <RequestFormSelectBox
                     id="task_type"
                     $wide={isNSMall(userCompany)}
-                    value={requestData.task_type || companyCfg.typeDefault} // ★ 변경
+                    value={
+                      isNSMall(userCompany)
+                        ? (isEdit ? (requestData.task_type || (renderTypes[0] as string || "")) : (requestData.task_type ?? "")) // ★ 변경
+                        : (requestData.task_type || companyCfg.typeDefault)
+                    }
                     onChange={(e) => requsetForm("task_type", e.target.value)}
                   >
-                  {isNSMall(userCompany) && (
-                    <option value="">업무 유형을 선택해주세요</option>
-                  )}
-                  {renderTypes.map((v) => (
-                    <option key={v as string} value={v as string}>
-                      {v as string}
-                    </option>
-                  ))}
+                    {isNSMall(userCompany) && !isEdit && (
+                      <option value="">업무 유형을 선택해주세요</option> // ★ 변경: placeholder 텍스트는 옵션 라벨로만
+                    )}
+                    {renderTypes.map((v) => <option key={v as string} value={v as string}>{v as string}</option>)}
                   </RequestFormSelectBox>
+                  {isNSMall(userCompany) && !!requestData.task_type && (
+                    <RequestFormSelectBox
+                      id="task_type_detail"
+                      $wide
+                      value={requestData.task_type_detail || ""}
+                      onChange={(e) => requsetForm("task_type_detail", e.target.value)}
+                    >
+                      <option value="">상세 유형을 선택해주세요</option>
+                      {mainDetailOptions.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                    </RequestFormSelectBox>
+                  )}
                 </RequestFormTableTd>
               </tr>
-              {isNSMall(userCompany) &&
-                (isEdit ? (
-                  requestData.task_type_detail ? (
-                    <tr>
-                      <RequestFormTableTh>업무 유형 상세</RequestFormTableTh>
-                      <RequestFormTableTd>
-                        <RequestFormSelectBox
-                          $wide
-                          value={requestData.task_type_detail}
-                          onChange={() => {}}
-                          disabled
-                        >
-                          <option value={requestData.task_type_detail as string}>
-                            {requestData.task_type_detail as string}
-                          </option>
-                        </RequestFormSelectBox>
-                      </RequestFormTableTd>
-                    </tr>
-                  ) : null
-                ) : requestData.task_type &&
-                  requestData.task_type !== companyCfg.typeDefault ? (
-                  <tr>
-                    <RequestFormTableTh>
-                      <RequestFormItemLabel htmlFor="task_type_detail">
-                        업무 유형 상세
-                      </RequestFormItemLabel>
-                    </RequestFormTableTh>
-                    <RequestFormTableTd>
-                      <RequestFormSelectBox
-                        id="task_type_detail"
-                        $wide
-                        value={requestData.task_type_detail || ""}
-                        onChange={(e) =>
-                          requsetForm("task_type_detail", e.target.value)
-                        }
-                      >
-                        <option value="">상세 유형을 선택해주세요</option>
-                        {mainDetailOptions.map((opt) => (
-                          <option key={opt} value={opt}>
-                            {opt}
-                          </option>
-                        ))}
-                      </RequestFormSelectBox>
-                    </RequestFormTableTd>
-                  </tr>
-                ) : null)}
               <tr>
                 <RequestFormTableTh><RequestFormItemLabel htmlFor="requirement">작업 항목</RequestFormItemLabel></RequestFormTableTh>
                 <RequestFormTableTd>
-                  <RequestFormTextInput
-                    type="text"
-                    id="requirement"
-                    value={requestData.requirement}
-                    onChange={(e) => requsetForm("requirement", e.target.value)}
-                    placeholder="작업 항목을 입력하세요."
-                  />
+                  <RequestFormTextInput type="text" id="requirement" value={requestData.requirement} onChange={(e) => requsetForm("requirement", e.target.value)} placeholder="작업 항목을 입력하세요." />
                 </RequestFormTableTd>
               </tr>
               <tr>
@@ -761,12 +604,7 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
                 <RequestFormTableTd>
                   <EmergencyWrap>
                     <RequestFormChackBoxLabel htmlFor="emergency">
-                      <RequestFormChackBoxInput
-                        type="checkbox"
-                        id="emergency"
-                        checked={requestData.emergency}
-                        onChange={(e) => requsetForm("emergency", e.target.checked)}
-                      />
+                      <RequestFormChackBoxInput type="checkbox" id="emergency" checked={requestData.emergency} onChange={(e) => requsetForm("emergency", e.target.checked)} />
                       <RequestFormChackBox />
                       <span>긴급 일정으로 설정</span>
                     </RequestFormChackBoxLabel>
@@ -776,37 +614,21 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
               <tr>
                 <RequestFormTableTh><RequestFormItemLabel htmlFor="url">요청서 URL</RequestFormItemLabel></RequestFormTableTh>
                 <RequestFormTableTd>
-                  <RequestFormTextArea
-                    id="url"
-                    value={requestData.url}
-                    onChange={(e) => requsetForm("url", e.target.value)}
-                    placeholder="요청 기획안 URL을 입력하세요."
-                  />
+                  <RequestFormTextArea id="url" value={requestData.url} onChange={(e) => requsetForm("url", e.target.value)} placeholder="요청 기획안 URL을 입력하세요." />
                 </RequestFormTableTd>
               </tr>
               <tr>
                 <RequestFormTableTh><RequestFormItemLabel htmlFor="note">메모</RequestFormItemLabel></RequestFormTableTh>
                 <RequestFormTableTd>
-                  <RequestFormMemoTextArea
-                    id="note"
-                    rows={2}
-                    value={requestData.note}
-                    onChange={(e) => requsetForm("note", e.target.value)}
-                    placeholder="메모를 입력하세요."
-                  />
+                  <RequestFormMemoTextArea id="note" rows={2} value={requestData.note} onChange={(e) => requsetForm("note", e.target.value)} placeholder="메모를 입력하세요." />
                 </RequestFormTableTd>
               </tr>
             </tbody>
           </RequestFormTable>
-          {/* ==== 수정: 추가 폼 세트 렌더링 (등록 모드에서만 노출) */}
         </RequestFormTableWrap>
         <RequestSubmitButtonWrap>
           <RequestSubmitButton type="submit">{isEdit ? "수정 완료" : "등록하기"}</RequestSubmitButton>
-          {!isEdit && (
-            <RequestAddSubmitButton type="button" onClick={addExtra}>
-              추가 등록하기
-            </RequestAddSubmitButton>
-          )}
+          {!isEdit && <RequestAddSubmitButton type="button" onClick={addExtra}>추가 등록하기</RequestAddSubmitButton>}
         </RequestSubmitButtonWrap>
       </RequestFormContainer>
     </>
@@ -868,7 +690,7 @@ const RequestFormTableTh = styled.th`
 const RequestFormTableTd = styled.td`
   padding: 12px 24px;
   border-right: none;
-`
+`;
 
 const RequestFormItemLabel = styled.label`
   width: 100%;
@@ -930,7 +752,7 @@ const RequestFormChackBoxInput = styled.input`
 
   &:checked + span {
     background-color: ${({ theme }) => theme.colors.red};
-    background-image: url(${checkBoxChecked}); // 체크 이미지 경로
+    background-image: url(${checkBoxChecked});
     background-repeat: no-repeat;
     background-position: center;
     background-size: 12px 12px;
@@ -950,20 +772,26 @@ const RequestFormSelectBox = styled.select<{ $wide?: boolean }>`
   -moz-appearance: none;
 
   width: ${({ $wide }) => ($wide ? "215px" : "168px")};
-  padding: 7.5px 32px 7.5px 16px;
+  height: 36px;
+  padding: 0 32px 0 16px;
   border: 1px solid ${({ theme }) => theme.colors.gray02};
   border-radius: 4px;
   font-family: 'Pretendard';
   font-size: 16px;
   background-color: ${({ theme }) => theme.colors.white01};
-  background-image: url(${selectBoxArrow}); // ✅ 직접 제작한 화살표 아이콘 경로
+  background-image: url(${selectBoxArrow});
   background-repeat: no-repeat;
   background-position: right 12px center;
   background-size: 16px 16px;
+  vertical-align: top;
 
   &:focus {
     outline: none;
     border-color: ${({ theme }) => theme.colors.black};
+  }
+
+  &:first-of-type {
+    margin-right: 10px;
   }
 `;
 

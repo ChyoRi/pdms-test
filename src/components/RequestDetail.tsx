@@ -56,7 +56,15 @@ export default function RequestDetail({ data, onClose }: RequestDetailProps) {
           </tr>
           <tr>
             <RequestDetailTableTh>업무 유형</RequestDetailTableTh>
-            <RequestDetailTableTd>{data?.task_type}</RequestDetailTableTd>
+            <RequestDetailTableTd>
+              <RequestDetailTaskType>{data?.task_type}</RequestDetailTaskType>
+              {data?.task_type_detail && (
+                <>
+                  <RequestDetailTaskTypeArrow>＞</RequestDetailTaskTypeArrow>
+                  <RequestDetailTaskTypeDetail>{data?.task_type_detail}</RequestDetailTaskTypeDetail>
+                </>
+              )}
+            </RequestDetailTableTd>
           </tr>
           <tr>
             <RequestDetailTableTh>작업 항목</RequestDetailTableTh>
@@ -155,7 +163,18 @@ const RequestDetailMemoTd = styled.td`
   padding: 12px 24px;
   border-right: none;
   background-color: #fffff1;
-`
+`;
+
+const RequestDetailTaskType = styled.span`
+`;
+
+const RequestDetailTaskTypeArrow = styled.span`
+  margin: 0 5px;
+`;
+
+const RequestDetailTaskTypeDetail = styled.span`
+  
+`;
 
 const UrlLink = styled.a`
   display: -webkit-box;

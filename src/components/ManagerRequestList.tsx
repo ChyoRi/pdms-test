@@ -36,13 +36,13 @@ export default function ManagerRequestList({
       <RequestListTable>
         <RequestListTableCaption>매니저 요청 리스트</RequestListTableCaption>
         <colgroup>
-          <col style={{ width: '40px' }} /><col style={{ width: '80px' }}/>
+          <col style={{ width: '40px' }} /><col style={{ width: '85px' }}/>
           <col style={{ width: '80px' }}/><col style={{ width: '50px' }} />
           <col style={{ width: '50px' }} /><col style={{ width: '50px' }} />
           <col style={{ width: '50px' }} /><col style={{ width: '50px' }} />
-          <col style={{ width: '80px' }} /><col style={{ width: '120px' }} />
+          <col style={{ width: '100px' }} /><col style={{ width: '120px' }} />
           <col /><col style={{ width: '50px' }} />
-          <col style={{ width: '150px' }} /><col style={{ width: '85px' }} />
+          <col style={{ width: '140px' }} /><col style={{ width: '85px' }} />
           <col style={{ width: '50px' }} /><col style={{ width: '50px' }} />
           <col style={{ width: '50px' }} /><col style={{ width: '160px' }} />
           <col style={{ width: '80px' }} /><col style={{ width: '110px' }} />

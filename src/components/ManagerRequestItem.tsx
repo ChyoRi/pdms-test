@@ -82,7 +82,12 @@ export default function ManagerRequestItem({
       <RequestListTableTd>{item.merchandiser}</RequestListTableTd>
       <RequestListTableTd>{item.requester}</RequestListTableTd>
       <RequestListTableTd>{item.task_form}</RequestListTableTd>
-      <RequestListTaskTypeTd>{item.task_type}</RequestListTaskTypeTd>
+      <RequestListTaskTypeTd>
+        <RequestListTaskTypeWrap>
+          <RequestListTaskType>{item.task_type}</RequestListTaskType>
+          <RequestListTaskTypeDetail>{item.task_type_detail}</RequestListTaskTypeDetail>
+        </RequestListTaskTypeWrap>
+      </RequestListTaskTypeTd>
       <RequestListRequirementTd>
         <RequestListEmergencyWrap>
           {item.emergency ? <EmergencyBadge>긴급</EmergencyBadge> : ""}
@@ -280,6 +285,17 @@ const RequestListRequestIdText = styled.span<{ $hasUpdate: boolean }>`
     text-decoration: underline;
   }
 `;
+
+const RequestListTaskTypeWrap = styled.div`
+  ${({ theme }) => theme.mixin.flex('center')};
+  flex-direction: column;
+`;
+
+const RequestListTaskType = styled.span`
+  white-space: nowrap;
+`;
+
+const RequestListTaskTypeDetail = styled.span``;
 
 const RequestListEmergencyWrap = styled.div`
   ${({ theme }) => theme.mixin.flex('center')};

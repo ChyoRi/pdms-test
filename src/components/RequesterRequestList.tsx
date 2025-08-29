@@ -16,7 +16,7 @@ export default function RequesterRequestList({ data, onReviewComplete, onCancel,
       <RequestListTable>
         <RequestListTableCaption>요청 리스트</RequestListTableCaption>
         <colgroup>
-          <col style={{ width: '50px' }} /><col style={{ width: '80px' }}/>
+          <col style={{ width: '50px' }} /><col style={{ width: '85px' }}/>
           <col style={{ width: '60px' }} /><col style={{ width: '60px' }} />
           <col style={{ width: '60px' }} /><col style={{ width: '60px' }} />
           <col style={{ width: '100px' }} /><col style={{ width: '120px' }}/>
