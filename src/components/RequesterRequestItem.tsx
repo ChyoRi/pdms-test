@@ -32,11 +32,11 @@ export default function RequesterRequestItem({ item, index, onReviewComplete, on
     <RequestListTableTr isCanceled={item.status === "취소"}>
       <RequestListTableTd>{index}</RequestListTableTd>
       <RequestListTableTd>
-        <RequestListRequestIdText onClick={openDetail} $hasUpdate={!!item.updated_at}>{item.design_request_id}</RequestListRequestIdText>
+        <RequestListRequestIdText onClick={openDetail} $hasUpdate={!!item.updated_date}>{item.design_request_id}</RequestListRequestIdText>
       </RequestListTableTd>
       <RequestListTableTd>{formatDate(item.request_date)}</RequestListTableTd>
-      <RequestListCompletionTd>{formatDate(item.completion_dt)}</RequestListCompletionTd>
-      <RequestListOpenDtTd>{formatDate(item.open_dt)}</RequestListOpenDtTd>
+      <RequestListCompletionTd>{formatDate(item.completion_date)}</RequestListCompletionTd>
+      <RequestListOpenDtTd>{formatDate(item.open_date)}</RequestListOpenDtTd>
       <RequestListTableTd>{item.merchandiser}</RequestListTableTd>
       <RequestListTableTd>{item.task_form}</RequestListTableTd>
       <RequestListTaskTypeTd>

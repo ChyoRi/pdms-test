@@ -40,11 +40,11 @@ export default function RequestDetail({ data, onClose }: RequestDetailProps) {
           </tr>
           <tr>
             <RequestDetailTableTh>완료 요청일</RequestDetailTableTh>
-            <RequestListcompletionTd>{formatDate(data?.completion_dt)}</RequestListcompletionTd>
+            <RequestListcompletionTd>{formatDate(data?.completion_date)}</RequestListcompletionTd>
           </tr>
           <tr>
             <RequestDetailTableTh>오픈일</RequestDetailTableTh>
-            <RequestListOpenDtTd>{formatDate(data?.open_dt)}</RequestListOpenDtTd>
+            <RequestListOpenDtTd>{formatDate(data?.open_date)}</RequestListOpenDtTd>
           </tr>
           <tr>
             <RequestDetailTableTh>담당 MD</RequestDetailTableTh>

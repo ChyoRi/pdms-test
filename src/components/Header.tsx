@@ -5,6 +5,7 @@ import { onAuthStateChanged, signOut } from "firebase/auth";
 import { auth, db } from "../firebaseconfig";
 import { doc, getDoc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
+import Nav from "./Nav";
 
 export default function Header() {
   const [userName, setUserName] = useState("");
@@ -60,7 +61,10 @@ export default function Header() {
 
   return (
     <HeaderElement>
-      <HomePlusLogo src={logo}></HomePlusLogo>
+      <LogoWrap>
+        <HomePlusLogo src={logo}></HomePlusLogo>
+        <Nav />
+      </LogoWrap>
       <UtilWrap>
         <UserNameWrap><UserName>{userName}</UserName>님({getRoleName(userRole)}) {userCompany}환영합니다.</UserNameWrap>
         <LogoutButton onClick={logout}>로그아웃</LogoutButton>
@@ -76,6 +80,11 @@ const HeaderElement = styled.header`
   font-family: 'Pretendard';
   background-color: ${({ theme }) => theme.colors.black};
 `;
+
+const LogoWrap = styled.div`
+  ${({ theme }) => theme.mixin.flex('center')};
+  gap: 0 10px;
+`
 
 const HomePlusLogo = styled.img``;
 

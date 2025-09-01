@@ -8,8 +8,8 @@ declare global {
     request_date: string; // 요청일
     merchandiser: string; // 담당 MD
     requester: string; // 요청자
-    completion_dt: string; // 완료 요청일
-    open_dt: string; // 오픈일
+    completion_date: string; // 완료 요청일
+    open_date: string; // 오픈일
     task_form: string; // 업무 형태
     task_type: string; // 업무 타입
     task_type_detail: string; // 상세 업무 타입
@@ -29,9 +29,9 @@ declare global {
     in_work_hour?: number | ""; // 내부공수
     out_work_hour?: number | ""; // 외부공수
     work_hour_edit_state?: boolean // 공수 수정 상태
-    created_at: Timestamp | null // 문서 생성일시
-    updated_at: Timestamp | null; // 문서 수정일시
-    delete_at: Timestamp | null; // 문서 삭제일시
+    created_date: Timestamp | null // 문서 생성일시
+    updated_date: Timestamp | null; // 문서 수정일시
+    delete_date: Timestamp | null; // 문서 삭제일시
   }
   
   type RequestLite = Pick<RequestData, "id" | "status">;

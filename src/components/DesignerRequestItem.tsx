@@ -50,12 +50,12 @@ export default function DesignerRequestItem({
     <RequestListTableTr isCanceled={item.status === "취소"}>
       <RequestListTableTd>{index}</RequestListTableTd>
       <RequestListTableTd>
-        <RequestListRequestIdText onClick={openDetail} $hasUpdate={!!item.updated_at}>{item.design_request_id}</RequestListRequestIdText>
+        <RequestListRequestIdText onClick={openDetail} $hasUpdate={!!item.updated_date}>{item.design_request_id}</RequestListRequestIdText>
       </RequestListTableTd>
       <RequestListTableTd>{item.company}</RequestListTableTd>
       <RequestListTableTd>{formatDate(item.request_date)}</RequestListTableTd>
-      <RequestListcompletionTd>{formatDate(item.completion_dt)}</RequestListcompletionTd>
-      <RequestListOpenDtTd>{formatDate(item.open_dt)}</RequestListOpenDtTd>  
+      <RequestListcompletionTd>{formatDate(item.completion_date)}</RequestListcompletionTd>
+      <RequestListOpenDtTd>{formatDate(item.open_date)}</RequestListOpenDtTd>  
       <RequestListTableTd>{item.merchandiser}</RequestListTableTd>
       <RequestListTableTd>{item.requester}</RequestListTableTd>
       <RequestListTableTd>{item.task_form}</RequestListTableTd>

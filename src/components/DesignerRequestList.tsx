@@ -87,7 +87,7 @@ export default function DesignerRequestList({
 }
 
 const RequestListTableWrap = styled.div`
-  max-height: 609px;
+  max-height: 535px;
   overflow-y: auto;
   scrollbar-width: thin;
 `

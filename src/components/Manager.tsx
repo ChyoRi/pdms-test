@@ -5,11 +5,15 @@ import { doc, updateDoc, collection, getDocs, onSnapshot, query, where, orderBy 
 import ManagerRequestList from "./ManagerRequestList";
 import MainTitle from "./MainTitle";
 import RequestFilterSearchWrap from "./RequestFilterSearchWrap";
+import InWorkHour from "./InWorkHour";
 import ExportCSV from "./ExportCSV";
 import { makeSearchIndex, matchesQuery } from "../utils/search";
 import { downloadArrayToCSV } from "../utils/firestoreToCSV";
 
+type ViewType = "dashboard" | "myrequestlist" | "allrequestlist" | "inworkhour";
+
 interface RequesterProps {
+  view: ViewType;
   setIsDrawerOpen: (value: boolean) => void;
   setDetailData: (data: RequestData) => void;
 }
@@ -18,7 +22,7 @@ const DEFAULT_STATUS = "진행 상태 선택";
 const DEFAULT_REQUESTER = "요청자 선택";
 const DEFAULT_DESIGNER = "디자이너 선택";
 
-export default function Manager({ setIsDrawerOpen, setDetailData }: RequesterProps) {
+export default function Manager({ view, setIsDrawerOpen, setDetailData }: RequesterProps) {
   const [requests, setRequests] = useState<RequestData[]>([]);
   const [designerList, setDesignerList] = useState<any[]>([]);
   const [selectedDesigners, setSelectedDesigners] = useState<{ [key: string]: string }>({});
@@ -42,21 +46,20 @@ export default function Manager({ setIsDrawerOpen, setDetailData }: RequesterPro
 
   // ✅ Firestore에서 요청 리스트 가져오기
   useEffect(() => {
-    const q = query(
-      collection(db, "design_request"),
-      orderBy("design_request_id", "desc")
-    );
+    // 대시보드/내부공수에서는 목록 조회 안 함
+    if (view === "dashboard" || view === "inworkhour") {
+      setRequests([]);
+      return;
+    }
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...(doc.data() as Omit<RequestData, "id">)
-      }));
+    // 매니저는 myrequestlist도 '전체'와 동일하게 처리(원한다면 별도 규칙으로 분기 가능)
+    const qRef = query(collection(db, "design_request"), orderBy("design_request_id", "desc"));
+    const unsubscribe = onSnapshot(qRef, (snapshot) => {
+      const data = snapshot.docs.map((doc) => ({ id: doc.id, ...(doc.data() as Omit<RequestData, "id">) }));
       setRequests(data);
     });
-
     return () => unsubscribe();
-  }, []);
+  }, [view]);
 
   // ✅ 스냅샷으로 받은 리스트로 선택 맵을 seed (빈 키만 채움)
   useEffect(() => {
@@ -387,47 +390,82 @@ export default function Manager({ setIsDrawerOpen, setDetailData }: RequesterPro
   return (
     <Container>
       <MainTitle />
-      <RequestWrap>
-        <ManagerRequestTitle>매니저 요청리스트</ManagerRequestTitle>
-        <RequestFilterSearchWrap 
-          roleNumber={3}
-          onApplyStatus={applyStatus} 
-          onApplyRange={applyRange} 
-          onSearch={applySearch} 
-          keyword={keywordInput} 
-          onKeywordChange={setKeywordInput}
-          // ⬇️ 매니저 전용 토글 + 요청자 옵션 전달
-          isManager
-          requesterOptions={requesterOptions}
-          onApplyRequester={applyRequester}
-          designerOptions={designerOptions}
-          onApplyDesigner={applyDesigner}
-        />
-        <ExportCSV onClick={handleExportCSV} loading={exporting} />
-        <ManagerRequestList 
-          data={viewList}
-          designerList={designerList}
-          selectedDesigners={selectedDesigners}
-          designerSelect={designerSelect}
-          assignDesigner={assignDesigner}
-          sendToRequester={sendToRequester}
-          onDetailClick={openDetail}
-          // [NEW] 공수 입력/저장 프롭스 전달
-          workHours={workHours}
-          onChangeWorkHour={changeWorkHour}
-          onSaveWorkHour={saveWorkHour}
-          onStartEditWorkHour={startEditWorkHour}
-          onCancelEditWorkHour={cancelEditWorkHour}
-        />
-      </RequestWrap>
+      {view === "dashboard" && (
+        <DashBoardWrap>
+          <SummaryBox>
+            <h4>대시보드</h4>
+            <ul>
+              <li>대기: {prepared.filter(v => v.status === "대기" || v.status === "대기중").length}</li>
+              <li>진행중: {prepared.filter(v => v.status === "진행중" || v.requester_review_status === "검수요청").length}</li>
+              <li>완료: {prepared.filter(v => v.status === "완료").length}</li>
+              <li>취소: {prepared.filter(v => v.status === "취소").length}</li>
+            </ul>
+          </SummaryBox>
+        </DashBoardWrap>
+      )}
+      {view === "myrequestlist" && (
+        <MyRequestWrap>
+          <ManagerRequestTitle>매니저 요청리스트</ManagerRequestTitle>
+          <RequestFilterSearchWrap 
+            roleNumber={3}
+            onApplyStatus={applyStatus} 
+            onApplyRange={applyRange} 
+            onSearch={applySearch} 
+            keyword={keywordInput} 
+            onKeywordChange={setKeywordInput}
+            // ⬇️ 매니저 전용 토글 + 요청자 옵션 전달
+            isManager
+            requesterOptions={requesterOptions}
+            onApplyRequester={applyRequester}
+            designerOptions={designerOptions}
+            onApplyDesigner={applyDesigner}
+          />
+          <ExportCSV onClick={handleExportCSV} loading={exporting} />
+          <ManagerRequestList 
+            data={viewList}
+            designerList={designerList}
+            selectedDesigners={selectedDesigners}
+            designerSelect={designerSelect}
+            assignDesigner={assignDesigner}
+            sendToRequester={sendToRequester}
+            onDetailClick={openDetail}
+            // [NEW] 공수 입력/저장 프롭스 전달
+            workHours={workHours}
+            onChangeWorkHour={changeWorkHour}
+            onSaveWorkHour={saveWorkHour}
+            onStartEditWorkHour={startEditWorkHour}
+            onCancelEditWorkHour={cancelEditWorkHour}
+          />
+        </MyRequestWrap>
+      )}
+      {view === "inworkhour" && (
+        <InWorkHour />
+      )}
     </Container>
   );
 }
 
 const Container = styled.div``;
 
-const RequestWrap = styled.div`
+// const AllRequestWrap = styled.div`
+  
+// `;
+
+const MyRequestWrap = styled.div`
   padding: 0 48px;
+`;
+
+const DashBoardWrap = styled.div`
+  
+`;
+
+const SummaryBox = styled.div`
+  padding: 16px;
+  border: 1px solid ${({ theme }) => theme.colors.gray02};
+  border-radius: 8px;
+  background: ${({ theme }) => theme.colors.gray04};
+  h4 { margin: 0 0 8px 0; }
+  ul { margin: 0; padding-left: 16px; }
 `;
 
 const ManagerRequestTitle = styled.h2`

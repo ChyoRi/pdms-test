@@ -66,7 +66,7 @@ export default function RequesterRequestList({ data, onReviewComplete, onCancel,
 }
 
 const RequestListTableWrap = styled.div`
-  max-height: 609px;
+  max-height: 535px;
   overflow-y: auto;
   scrollbar-width: thin;
 `

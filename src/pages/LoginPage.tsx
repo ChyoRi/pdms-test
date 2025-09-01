@@ -22,7 +22,7 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
     signInWithEmailAndPassword(auth, email, password)
     .then(() => {
       onLoginSuccess();  // ✅ App.tsx에서 isAuthenticated = true
-      navigate('/dashboard'); // ✅ 로그인 후 이동
+      navigate('/main'); // ✅ 로그인 후 이동
     })
     .catch((err) => {
       alert("로그인 실패: " + err.message);

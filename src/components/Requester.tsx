@@ -8,8 +8,12 @@ import MainTitle from "./MainTitle";
 import RequestFilterSearchWrap from "./RequestFilterSearchWrap";
 import { makeSearchIndex, matchesQuery } from "../utils/search.ts";
 
+// ★ 추가: view 타입
+type ViewType = "dashboard" | "myrequestlist" | "allrequestlist" | "inworkhour";
+
 // ✅ 추가된 Props 인터페이스 정의
 interface RequesterProps {
+  view: ViewType;
   setIsDrawerOpen: (value: boolean) => void;
   setEditData: (data: RequestData) => void;
   setDetailData: (data: RequestData) => void;
@@ -17,7 +21,7 @@ interface RequesterProps {
 
 const DEFAULT_STATUS = "진행 상태 선택";
 
-export default function Requester({ setIsDrawerOpen, setEditData, setDetailData }: RequesterProps) {
+export default function Requester({ view, setIsDrawerOpen, setEditData, setDetailData }: RequesterProps) {
   const [userName, setUserName] = useState("");
   const [requests, setRequests] = useState<RequestData[]>([]); // request DB 배열
   const [statusFilter, setStatusFilter] = useState<string>("진행 상태 선택");
@@ -38,21 +42,36 @@ export default function Requester({ setIsDrawerOpen, setEditData, setDetailData 
   }, []);
 
   // ✅ 요청자가 보낸 요청만 가져오기
+  // 요청 데이터: view에 따라 쿼리 스위칭
   useEffect(() => {
-    if (!userName) return; // 로그인 이름 없으면 실행 X
+    if (view === "dashboard" || view === "inworkhour") {
+      setRequests([]); // 필요 시 초기화
+      return;
+    }
+    if (view !== "allrequestlist" && !userName) return;
 
-    const q = query(collection(db, "design_request"),where("requester", "==", userName),orderBy("design_request_id", "desc"));
+    let qRef;
+    if (view === "allrequestlist") {
+      qRef = query(collection(db, "design_request"), orderBy("design_request_id", "desc"));
+    } else if (view === "myrequestlist") { // ★ 명시
+      qRef = query(
+        collection(db, "design_request"),
+        where("requester", "==", userName),
+        orderBy("design_request_id", "desc")
+      );
+    } else {
+      return; // 안전망
+    }
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = onSnapshot(qRef, (snapshot) => {
       const data = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...(doc.data() as Omit<RequestData, "id">)
       }));
       setRequests(data);
     });
-
     return () => unsubscribe();
-  }, [userName]);
+  }, [userName, view]) // ★ 변경: view 의존
 
   // 필터 적용 콜백 (하위에서 올라옴)
   const applyRange  = (r: { start: Date | null; end: Date | null }) => setDateRange(r); // ⬅️ 추가
@@ -181,14 +200,67 @@ export default function Requester({ setIsDrawerOpen, setEditData, setDetailData 
   return (
     <>
       <MainTitle />
-      <RequestWrap>
-        <RequestFilterSearchWrap roleNumber={1} onApplyStatus={applyStatus} onApplyRange={applyRange} onSearch={applySearch} keyword={keywordInput} onKeywordChange={setKeywordInput}/>
-        <RequesterRequestList data={viewList} onReviewComplete={reviewComplete} onCancel={cancelRequest} onEditClick={editRequest} onDetailClick={openDetail} />
-      </RequestWrap>
+      {view === "dashboard" && (
+        <DashBoardWrap>
+          <SummaryBox>
+            <h4>대시보드</h4>
+            <ul>
+              <li>대기: {prepared.filter(v => v.status === "대기" || v.status === "대기중").length}</li>
+              <li>진행중: {prepared.filter(v => v.status === "진행중" || v.requester_review_status === "검수요청").length}</li>
+              <li>완료: {prepared.filter(v => v.status === "완료").length}</li>
+              <li>취소: {prepared.filter(v => v.status === "취소").length}</li>
+            </ul>
+          </SummaryBox>
+        </DashBoardWrap>
+      )}
+
+      {view === "allrequestlist" && (
+        <AllRequestWrap>
+          <RequestFilterSearchWrap
+            roleNumber={3} // ★ 변경: 전체 조회니까 매니저 필터와 동일 UI가 어울리면 3, 아니면 1 유지
+            onApplyStatus={applyStatus}
+            onApplyRange={applyRange}
+            onSearch={applySearch}
+            keyword={keywordInput}
+            onKeywordChange={setKeywordInput}
+          />
+          <RequesterRequestList
+            data={viewList}
+            onReviewComplete={reviewComplete}
+            onCancel={cancelRequest}
+            onEditClick={editRequest}
+            onDetailClick={openDetail}
+          />
+        </AllRequestWrap>
+      )}
+
+      {view === "myrequestlist" && (
+        <MyRequestWrap>
+          <RequestFilterSearchWrap roleNumber={1} onApplyStatus={applyStatus} onApplyRange={applyRange} onSearch={applySearch} keyword={keywordInput} onKeywordChange={setKeywordInput}/>
+          <RequesterRequestList data={viewList} onReviewComplete={reviewComplete} onCancel={cancelRequest} onEditClick={editRequest} onDetailClick={openDetail} />
+        </MyRequestWrap>
+      )}
     </>
   );
 }
 
-const RequestWrap = styled.div`
+const AllRequestWrap = styled.div`
+  
+`;
+
+const MyRequestWrap = styled.div`
   padding: 0 48px;
+`;
+
+const DashBoardWrap = styled.div`
+  
+`;
+
+const SummaryBox = styled.div`
+  padding: 16px;
+  border: 1px solid ${({ theme }) => theme.colors.gray02};
+  border-radius: 8px;
+  background: ${({ theme }) => theme.colors.gray04};
+  h4 { margin: 0 0 8px 0; }
+  ul { margin: 0; padding-left: 16px; }
 `;

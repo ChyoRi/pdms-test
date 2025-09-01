@@ -2,7 +2,7 @@ import { BrowserRouter as Router, Route, Routes, Navigate } from "react-router-d
 import { useState } from 'react'
 import './App.css';
 import LoginPage from './pages/LoginPage'
-import DashboardPage from './pages/DashBoardPage';
+import MainPage from './pages/MainPage';
 import SignUpPage from "./pages/SignUpPage";
 
 export default function App() {
@@ -12,7 +12,7 @@ export default function App() {
     <Router>
       <Routes>
         <Route path='/' element={<LoginPage onLoginSuccess={() => setIsAuthenticated(true)} />} />
-        <Route path='/dashboard' element={isAuthenticated ? <DashboardPage /> : <Navigate to='/' />} />
+        <Route path='/main' element={isAuthenticated ? <MainPage /> : <Navigate to='/' />} />
         <Route path='/signup' element={<SignUpPage />} />
       </Routes>
     </Router>

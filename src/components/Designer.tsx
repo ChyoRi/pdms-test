@@ -8,12 +8,16 @@ import MainTitle from "./MainTitle";
 import RequestFilterSearchWrap from "./RequestFilterSearchWrap";
 import { makeSearchIndex, matchesQuery } from "../utils/search";
 
+type ViewType = "dashboard" | "myrequestlist" | "allrequestlist" | "inworkhour";
+
 interface RequesterProps {
+  view: ViewType;
   setIsDrawerOpen: (value: boolean) => void;
   setDetailData: (data: RequestData) => void;
 }
 
 interface DesignRequest {
+  view: ViewType;
   design_request_id: string;
   id: string;
   requester: string;
@@ -44,7 +48,7 @@ type RowForm = {
 
 const DEFAULT_STATUS = "진행 상태 선택";
 
-export default function Designer({ setIsDrawerOpen, setDetailData }: RequesterProps) {
+export default function Designer({ view, setIsDrawerOpen, setDetailData }: RequesterProps) {
   const [assignedRequests, setAssignedRequests] = useState<DesignRequest[]>([]);
   const [designerName, setDesignerName] = useState(""); // ✅ 로그인 디자이너 이름
   const [formData, setFormData] = useState<{ [key: string]: RowForm  }>({});
@@ -65,21 +69,29 @@ export default function Designer({ setIsDrawerOpen, setDetailData }: RequesterPr
 
   // ✅ Firestore에서 로그인 디자이너에게 배정된 요청만 가져오기
   useEffect(() => {
-    if (!designerName) return; // 이름 없으면 실행 X
+    if (!designerName) return;
 
-    const q = query(
-      collection(db, "design_request"),
-      where("assigned_designer", "==", designerName), // ✅ 필터 추가
-      orderBy("design_request_id", "desc")
-    );
+    if (view === "dashboard" || view === "inworkhour") {
+      setAssignedRequests([]);
+      return;
+    }
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const qRef =
+      view === "allrequestlist"
+        ? query(collection(db, "design_request"), orderBy("design_request_id", "desc"))
+        : query(
+            collection(db, "design_request"),
+            where("assigned_designer", "==", designerName),
+            orderBy("design_request_id", "desc")
+          );
+
+    const unsubscribe = onSnapshot(qRef, (snapshot) => {
       const data: DesignRequest[] = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as Omit<DesignRequest, "id">)}));
       setAssignedRequests(data);
     });
 
     return () => unsubscribe();
-  }, [designerName]); // ✅ 의존성에 designerName 추가
+  }, [designerName, view]);
 
   // 필터 적용 콜백 (하위에서 올라옴)
   const applyRange  = (r: { start: Date | null; end: Date | null }) => setDateRange(r); // ⬅️ 추가
@@ -258,21 +270,58 @@ export default function Designer({ setIsDrawerOpen, setDetailData }: RequesterPr
   return (
     <Container>
       <MainTitle />
-      <RequestWrap>
-        <DesignerRequestTitle>디자이너 화면</DesignerRequestTitle>
-        <RequestFilterSearchWrap roleNumber={2} onApplyStatus={applyStatus} onApplyRange={applyRange} onSearch={applySearch} keyword={keywordInput} onKeywordChange={setKeywordInput}/>
-        <DesignerRequestList requests={viewList} formData={formData} onChange={handleChange} onSave={saveResponse} onDetailClick={openDetail} />
-      </RequestWrap>
+      {view === "dashboard" && (
+        <DashBoardWrap>
+          <SummaryBox>
+            <h4>대시보드</h4>
+            <ul>
+              <li>대기: {normalizedRequests.filter(v => (v.status ?? "대기") === "대기").length}</li>
+              <li>진행중: {
+                normalizedRequests.filter(v => {
+                  const s = v.status ?? "대기";
+                  return s === "진행중" || s === "검수요청" || s === "검수중";
+                }).length
+              }</li>
+              <li>완료: {normalizedRequests.filter(v => v.status === "완료").length}</li>
+              <li>취소: {normalizedRequests.filter(v => v.status === "취소").length}</li>
+            </ul>
+          </SummaryBox>
+        </DashBoardWrap>
+      )}
+
+      {view === "myrequestlist" && (
+        <MyRequestWrap>
+          <DesignerRequestTitle>디자이너 화면</DesignerRequestTitle>
+          <RequestFilterSearchWrap roleNumber={2} onApplyStatus={applyStatus} onApplyRange={applyRange} onSearch={applySearch} keyword={keywordInput} onKeywordChange={setKeywordInput}/>
+          <DesignerRequestList requests={viewList} formData={formData} onChange={handleChange} onSave={saveResponse} onDetailClick={openDetail} />
+        </MyRequestWrap>
+      )}
     </Container>
   )
 }
 
 const Container = styled.div``;
 
-const RequestWrap = styled.div`
+const AllRequestWrap = styled.div`
+  
+`;
+
+const MyRequestWrap = styled.div`
   padding: 0 48px;
 `;
 
+const DashBoardWrap = styled.div`
+  
+`;
+
+const SummaryBox = styled.div`
+  padding: 16px;
+  border: 1px solid ${({ theme }) => theme.colors.gray02};
+  border-radius: 8px;
+  background: ${({ theme }) => theme.colors.gray04};
+  h4 { margin: 0 0 8px 0; }
+  ul { margin: 0; padding-left: 16px; }
+`;
 const DesignerRequestTitle = styled.h2`
   margin-top: 20px;
 `;

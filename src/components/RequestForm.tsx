@@ -15,8 +15,8 @@ interface RequestFormProps {
 }
 
 const defaultRequestData: Partial<RequestData> = {
-  completion_dt: "",
-  open_dt: "",
+  completion_date: "",
+  open_date: "",
   merchandiser: "",
   task_form: "",
   task_type: "",
@@ -126,8 +126,8 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
   // ★ 추가: 공통 유효성 검사 헬퍼
   const isEmpty = (v?: any) => (typeof v !== "string" || v.trim() === "");
   const validateDesignForm = (f: Partial<RequestData>, ns: boolean): string | null => {
-    if (isEmpty(f.completion_dt)) return "완료 요청일을 선택하세요.";
-    if (isEmpty(f.open_dt)) return "오픈일을 선택하세요.";
+    if (isEmpty(f.completion_date)) return "완료 요청일을 선택하세요.";
+    if (isEmpty(f.open_date)) return "오픈일을 선택하세요.";
     if (isEmpty(f.task_form)) return "업무 부서를 선택하세요.";
     if (isEmpty(f.task_type)) return "업무 유형을 선택하세요.";
     if (ns && isEmpty(f.task_type_detail)) return "업무 유형 상세를 선택하세요.";
@@ -252,8 +252,8 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
       ); // ◎ 수정
 
       const patch: any = {
-        completion_dt: toTimestamp(requestData.completion_dt),
-        open_dt: toTimestamp(requestData.open_dt),
+        completion_date: toTimestamp(requestData.completion_date),
+        open_date: toTimestamp(requestData.open_date),
         merchandiser: requestData.merchandiser ?? "",
         task_form: requestData.task_form || companyCfg.formDefault,
         task_type: isNSMall(userCompany) ? (requestData.task_type ?? "") : (requestData.task_type || companyCfg.typeDefault), // ★ 변경
@@ -263,7 +263,7 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
         note: requestData.note,
         emergency: requestData.emergency,
         requester_edit_state: false,
-        updated_at: serverTimestamp()
+        updated_date: serverTimestamp()
       };
 
       if (formChanged || typeChanged || detailChanged) { // ◎ 수정
@@ -323,8 +323,8 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
         merchandiser: f.merchandiser ?? "",
         requester: userName,
         company: userCompany,
-        completion_dt: toTimestamp(f.completion_dt as any),
-        open_dt: toTimestamp(f.open_dt as any),
+        completion_date: toTimestamp(f.completion_date as any),
+        open_date: toTimestamp(f.open_date as any),
         task_form: formValue,
         task_type: typeValue,
         task_type_detail: f.task_type_detail ?? "",
@@ -344,9 +344,9 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
         in_work_hour: computedIn,
         out_work_hour: baseHour,
         work_hour_edit_state: false,
-        created_at: serverTimestamp(),
-        updated_at: null,
-        delete_at: null,
+        created_date: serverTimestamp(),
+        updated_date: null,
+        delete_date: null,
       });
     }
 
@@ -360,8 +360,8 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
   useEffect(() => {
     if (isEdit && editData) {
       setRequestData({
-        completion_dt: editData.completion_dt ? (editData.completion_dt as any).toDate().toISOString().slice(0, 10) : "",
-        open_dt: editData.open_dt ? (editData.open_dt as any).toDate().toISOString().slice(0, 10) : "",
+        completion_date: editData.completion_date ? (editData.completion_date as any).toDate().toISOString().slice(0, 10) : "",
+        open_date: editData.open_date ? (editData.open_date as any).toDate().toISOString().slice(0, 10) : "",
         merchandiser: editData.merchandiser ?? "",
         task_form: editData.task_form ?? "",
         task_type: editData.task_type ?? "",
@@ -446,15 +446,15 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
                         </RequestFormTableTd>
                       </tr>
                       <tr>
-                        <RequestFormTableTh><RequestFormItemLabel htmlFor={`completion_dt_ex_${idx}`}>완료 요청일</RequestFormItemLabel></RequestFormTableTh>
+                        <RequestFormTableTh><RequestFormItemLabel htmlFor={`completion_date_ex_${idx}`}>완료 요청일</RequestFormItemLabel></RequestFormTableTh>
                         <RequestFormTableTd>
-                          <RequestFormDateInput id={`completion_dt_ex_${idx}`} type="date" value={(f.completion_dt as string) || ""} onChange={(e) => updateExtra(idx, "completion_dt", e.target.value)} />
+                          <RequestFormDateInput id={`completion_date_ex_${idx}`} type="date" value={(f.completion_date as string) || ""} onChange={(e) => updateExtra(idx, "completion_date", e.target.value)} />
                         </RequestFormTableTd>
                       </tr>
                       <tr>
-                        <RequestFormTableTh><RequestFormItemLabel htmlFor={`open_dt_ex_${idx}`}>오픈일</RequestFormItemLabel></RequestFormTableTh>
+                        <RequestFormTableTh><RequestFormItemLabel htmlFor={`open_date_ex_${idx}`}>오픈일</RequestFormItemLabel></RequestFormTableTh>
                         <RequestFormTableTd>
-                          <RequestFormDateInput id={`open_dt_ex_${idx}`} type="date" value={(f.open_dt as string) || ""} onChange={(e) => updateExtra(idx, "open_dt", e.target.value)} />
+                          <RequestFormDateInput id={`open_date_ex_${idx}`} type="date" value={(f.open_date as string) || ""} onChange={(e) => updateExtra(idx, "open_date", e.target.value)} />
                         </RequestFormTableTd>
                       </tr>
                       <tr>
@@ -536,15 +536,15 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
                 <RequestFormTableTd>{isEdit ? editData?.design_request_id : ""}</RequestFormTableTd>
               </tr>
               <tr>
-                <RequestFormTableTh><RequestFormItemLabel htmlFor="completion_dt">완료 요청일</RequestFormItemLabel></RequestFormTableTh>
+                <RequestFormTableTh><RequestFormItemLabel htmlFor="completion_date">완료 요청일</RequestFormItemLabel></RequestFormTableTh>
                 <RequestFormTableTd>
-                  <RequestFormDateInput type="date" id="completion_dt" value={requestData.completion_dt} onChange={(e) => requsetForm("completion_dt", e.target.value)} />
+                  <RequestFormDateInput type="date" id="completion_date" value={requestData.completion_date} onChange={(e) => requsetForm("completion_date", e.target.value)} />
                 </RequestFormTableTd>
               </tr>
               <tr>
-                <RequestFormTableTh><RequestFormItemLabel htmlFor="open_dt">오픈일</RequestFormItemLabel></RequestFormTableTh>
+                <RequestFormTableTh><RequestFormItemLabel htmlFor="open_date">오픈일</RequestFormItemLabel></RequestFormTableTh>
                 <RequestFormTableTd>
-                  <RequestFormDateInput type="date" id="open_dt" value={requestData.open_dt} onChange={(e) => requsetForm("open_dt", e.target.value)} />
+                  <RequestFormDateInput type="date" id="open_date" value={requestData.open_date} onChange={(e) => requsetForm("open_date", e.target.value)} />
                 </RequestFormTableTd>
               </tr>
               <tr>
@@ -688,7 +688,7 @@ const RequestFormTableTh = styled.th`
 `;
 
 const RequestFormTableTd = styled.td`
-  padding: 12px 24px;
+  padding: 10px 24px;
   border-right: none;
 `;
 
