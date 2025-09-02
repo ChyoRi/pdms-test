@@ -13,7 +13,7 @@ export default function MainTitle() {
 }
 
 const MainTitleWrap = styled.div`
-  padding: 30px 48px;
+  padding: 29px 48px;
   background-color: ${({ theme }) => theme.colors.gray08};
 `;
 

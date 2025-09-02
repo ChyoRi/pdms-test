@@ -8,10 +8,8 @@ import MainTitle from "./MainTitle";
 import RequestFilterSearchWrap from "./RequestFilterSearchWrap";
 import { makeSearchIndex, matchesQuery } from "../utils/search.ts";
 
-// ★ 추가: view 타입
 type ViewType = "dashboard" | "myrequestlist" | "allrequestlist" | "inworkhour";
 
-// ✅ 추가된 Props 인터페이스 정의
 interface RequesterProps {
   view: ViewType;
   setIsDrawerOpen: (value: boolean) => void;
@@ -23,6 +21,7 @@ const DEFAULT_STATUS = "진행 상태 선택";
 
 export default function Requester({ view, setIsDrawerOpen, setEditData, setDetailData }: RequesterProps) {
   const [userName, setUserName] = useState("");
+  const [userCompany, setUserCompany] = useState<string>("");
   const [requests, setRequests] = useState<RequestData[]>([]); // request DB 배열
   const [statusFilter, setStatusFilter] = useState<string>("진행 상태 선택");
   const [dateRange, setDateRange] = useState<{ start: Date | null; end: Date | null }>({ start: null, end: null });
@@ -32,10 +31,22 @@ export default function Requester({ view, setIsDrawerOpen, setEditData, setDetai
   const [keyword, setKeyword] = useState<string>("");           // 검색 버튼 클릭 시에만 적용
 
   // ✅ 로그인 사용자 이름 가져오기
+  // ✅ 로그인 사용자 이름 + company 가져오기
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user && user.displayName) {
-        setUserName(user.displayName);
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!user) return;
+
+      // 이름: 기존대로 displayName 우선
+      if (user.displayName) setUserName(user.displayName);
+
+      // ★ 추가: users/{uid}에서 company 로드
+      const uref = doc(db, "users", user.uid);
+      const usnap = await getDoc(uref);
+      if (usnap.exists()) {
+        const data = usnap.data() as any;
+        setUserCompany(data?.company ?? ""); // ← 여기서 company 확보
+      } else {
+        setUserCompany(""); // 문서 없으면 대기 상태 유지
       }
     });
     return () => unsubscribe();
@@ -44,34 +55,42 @@ export default function Requester({ view, setIsDrawerOpen, setEditData, setDetai
   // ✅ 요청자가 보낸 요청만 가져오기
   // 요청 데이터: view에 따라 쿼리 스위칭
   useEffect(() => {
-    if (view === "dashboard" || view === "inworkhour") {
-      setRequests([]); // 필요 시 초기화
-      return;
-    }
-    if (view !== "allrequestlist" && !userName) return;
+  if (view === "dashboard" || view === "inworkhour") {
+    setRequests([]); // 필요 시 초기화
+    return;
+  }
 
-    let qRef;
-    if (view === "allrequestlist") {
-      qRef = query(collection(db, "design_request"), orderBy("design_request_id", "desc"));
-    } else if (view === "myrequestlist") { // ★ 명시
-      qRef = query(
-        collection(db, "design_request"),
-        where("requester", "==", userName),
-        orderBy("design_request_id", "desc")
-      );
-    } else {
-      return; // 안전망
-    }
+  // ★ 변경: 분기별로 준비 조건 분리
+  if (view === "allrequestlist" && !userCompany) return;
+  if (view === "myrequestlist" && !userName) return;
 
-    const unsubscribe = onSnapshot(qRef, (snapshot) => {
-      const data = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...(doc.data() as Omit<RequestData, "id">)
-      }));
-      setRequests(data);
-    });
-    return () => unsubscribe();
-  }, [userName, view]) // ★ 변경: view 의존
+  let qRef;
+  if (view === "allrequestlist") {
+    // ★ 변경: 같은 회사만 필터 + 정렬 유지 (복합색인 이미 있다고 했으니 그대로 사용)
+    qRef = query(
+      collection(db, "design_request"),
+      where("company", "==", userCompany),
+      orderBy("design_request_id", "desc")
+    );
+  } else if (view === "myrequestlist") { // ★ 기존 그대로 유지
+    qRef = query(
+      collection(db, "design_request"),
+      where("requester", "==", userName),
+      orderBy("design_request_id", "desc")
+    );
+  } else {
+    return; // 안전망
+  }
+
+  const unsubscribe = onSnapshot(qRef, (snapshot) => {
+    const data = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...(doc.data() as Omit<RequestData, "id">)
+    }));
+    setRequests(data);
+  });
+  return () => unsubscribe();
+}, [userName, userCompany, view]);
 
   // 필터 적용 콜백 (하위에서 올라옴)
   const applyRange  = (r: { start: Date | null; end: Date | null }) => setDateRange(r); // ⬅️ 추가
@@ -201,7 +220,7 @@ export default function Requester({ view, setIsDrawerOpen, setEditData, setDetai
     <>
       <MainTitle />
       {view === "dashboard" && (
-        <DashBoardWrap>
+        <MainContentWrap>
           <SummaryBox>
             <h4>대시보드</h4>
             <ul>
@@ -211,11 +230,11 @@ export default function Requester({ view, setIsDrawerOpen, setEditData, setDetai
               <li>취소: {prepared.filter(v => v.status === "취소").length}</li>
             </ul>
           </SummaryBox>
-        </DashBoardWrap>
+        </MainContentWrap>
       )}
 
       {view === "allrequestlist" && (
-        <AllRequestWrap>
+        <MainContentWrap>
           <RequestFilterSearchWrap
             roleNumber={3} // ★ 변경: 전체 조회니까 매니저 필터와 동일 UI가 어울리면 3, 아니면 1 유지
             onApplyStatus={applyStatus}
@@ -231,29 +250,21 @@ export default function Requester({ view, setIsDrawerOpen, setEditData, setDetai
             onEditClick={editRequest}
             onDetailClick={openDetail}
           />
-        </AllRequestWrap>
+        </MainContentWrap>
       )}
 
       {view === "myrequestlist" && (
-        <MyRequestWrap>
+        <MainContentWrap>
           <RequestFilterSearchWrap roleNumber={1} onApplyStatus={applyStatus} onApplyRange={applyRange} onSearch={applySearch} keyword={keywordInput} onKeywordChange={setKeywordInput}/>
           <RequesterRequestList data={viewList} onReviewComplete={reviewComplete} onCancel={cancelRequest} onEditClick={editRequest} onDetailClick={openDetail} />
-        </MyRequestWrap>
+        </MainContentWrap>
       )}
     </>
   );
 }
 
-const AllRequestWrap = styled.div`
-  
-`;
-
-const MyRequestWrap = styled.div`
+const MainContentWrap = styled.div`
   padding: 0 48px;
-`;
-
-const DashBoardWrap = styled.div`
-  
 `;
 
 const SummaryBox = styled.div`

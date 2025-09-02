@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Route, Routes, Navigate } from "react-router-dom";
 import { useState } from 'react'
 import './App.css';
+import './style/fonts.scss';
 import LoginPage from './pages/LoginPage'
 import MainPage from './pages/MainPage';
 import SignUpPage from "./pages/SignUpPage";

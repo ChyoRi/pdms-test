@@ -121,13 +121,14 @@ export default function Aside({ requests, role, userName, onRequestButtonClick }
 }
 
 const AsideFrame = styled.aside`
+  width: 240px;
   height: 100%;
   border-right: 1px solid ${({ theme }) => theme.colors.black};
 `;
 
 const AsideLogoWrap = styled.div`
   ${({ theme }) => theme.mixin.flex('center', 'center')};
-  padding: 19.5px 23px;
+  padding: 18.5px 0;
   border-bottom: 1px solid ${({ theme }) => theme.colors.gray02};
 `;
 
@@ -144,7 +145,8 @@ const AsideTitle = styled.span`
 `;
 
 const RequestFormButtonWrap = styled.div`
-  padding: 32px 20px;
+  text-align: center;
+  padding: 32px 0;
   border-bottom: 1px solid ${({ theme }) => theme.colors.gray02};
 `;
 
