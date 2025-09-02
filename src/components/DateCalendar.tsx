@@ -176,11 +176,22 @@ export default function DateCalendar({
                             e = ts(selected.end);
                           return t > s && t < e;
                         },
+                        // ✅ 오늘: 이 달 내부 셀에만 today 클래스 부여
+                        todayInMonth: (d) => {
+                          const now = new Date();
+                          return (
+                          inThisMonth(d) &&
+                          d.getFullYear() === now.getFullYear() &&
+                          d.getMonth() === now.getMonth() &&
+                          d.getDate() === now.getDate()
+                        );
+                        },
                       }}
                       modifiersClassNames={{
                         start: "sel-start",
                         end: "sel-end",
                         middle: "sel-mid",
+                        todayInMonth: "sel-today",
                       }}
                     />
                   </MonthBox>
@@ -346,7 +357,7 @@ const MonthBox = styled.div`
   }
 
   /* ✅ 오늘 날짜 강조 */
-  .rdp-day.rdp-today {
+  .sel-today {
     background-color: ${({ theme }) => theme?.colors?.black};
     font-weight: 700;
 

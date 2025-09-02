@@ -302,9 +302,9 @@ export default function Designer({ view, setIsDrawerOpen, setDetailData }: Reque
 
 const Container = styled.div``;
 
-const AllRequestWrap = styled.div`
+// const AllRequestWrap = styled.div`
   
-`;
+// `;
 
 const MyRequestWrap = styled.div`
   padding: 0 48px;

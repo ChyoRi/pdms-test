@@ -391,7 +391,7 @@ export default function Manager({ view, setIsDrawerOpen, setDetailData }: Reques
     <Container>
       <MainTitle />
       {view === "dashboard" && (
-        <DashBoardWrap>
+        <MainContentWrap>
           <SummaryBox>
             <h4>대시보드</h4>
             <ul>
@@ -401,10 +401,10 @@ export default function Manager({ view, setIsDrawerOpen, setDetailData }: Reques
               <li>취소: {prepared.filter(v => v.status === "취소").length}</li>
             </ul>
           </SummaryBox>
-        </DashBoardWrap>
+        </MainContentWrap>
       )}
       {view === "myrequestlist" && (
-        <MyRequestWrap>
+        <MainContentWrap>
           <ManagerRequestTitle>매니저 요청리스트</ManagerRequestTitle>
           <RequestFilterSearchWrap 
             roleNumber={3}
@@ -436,7 +436,7 @@ export default function Manager({ view, setIsDrawerOpen, setDetailData }: Reques
             onStartEditWorkHour={startEditWorkHour}
             onCancelEditWorkHour={cancelEditWorkHour}
           />
-        </MyRequestWrap>
+        </MainContentWrap>
       )}
       {view === "inworkhour" && (
         <InWorkHour />
@@ -447,16 +447,8 @@ export default function Manager({ view, setIsDrawerOpen, setDetailData }: Reques
 
 const Container = styled.div``;
 
-// const AllRequestWrap = styled.div`
-  
-// `;
-
-const MyRequestWrap = styled.div`
+const MainContentWrap = styled.div`
   padding: 0 48px;
-`;
-
-const DashBoardWrap = styled.div`
-  
 `;
 
 const SummaryBox = styled.div`

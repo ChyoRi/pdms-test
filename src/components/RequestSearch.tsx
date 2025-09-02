@@ -32,7 +32,7 @@ export default function RequestSearch({
 const Container = styled.div`
   position: relative;
   ${({ theme }) => theme.mixin.flex('center', 'space-between')};
-  padding: 11px 14.5px;
+  padding: 11.5px 14.5px;
   border: 1px solid ${({ theme }) => theme.colors.gray02};
   border-radius: 8px;
 
