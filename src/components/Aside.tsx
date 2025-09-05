@@ -173,6 +173,7 @@ const MyRequestTitleWrap = styled.div`
 const MyRequestIcon = styled.img``;
 
 const MyRequestTitle = styled.h4`
+  white-space: nowrap;
   font-family: 'Pretendard';
   font-size: 20px;
   font-weight: 700;

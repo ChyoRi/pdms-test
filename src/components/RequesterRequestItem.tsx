@@ -4,13 +4,14 @@ import urlIcon from "../assets/url-icon.svg";
 interface RequestItemProps {
   item: RequestData;
   index: number;
+  disableActions: boolean;
   onReviewComplete: (id: string) => void;
   onCancel: (id: string) => void;
   onEditClick: (id: string) => void;
   onDetailClick: (item: RequestData) => void;
 }
 
-export default function RequesterRequestItem({ item, index, onReviewComplete, onCancel, onEditClick, onDetailClick }: RequestItemProps) {
+export default function RequesterRequestItem({ item, index, disableActions, onReviewComplete, onCancel, onEditClick, onDetailClick }: RequestItemProps) {
 
   // 날짜 포맷 함수
   const formatDate = (timestamp: any) => {
@@ -83,7 +84,7 @@ export default function RequesterRequestItem({ item, index, onReviewComplete, on
       <RequestListTableTd>
         {item.manager_review_status === "검수완료" ? (
           item.status !== "완료" ? (
-            <ReviewButton onClick={() => onReviewComplete(item.id)}>검수완료</ReviewButton>
+            <ReviewButton onClick={() => onReviewComplete(item.id)} disabled={disableActions}>검수완료</ReviewButton>
           ) : (
             <CompletedText>검수완료</CompletedText>
           )
@@ -92,10 +93,10 @@ export default function RequesterRequestItem({ item, index, onReviewComplete, on
         )}
       </RequestListTableTd>
       <RequestListTableTd>
-        <EditButton onClick={() => onEditClick(item.id)} disabled={item.status === "취소" || item.status === "완료"}>수정</EditButton>
+        <EditButton onClick={() => onEditClick(item.id)} disabled={disableActions || item.status === "취소" || item.status === "완료"}>수정</EditButton>
       </RequestListTableTd>
       <RequestListTableTd>
-        <CancelButton onClick={() => onCancel(item.id)} disabled={item.status === "취소" || item.status === "완료"}>취소</CancelButton>
+        <CancelButton onClick={() => onCancel(item.id)} disabled={disableActions || item.status === "취소" || item.status === "완료"}>취소</CancelButton>
       </RequestListTableTd>
     </RequestListTableTr>
   );
@@ -309,6 +310,13 @@ const ReviewButton = styled.button`
   border-radius: 4px;
   color: ${({ theme }) => theme.colors.white01};
   background-color: green;
+  &:disabled {
+    background-color: ${({ theme }) => theme.colors.gray07};
+    color: ${({ theme }) => theme.colors.gray06};
+    border-color: ${({ theme }) => theme.colors.gray06};
+    cursor: default;
+    pointer-events: none;
+  }
 `;
 
 const CompletedText = styled.span`

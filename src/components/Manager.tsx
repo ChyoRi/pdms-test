@@ -6,6 +6,7 @@ import ManagerRequestList from "./ManagerRequestList";
 import MainTitle from "./MainTitle";
 import RequestFilterSearchWrap from "./RequestFilterSearchWrap";
 import InWorkHour from "./InWorkHour";
+import DashBoard from "./DashBoard";
 import ExportCSV from "./ExportCSV";
 import { makeSearchIndex, matchesQuery } from "../utils/search";
 import { downloadArrayToCSV } from "../utils/firestoreToCSV";
@@ -390,19 +391,6 @@ export default function Manager({ view, setIsDrawerOpen, setDetailData }: Reques
   return (
     <Container>
       <MainTitle />
-      {view === "dashboard" && (
-        <MainContentWrap>
-          <SummaryBox>
-            <h4>대시보드</h4>
-            <ul>
-              <li>대기: {prepared.filter(v => v.status === "대기" || v.status === "대기중").length}</li>
-              <li>진행중: {prepared.filter(v => v.status === "진행중" || v.requester_review_status === "검수요청").length}</li>
-              <li>완료: {prepared.filter(v => v.status === "완료").length}</li>
-              <li>취소: {prepared.filter(v => v.status === "취소").length}</li>
-            </ul>
-          </SummaryBox>
-        </MainContentWrap>
-      )}
       {view === "myrequestlist" && (
         <MainContentWrap>
           <ManagerRequestTitle>매니저 요청리스트</ManagerRequestTitle>
@@ -438,6 +426,11 @@ export default function Manager({ view, setIsDrawerOpen, setDetailData }: Reques
           />
         </MainContentWrap>
       )}
+      {view === "dashboard" && (
+        <DashBoardWrap>
+          <DashBoard capacityHoursPerMonth={704} />
+        </DashBoardWrap>
+      )}
       {view === "inworkhour" && (
         <InWorkHour />
       )}
@@ -451,13 +444,10 @@ const MainContentWrap = styled.div`
   padding: 0 48px;
 `;
 
-const SummaryBox = styled.div`
-  padding: 16px;
-  border: 1px solid ${({ theme }) => theme.colors.gray02};
-  border-radius: 8px;
-  background: ${({ theme }) => theme.colors.gray04};
-  h4 { margin: 0 0 8px 0; }
-  ul { margin: 0; padding-left: 16px; }
+const DashBoardWrap = styled.div`
+  max-height: 766px;
+  padding: 0 48px;
+  overflow: auto;
 `;
 
 const ManagerRequestTitle = styled.h2`

@@ -15,6 +15,7 @@ interface DesignerRequestItemProps {
   onChange: (id: string, field: string, value: string) => void;
   onSave: (id: string) => void;
   onDetailClick: (item: RequestData) => void;
+  disableActions: boolean;
 }
 
 export default function DesignerRequestItem({
@@ -23,7 +24,8 @@ export default function DesignerRequestItem({
   row,
   onChange,
   onSave,
-  onDetailClick
+  onDetailClick,
+  disableActions
 }: DesignerRequestItemProps) {
   const formatDate = (timestamp: any) => {
     if (!timestamp) return "-";
@@ -86,7 +88,7 @@ export default function DesignerRequestItem({
           type="date"
           value={row.start_dt ?? ""} 
           onChange={(e) => onChange(item.id, "start_dt", e.target.value)}
-          disabled={item.status === "취소" || item.status === "완료"}
+          disabled={disableActions || item.status === "취소" || item.status === "완료"}
         />
       </RequestListDateInputTd>
       <RequestListDateInputTd>
@@ -94,7 +96,7 @@ export default function DesignerRequestItem({
           type="date"
           value={row.end_dt ?? ""}
           onChange={(e) => onChange(item.id, "end_dt", e.target.value)}
-          disabled={item.status === "취소" || item.status === "완료"}
+          disabled={disableActions || item.status === "취소" || item.status === "완료"}
         />
       </RequestListDateInputTd>
       <RequestListTableTd>
@@ -103,14 +105,14 @@ export default function DesignerRequestItem({
           value={row.result_url ?? ""}
           placeholder="산출물 URL을 입력해주세요."
           onChange={(e) => onChange(item.id, "result_url", e.target.value)}
-          disabled={item.status === "취소" || item.status === "완료"}
+          disabled={disableActions || item.status === "취소" || item.status === "완료"}
         />
       </RequestListTableTd>
       <RequestListTableTd>
         <select
           value={uiStatusValue}                            // ← UI 표시값
           onChange={(e) => onChange(item.id, "status", dbFromUiStatus(e.target.value))} // ← DB 저장값
-          disabled={item.status === "취소" || item.status === "완료"}
+          disabled={disableActions || item.status === "취소" || item.status === "완료"}
         >
           {/* 🔧 value를 '대기'로 맞춰서 불일치 해결 (기존 '대기중' → '대기') */}
           <option value="대기">대기</option>
@@ -121,7 +123,7 @@ export default function DesignerRequestItem({
         </select>
       </RequestListTableTd>
       <RequestListTableTd>
-        <SaveButton onClick={() => onSave(item.id)} disabled={item.status === "취소" || item.status === "완료"}>저장</SaveButton>
+        <SaveButton onClick={() => onSave(item.id)} disabled={disableActions || item.status === "취소" || item.status === "완료"}>저장</SaveButton>
       </RequestListTableTd>
     </RequestListTableTr>
   );
@@ -231,7 +233,7 @@ const RequestListTaskTypeWrap = styled.div`
 `;
 
 const RequestListTaskType = styled.span`
-  
+  white-space: nowrap;
 `;
 
 const RequestListTaskTypeDetail = styled.span`
@@ -310,4 +312,11 @@ const SaveButton = styled.button`
   border-radius: 4px;
   background-color: ${({ theme }) => theme.colors.black};
   color: ${({ theme }) => theme.colors.white01};
+  &:disabled {
+    background-color: ${({ theme }) => theme.colors.gray07};
+    color: ${({ theme }) => theme.colors.gray06};
+    border-color: ${({ theme }) => theme.colors.gray06};
+    cursor: default;
+    pointer-events: none;
+  }
 `;

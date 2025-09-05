@@ -3,7 +3,11 @@ import { useSearchParams } from "react-router-dom";
 
 type ViewType = "dashboard" | "myrequestlist" | "allrequestlist" | "inworkhour";
 
-export default function Nav() {
+interface NavProps {
+  userRole: number | null; // 1: 요청자, 2: 디자이너, 3: 담당자(매니저)
+}
+
+export default function Nav({ userRole }: NavProps) {
   const [searchParams, setSearchParams] = useSearchParams(); // ★ 추가
   const view = (searchParams.get("view") || "dashboard") as ViewType; // ★ 추가
 
@@ -15,18 +19,22 @@ export default function Nav() {
     });
   };
 
+  const isManager = userRole === 3;
+
   return (
     <NavFrame>
       <MainMenuList>
-        <MainMenuItem>
-          <MainMenuItemButton 
-            type="button"
-            onClick={() => go("allrequestlist")} // ★ 변경
-            $active={view === "allrequestlist"} // ★ 추가
-          >
-            전체 요청 리스트
-          </MainMenuItemButton>
-        </MainMenuItem>
+        {(!isManager) && ( // ★ 변경: 조건 렌더링
+          <MainMenuItem>
+            <MainMenuItemButton 
+              type="button"
+              onClick={() => go("allrequestlist")}
+              $active={view === "allrequestlist"}
+            >
+              전체 요청 리스트
+            </MainMenuItemButton>
+          </MainMenuItem>
+        )}
         <MainMenuItem>
           <MainMenuItemButton
             type="button"
@@ -45,14 +53,17 @@ export default function Nav() {
             전체 현황
           </MainMenuItemButton>
         </MainMenuItem>
-        <MainMenuItem>
-          <MainMenuItemButton type="button"
-            onClick={() => go("inworkhour")} // ★ 변경
-            $active={view === "inworkhour"} // ★ 추가
-          >
-            내부 공수
-          </MainMenuItemButton>
-        </MainMenuItem>
+        {isManager && ( // ★ 변경: 조건 렌더링
+          <MainMenuItem>
+            <MainMenuItemButton
+              type="button"
+              onClick={() => go("inworkhour")}
+              $active={view === "inworkhour"}
+            >
+              내부 공수
+            </MainMenuItemButton>
+          </MainMenuItem>
+        )}
       </MainMenuList>
     </NavFrame>
   )

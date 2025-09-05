@@ -34,7 +34,7 @@ const Container = styled.div`
   ${({ theme }) => theme.mixin.flex('center', 'space-between')};
   padding: 11.5px 14.5px;
   border: 1px solid ${({ theme }) => theme.colors.gray02};
-  border-radius: 8px;
+  border-radius: 4px;
 
   /* 🔍 아이콘: 버튼 제거하고 래퍼에 ::after로 표시 */
   &::after {

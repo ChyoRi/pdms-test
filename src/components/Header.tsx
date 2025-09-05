@@ -63,7 +63,7 @@ export default function Header() {
     <HeaderElement>
       <LogoWrap>
         <HomePlusLogo src={logo}></HomePlusLogo>
-        <Nav />
+        <Nav userRole={userRole} />
       </LogoWrap>
       <UtilWrap>
         <UserNameWrap><UserName>{userName}</UserName>님({getRoleName(userRole)}) {userCompany}환영합니다.</UserNameWrap>

@@ -6,6 +6,7 @@ import { query, where, collection, onSnapshot, doc, updateDoc, Timestamp, orderB
 import DesignerRequestList from "./DesignerRequestList";
 import MainTitle from "./MainTitle";
 import RequestFilterSearchWrap from "./RequestFilterSearchWrap";
+import DashBoard from "./DashBoard";
 import { makeSearchIndex, matchesQuery } from "../utils/search";
 
 type ViewType = "dashboard" | "myrequestlist" | "allrequestlist" | "inworkhour";
@@ -244,7 +245,10 @@ export default function Designer({ view, setIsDrawerOpen, setDetailData }: Reque
     return isNaN(+dt) ? null : Timestamp.fromDate(dt);
   };
 
+  const actionsDisabled = view === "allrequestlist";
+
   const saveResponse = async (requestId: string) => {
+    if (actionsDisabled) return;
     const row = formData[requestId];
     if (!row) {
       alert("변경된 내용이 없습니다.");
@@ -270,31 +274,23 @@ export default function Designer({ view, setIsDrawerOpen, setDetailData }: Reque
   return (
     <Container>
       <MainTitle />
-      {view === "dashboard" && (
-        <DashBoardWrap>
-          <SummaryBox>
-            <h4>대시보드</h4>
-            <ul>
-              <li>대기: {normalizedRequests.filter(v => (v.status ?? "대기") === "대기").length}</li>
-              <li>진행중: {
-                normalizedRequests.filter(v => {
-                  const s = v.status ?? "대기";
-                  return s === "진행중" || s === "검수요청" || s === "검수중";
-                }).length
-              }</li>
-              <li>완료: {normalizedRequests.filter(v => v.status === "완료").length}</li>
-              <li>취소: {normalizedRequests.filter(v => v.status === "취소").length}</li>
-            </ul>
-          </SummaryBox>
-        </DashBoardWrap>
+      {view === "allrequestlist" && (
+        <MainContentWrap>
+          <RequestFilterSearchWrap roleNumber={2} onApplyStatus={applyStatus} onApplyRange={applyRange} onSearch={applySearch} keyword={keywordInput} onKeywordChange={setKeywordInput}/>
+          <DesignerRequestList requests={viewList} formData={formData} onChange={handleChange} onSave={saveResponse} onDetailClick={openDetail} disableActions={actionsDisabled}/>
+        </MainContentWrap>
       )}
-
       {view === "myrequestlist" && (
-        <MyRequestWrap>
+        <MainContentWrap>
           <DesignerRequestTitle>디자이너 화면</DesignerRequestTitle>
           <RequestFilterSearchWrap roleNumber={2} onApplyStatus={applyStatus} onApplyRange={applyRange} onSearch={applySearch} keyword={keywordInput} onKeywordChange={setKeywordInput}/>
-          <DesignerRequestList requests={viewList} formData={formData} onChange={handleChange} onSave={saveResponse} onDetailClick={openDetail} />
-        </MyRequestWrap>
+          <DesignerRequestList requests={viewList} formData={formData} onChange={handleChange} onSave={saveResponse} onDetailClick={openDetail} disableActions={false}/>
+        </MainContentWrap>
+      )}
+      {view === "dashboard" && (
+        <DashBoardWrap>
+          <DashBoard capacityHoursPerMonth={704} />
+        </DashBoardWrap>
       )}
     </Container>
   )
@@ -302,26 +298,16 @@ export default function Designer({ view, setIsDrawerOpen, setDetailData }: Reque
 
 const Container = styled.div``;
 
-// const AllRequestWrap = styled.div`
-  
-// `;
-
-const MyRequestWrap = styled.div`
+const MainContentWrap = styled.div`
   padding: 0 48px;
 `;
 
 const DashBoardWrap = styled.div`
-  
+  max-height: 766px;
+  padding: 0 48px;
+  overflow: auto;
 `;
 
-const SummaryBox = styled.div`
-  padding: 16px;
-  border: 1px solid ${({ theme }) => theme.colors.gray02};
-  border-radius: 8px;
-  background: ${({ theme }) => theme.colors.gray04};
-  h4 { margin: 0 0 8px 0; }
-  ul { margin: 0; padding-left: 16px; }
-`;
 const DesignerRequestTitle = styled.h2`
   margin-top: 20px;
 `;

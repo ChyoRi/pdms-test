@@ -217,7 +217,7 @@ const InputLike = styled.input`
   width: 100%;
   padding: 11.5px 12px;
   border: 1px solid ${({ theme }) => theme?.colors?.gray02 || "#d0d5dd"};
-  border-radius: 10px;
+  border-radius: 4px;
   font-family: 'Pretendard';
   font-size: 16px;
   cursor: pointer;

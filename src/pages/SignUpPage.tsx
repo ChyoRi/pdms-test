@@ -33,7 +33,7 @@ export default function SignUpPage() {
         await setDoc(doc(db, "users", user.uid), {
           name: nameTrim,
           company: companyTrim,
-          role: 1, // 기본값: 요청자
+          role: 2, // 기본값: 요청자
           createdAt: serverTimestamp(),
         });
       })

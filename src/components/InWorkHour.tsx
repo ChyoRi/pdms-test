@@ -192,12 +192,12 @@ export default function InWorkHour({
           <col style={{ width: '50px' }} /><col style={{ width: '140px' }} />
           <col style={{ width: '70px' }} /><col style={{ width: '70px' }} />
           <col style={{ width: '70px' }} /><col style={{ width: '70px' }} />
-          <col style={{ width: '90px' }} /><col style={{ width: '90px' }} />
-          <col style={{ width: '90px' }} /><col style={{ width: '90px' }} />
-          <col style={{ width: '90px' }} /><col style={{ width: '90px' }} />
-          <col style={{ width: '90px' }} /><col style={{ width: '90px' }} />
-          <col style={{ width: '90px' }} /><col style={{ width: '90px' }} />
-          <col style={{ width: '90px' }} /><col style={{ width: '90px' }} />
+          <col style={{ width: '80px' }} /><col style={{ width: '80px' }} />
+          <col style={{ width: '80px' }} /><col style={{ width: '80px' }} />
+          <col style={{ width: '80px' }} /><col style={{ width: '80px' }} />
+          <col style={{ width: '80px' }} /><col style={{ width: '80px' }} />
+          <col style={{ width: '80px' }} /><col style={{ width: '80px' }} />
+          <col style={{ width: '80px' }} /><col style={{ width: '80px' }} />
           <col style={{ width: '110px' }} />
         </colgroup>
         <thead>
@@ -234,16 +234,16 @@ export default function InWorkHour({
                 <InWorkHourTableTd>{formatMax2(r.usedHours)}</InWorkHourTableTd>
 
                 {r.monthly.map((m, i) => (
-                  <TdTwoLines key={i}>
+                  <InWorkHourTableTd key={i}>
                     <div>{m.rate}%</div>
                     <div>{m.count}</div>
-                  </TdTwoLines>
+                  </InWorkHourTableTd>
                 ))}
 
-                <TdTwoLines>
+                <InWorkHourTableTd>
                   <div>{avgRate.toFixed(0)}%</div>
                   <div>{totalCount}</div>
-                </TdTwoLines>
+                </InWorkHourTableTd>
               </tr>
             );
           })}
@@ -274,6 +274,25 @@ const InWorkHourTable = styled.table`
   font-family: 'Pretendard';
   border-top: 2px solid ${({ theme }) => theme.colors.black};
 
+  thead {
+    tr {
+      &:first-of-type {
+        th:nth-of-type(3) {
+          border-right: 1px solid ${({ theme }) => theme.colors.black};
+        }
+        th:nth-of-type(4) {
+          background-color: ${({ theme }) => theme.colors.pink01};
+        }
+      }
+      &:last-of-type {
+        th:nth-of-type(4) {
+          border-right: 1px solid ${({ theme }) => theme.colors.black};
+        }
+      }
+    }
+  }
+
+
   th, td {
     padding: 8px 10px;
     font-size: 14px;
@@ -288,10 +307,8 @@ const InWorkHourTableTh = styled.th`
     border-left: none;
   }
 
-  &:first-of-type {
-    &:nth-of-type(4) {
-      background-color: ${({ theme }) => theme.colors.pink01};
-    }
+  &:last-of-type {
+    border-right:none;
   }
 
   &:nth-of-type(n + 5):nth-of-type(-n + 16) {
@@ -301,14 +318,17 @@ const InWorkHourTableTh = styled.th`
 
 const InWorkHourTableTd = styled.td`
   text-align: center;
+  font-weight: 500;
 
   &:first-of-type {
     border-left: none;
   }
-`;
 
-const TdTwoLines = styled.td`
-  text-align: center;
-  line-height: 1.1;
-  & > div:first-child { font-weight: 700; } /* 위 줄: 퍼센트 */
+  &:last-of-type {
+    border-right: none;
+  }
+
+  &:nth-of-type(6) {
+    border-right: 1px solid ${({ theme }) => theme.colors.black};
+  }
 `;

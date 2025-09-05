@@ -40,4 +40,6 @@ export default function Main({ userRole, setIsDrawerOpen, setEditData, setDetail
   return <Container>{renderComponent()}</Container>;
 }
 
-const Container = styled.main``;
+const Container = styled.main`
+  height: calc(100% - 64px);
+`;

@@ -3,6 +3,7 @@ import RequesterRequestItem from "./RequesterRequestItem";
 
 interface RequestListProps {
   data: RequestData[];
+  disableActions: boolean;
   onReviewComplete: (id: string) => void;
   onCancel: (id: string) => void;
   onEditClick: (id: string) => void;
@@ -10,7 +11,7 @@ interface RequestListProps {
   onDetailClick: (item: RequestData) => void;
 }
 
-export default function RequesterRequestList({ data, onReviewComplete, onCancel, onEditClick, onDetailClick }: RequestListProps) {
+export default function RequesterRequestList({ data, disableActions, onReviewComplete, onCancel, onEditClick, onDetailClick }: RequestListProps) {
   return (
     <RequestListTableWrap>
       <RequestListTable>
@@ -50,7 +51,7 @@ export default function RequesterRequestList({ data, onReviewComplete, onCancel,
         <tbody>
           {data.length > 0 ? (
             data.map((item, index) => (
-              <RequesterRequestItem key={item.id} index={index + 1} item={item} onReviewComplete={onReviewComplete} onCancel={onCancel} onEditClick={onEditClick} onDetailClick={onDetailClick} />
+              <RequesterRequestItem key={item.id} index={index + 1} item={item} disableActions={disableActions} onReviewComplete={onReviewComplete} onCancel={onCancel} onEditClick={onEditClick} onDetailClick={onDetailClick} />
             ))
           ) : (
             <tr>

@@ -145,7 +145,7 @@ const SelectBox = styled.select`
   margin-right: 8px;
   padding: 13.5px 12px;
   border: 1px solid ${({ theme }) => theme.colors.gray02};
-  border-radius: 8px;
+  border-radius: 4px;
   font-family: 'Pretendard';
   font-size: 16px;
   font-weight: 400;

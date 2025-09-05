@@ -6,6 +6,7 @@ import { collection, onSnapshot, query, where, updateDoc, doc, orderBy, getDoc }
 import RequesterRequestList from "./RequesterRequestList";
 import MainTitle from "./MainTitle";
 import RequestFilterSearchWrap from "./RequestFilterSearchWrap";
+import DashBoard from "./DashBoard";
 import { makeSearchIndex, matchesQuery } from "../utils/search.ts";
 
 type ViewType = "dashboard" | "myrequestlist" | "allrequestlist" | "inworkhour";
@@ -18,6 +19,17 @@ interface RequesterProps {
 }
 
 const DEFAULT_STATUS = "진행 상태 선택";
+
+// ★ 추가: 회사 문자열 변형 세트(공백 trim + 대/소문자 변형)
+const companyVariants = (raw: string) => {
+  const t = (raw ?? "").trim();
+  if (!t) return [] as string[];
+  const lower = t.toLowerCase();
+  const upper = t.toUpperCase();
+  const cap = t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
+  // 중복 제거
+  return Array.from(new Set([t, lower, upper, cap]));
+};
 
 export default function Requester({ view, setIsDrawerOpen, setEditData, setDetailData }: RequesterProps) {
   const [userName, setUserName] = useState("");
@@ -35,18 +47,15 @@ export default function Requester({ view, setIsDrawerOpen, setEditData, setDetai
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) return;
-
-      // 이름: 기존대로 displayName 우선
       if (user.displayName) setUserName(user.displayName);
 
-      // ★ 추가: users/{uid}에서 company 로드
       const uref = doc(db, "users", user.uid);
       const usnap = await getDoc(uref);
       if (usnap.exists()) {
         const data = usnap.data() as any;
-        setUserCompany(data?.company ?? ""); // ← 여기서 company 확보
+        setUserCompany((data?.company ?? "").trim()); // ★ 변경: trim
       } else {
-        setUserCompany(""); // 문서 없으면 대기 상태 유지
+        setUserCompany("");
       }
     });
     return () => unsubscribe();
@@ -54,43 +63,73 @@ export default function Requester({ view, setIsDrawerOpen, setEditData, setDetai
 
   // ✅ 요청자가 보낸 요청만 가져오기
   // 요청 데이터: view에 따라 쿼리 스위칭
+  // ✅ 목록 구독: view/userCompany/userName 변화에 반응
   useEffect(() => {
-  if (view === "dashboard" || view === "inworkhour") {
-    setRequests([]); // 필요 시 초기화
-    return;
-  }
+    // 항상 먼저 비워서 이전 구독 잔상 제거
+    setRequests([]); // ★ 변경: 스테일 데이터 제거
 
-  // ★ 변경: 분기별로 준비 조건 분리
-  if (view === "allrequestlist" && !userCompany) return;
-  if (view === "myrequestlist" && !userName) return;
+    // 대시보드/공수 화면은 이 컴포넌트에서 목록 없음
+    if (view === "dashboard" || view === "inworkhour") {
+      return;
+    }
 
-  let qRef;
-  if (view === "allrequestlist") {
-    // ★ 변경: 같은 회사만 필터 + 정렬 유지 (복합색인 이미 있다고 했으니 그대로 사용)
-    qRef = query(
-      collection(db, "design_request"),
-      where("company", "==", userCompany),
-      orderBy("design_request_id", "desc")
-    );
-  } else if (view === "myrequestlist") { // ★ 기존 그대로 유지
-    qRef = query(
-      collection(db, "design_request"),
-      where("requester", "==", userName),
-      orderBy("design_request_id", "desc")
-    );
-  } else {
-    return; // 안전망
-  }
+    // myrequestlist: 본인이 요청한 것
+    if (view === "myrequestlist") {
+      if (!userName) return;
+      const qRef = query(
+        collection(db, "design_request"),
+        where("requester", "==", userName),
+        orderBy("design_request_id", "desc")
+      );
+      const unsubscribe = onSnapshot(qRef, (snapshot) => {
+        const data = snapshot.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as Omit<RequestData, "id">),
+        }));
+        setRequests(data);
+      });
+      return () => unsubscribe();
+    }
 
-  const unsubscribe = onSnapshot(qRef, (snapshot) => {
-    const data = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...(doc.data() as Omit<RequestData, "id">)
-    }));
-    setRequests(data);
-  });
-  return () => unsubscribe();
-}, [userName, userCompany, view]);
+    // allrequestlist: 같은 회사의 모든 요청
+    if (view === "allrequestlist") {
+      if (!userCompany) return;
+
+      // ★ 추가: 변형값 여러 개를 동시에 구독 → 병합
+      const variants = companyVariants(userCompany);
+      const col = collection(db, "design_request");
+
+      const seen = new Map<string, RequestData>(); // dedup
+      const unsubs: Array<() => void> = [];
+
+      const publish = () => {
+        const arr = Array.from(seen.values()).sort((a: any, b: any) => {
+          // design_request_id가 문자열일 가능성 고려
+          const aa = String(a.design_request_id ?? "");
+          const bb = String(b.design_request_id ?? "");
+          return bb.localeCompare(aa, "en", { numeric: true });
+        });
+        setRequests(arr);
+      };
+
+      variants.forEach((v) => {
+        const qRef = query(
+          col,
+          where("company", "==", v),
+          orderBy("design_request_id", "desc") // ★ 주의: 복합 인덱스 필요할 수 있음
+        );
+        const unsub = onSnapshot(qRef, (snap) => {
+          snap.docs.forEach((d) => {
+            seen.set(d.id, { id: d.id, ...(d.data() as Omit<RequestData, "id">) });
+          });
+          publish();
+        });
+        unsubs.push(unsub);
+      });
+
+      return () => unsubs.forEach((f) => f());
+    }
+  }, [view, userCompany, userName]); // ★ 변경: 의존성 정리
 
   // 필터 적용 콜백 (하위에서 올라옴)
   const applyRange  = (r: { start: Date | null; end: Date | null }) => setDateRange(r); // ⬅️ 추가
@@ -168,9 +207,11 @@ export default function Requester({ view, setIsDrawerOpen, setEditData, setDetai
     });
   }, [prepared, statusFilter, dateRange, keyword]);
 
+  const actionsDisabled = view === "allrequestlist";
 
   // ✅ 검수완료 처리
   const reviewComplete = async (id: string) => {
+    if (actionsDisabled) return;
     await updateDoc(doc(db, "design_request", id), {
       status: "완료",
       requester_review_status: "검수완료"
@@ -186,6 +227,7 @@ export default function Requester({ view, setIsDrawerOpen, setEditData, setDetai
   };
 
   const editRequest = async (id: string) => {
+    if (actionsDisabled) return;
     const docRef = doc(db, "design_request", id);
     await updateDoc(docRef, { requester_edit_state: true });
 
@@ -205,6 +247,7 @@ export default function Requester({ view, setIsDrawerOpen, setEditData, setDetai
 
   // ✅ 취소 처리
   const cancelRequest = async (id: string) => {
+    if (actionsDisabled) return;
     await updateDoc(doc(db, "design_request", id), {
       status: "취소"
     });
@@ -220,23 +263,15 @@ export default function Requester({ view, setIsDrawerOpen, setEditData, setDetai
     <>
       <MainTitle />
       {view === "dashboard" && (
-        <MainContentWrap>
-          <SummaryBox>
-            <h4>대시보드</h4>
-            <ul>
-              <li>대기: {prepared.filter(v => v.status === "대기" || v.status === "대기중").length}</li>
-              <li>진행중: {prepared.filter(v => v.status === "진행중" || v.requester_review_status === "검수요청").length}</li>
-              <li>완료: {prepared.filter(v => v.status === "완료").length}</li>
-              <li>취소: {prepared.filter(v => v.status === "취소").length}</li>
-            </ul>
-          </SummaryBox>
-        </MainContentWrap>
+        <DashBoardWrap>
+          <DashBoard capacityHoursPerMonth={704} />
+        </DashBoardWrap>
       )}
 
       {view === "allrequestlist" && (
         <MainContentWrap>
           <RequestFilterSearchWrap
-            roleNumber={3} // ★ 변경: 전체 조회니까 매니저 필터와 동일 UI가 어울리면 3, 아니면 1 유지
+            roleNumber={1} // ★ 변경: 전체 조회니까 매니저 필터와 동일 UI가 어울리면 3, 아니면 1 유지
             onApplyStatus={applyStatus}
             onApplyRange={applyRange}
             onSearch={applySearch}
@@ -245,6 +280,7 @@ export default function Requester({ view, setIsDrawerOpen, setEditData, setDetai
           />
           <RequesterRequestList
             data={viewList}
+            disableActions={actionsDisabled}
             onReviewComplete={reviewComplete}
             onCancel={cancelRequest}
             onEditClick={editRequest}
@@ -256,7 +292,7 @@ export default function Requester({ view, setIsDrawerOpen, setEditData, setDetai
       {view === "myrequestlist" && (
         <MainContentWrap>
           <RequestFilterSearchWrap roleNumber={1} onApplyStatus={applyStatus} onApplyRange={applyRange} onSearch={applySearch} keyword={keywordInput} onKeywordChange={setKeywordInput}/>
-          <RequesterRequestList data={viewList} onReviewComplete={reviewComplete} onCancel={cancelRequest} onEditClick={editRequest} onDetailClick={openDetail} />
+          <RequesterRequestList data={viewList} disableActions={false} onReviewComplete={reviewComplete} onCancel={cancelRequest} onEditClick={editRequest} onDetailClick={openDetail} />
         </MainContentWrap>
       )}
     </>
@@ -267,11 +303,8 @@ const MainContentWrap = styled.div`
   padding: 0 48px;
 `;
 
-const SummaryBox = styled.div`
-  padding: 16px;
-  border: 1px solid ${({ theme }) => theme.colors.gray02};
-  border-radius: 8px;
-  background: ${({ theme }) => theme.colors.gray04};
-  h4 { margin: 0 0 8px 0; }
-  ul { margin: 0; padding-left: 16px; }
+const DashBoardWrap = styled.div`
+  max-height: 766px;
+  padding: 0 48px;
+  overflow: auto;
 `;

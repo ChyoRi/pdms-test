@@ -15,6 +15,7 @@ interface DesignerRequestListProps {
   onChange: (requestId: string, field: string, value: string) => void;
   onSave: (requestId: string) => void;
   onDetailClick: (item: RequestData) => void;
+  disableActions: boolean;
 }
 
 export default function DesignerRequestList({
@@ -22,7 +23,8 @@ export default function DesignerRequestList({
   onChange,
   formData,
   onSave,
-  onDetailClick
+  onDetailClick,
+  disableActions
 }: DesignerRequestListProps) {
   return (
     <RequestListTableWrap>
@@ -71,6 +73,7 @@ export default function DesignerRequestList({
                 onChange={onChange}
                 onSave={onSave}
                 onDetailClick={onDetailClick}
+                disableActions={disableActions}
               />
             ))
           ) : (
