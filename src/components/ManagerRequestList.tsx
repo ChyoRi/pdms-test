@@ -104,15 +104,16 @@ export default function ManagerRequestList({
 }
 
 const RequestListTableWrap = styled.div`
+  position: relative;
   max-height: 535px;
+  border-top: 2px solid ${({ theme }) => theme.colors.black};
   overflow-y: auto;
   scrollbar-width: thin;
-`
+`;
 
 const RequestListTable = styled.table`
   table-layout: fixed;
   width: 100%;
-  border-top: 2px solid ${({ theme }) => theme.colors.black};
   text-align: center;
 `;
 
@@ -126,6 +127,8 @@ const RequestListTableCaption = styled.caption`
 `;
 
 const RequestListTableTh = styled.th`
+  position: sticky;
+  top: -2px;
   line-height: 16px;
   padding: 13px 0;
   border-bottom: none;
@@ -133,6 +136,7 @@ const RequestListTableTh = styled.th`
   font-size: 14px;
   font-weight: 700;
   background-color: ${({ theme }) => theme.colors.gray08};
+  z-index: 10;
 
   &:first-of-type {
     border-left: none;

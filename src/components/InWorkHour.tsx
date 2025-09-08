@@ -173,11 +173,16 @@ export default function InWorkHour({
   // 연평균/연총건수 계산
   const computed = useMemo(() => {
     return rows.map((r, i) => {
-      const avgRate = r.monthly.length
-        ? r.monthly.reduce((s, m) => s + m.rate, 0) / r.monthly.length
+      // 건수 있는 달만 활성 월로 간주
+      const activeMonths = r.monthly.filter(m => m.count > 0);
+      const avgRate = activeMonths.length
+        ? activeMonths.reduce((s, m) => s + m.rate, 0) / activeMonths.length
         : 0;
+
       const totalCount = r.monthly.reduce((s, m) => s + m.count, 0);
-      return { index: i + 1, avgRate, totalCount };
+
+      // 필요하면 activeMonths.length를 화면에 보여줄 수도 있음
+      return { index: i + 1, avgRate, totalCount /*, denom: activeMonths.length*/ };
     });
   }, [rows]);
 

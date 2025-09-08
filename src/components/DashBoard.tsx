@@ -16,6 +16,10 @@ type RD = RequestData;
 
 // ───────── Logic helpers ─────────
 const COLORS = ["#4e79a7","#59a14f","#9c755f","#edc949","#e15759","#76b7b2","#f28e2b","#af7aa1","#ff9da7","#bab0ab"];
+const CAPACITY_BY_COMPANY = {
+  homeplus: 704,
+  nsmall: 812,
+} as const;
 const companyKey = (v: any) => String(v ?? "").replace(/\s+/g, "").toLowerCase();
 const isHomeplus = (r: RD) => companyKey(r.company) === "homeplus";
 const isNSmall   = (r: RD) => companyKey(r.company) === "nsmall" || companyKey(r.company) === "n-small";
@@ -152,8 +156,25 @@ export default function DashBoard({ capacityHoursPerMonth }: Props) {
   // KPI
   const totalRequests = monthRows.length;
   const producedCount = monthRows.filter(r => normalizeStatus(r.status) === "완료").length;
-  const usedHours = sum(monthRows.map(r => Number(r.in_work_hour) || 0));
-  const availHours = capacityHoursPerMonth ?? 0;
+  const usedHours = sum(
+    monthRows
+      .filter(r => normalizeStatus(r.status) !== "취소")
+      .map(r => Number(r.out_work_hour) || 0)
+  );
+  const availHours = useMemo(() => {
+    if (effectiveMode === "all") {
+      return CAPACITY_BY_COMPANY.homeplus + CAPACITY_BY_COMPANY.nsmall; // 704 + 812
+    }
+    if (effectiveMode === "homeplus") {
+      // Homeplus만 prop를 허용(없으면 기본 704)
+      return capacityHoursPerMonth ?? CAPACITY_BY_COMPANY.homeplus;
+    }
+    if (effectiveMode === "nsmall") {
+      // NSmall은 812 고정
+      return CAPACITY_BY_COMPANY.nsmall;
+    }
+    return 0;
+  }, [effectiveMode, capacityHoursPerMonth]);
   const usedRatio = availHours ? Math.round((usedHours/availHours)*100) : 0;
 
   const usedHoursDisplay = usedHours.toLocaleString(undefined, {
@@ -235,22 +256,21 @@ export default function DashBoard({ capacityHoursPerMonth }: Props) {
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          layout: { padding: { top: 4 } },               // 살짝 여백
+          layout: { padding: { top: 4 } },
           scales: {
             y: {
               beginAtZero: true,
               ticks: { precision: 0, font: { size: 14 } },
-              grace: "15%",                               // ★ 상단에 15% 여유
-              // (대안) suggestedMax: Math.max(1, ...statusArr.map(d=>d.value)) + 1
+              grace: "15%",
             }
           },
           plugins: {
             legend: { display: false },
             datalabels: {
               anchor: "end",
-              align: "end",                               // 막대 위에 표시
-              offset: 4,                                  // ★ 약간 띄우기
-              clip: false,                                // ★ 차트 영역 밖도 보이게
+              align: "end",
+              offset: 4,
+              clip: false,
               font: { size: 14 },
               formatter: (v:number)=> (v>0 ? v : "")
             },

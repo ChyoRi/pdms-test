@@ -271,7 +271,7 @@ export default function Requester({ view, setIsDrawerOpen, setEditData, setDetai
       {view === "allrequestlist" && (
         <MainContentWrap>
           <RequestFilterSearchWrap
-            roleNumber={1} // ★ 변경: 전체 조회니까 매니저 필터와 동일 UI가 어울리면 3, 아니면 1 유지
+            roleNumber={1}
             onApplyStatus={applyStatus}
             onApplyRange={applyRange}
             onSearch={applySearch}

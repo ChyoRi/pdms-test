@@ -2,6 +2,7 @@ import styled from "styled-components"
 import asideLogo from "../assets/aside-logo.svg"
 import myrequestIcon from "../assets/myrequest-icon.svg"
 import MyRequestItem from "../components/MyRequestItem"
+import Footer from "./Footer"
 
 interface RequestData {
   status?: string;
@@ -96,34 +97,43 @@ export default function Aside({ requests, role, userName, onRequestButtonClick }
 
   return (
     <AsideFrame>
-      <AsideLogoWrap>
-        <AsideLogo src={asideLogo} />
-        <AsideTitle>업무 관리시스템</AsideTitle>
-      </AsideLogoWrap>
-      {role === 1 && (
-        <RequestFormButtonWrap>
-          <RequestFormButton onClick={onRequestButtonClick}>디자인 요청 등록</RequestFormButton>
-        </RequestFormButtonWrap>
-      )}
-      <MyRequestWrap>
-        <MyRequestTitleWrap>
-          <MyRequestIcon src={myrequestIcon} />
-          <MyRequestTitle>{getRoleTitle(role, userName)}</MyRequestTitle>
-        </MyRequestTitleWrap>
-        <MyRequestList>
-          {statusList.map((item) => (
-            <MyRequestItem key={item.status} item={item} />
-          ))}
-        </MyRequestList>
-      </MyRequestWrap>
+      <AsideTopFrame>
+        <AsideLogoWrap>
+          <AsideLogo src={asideLogo} />
+          <AsideTitle>업무 관리시스템</AsideTitle>
+        </AsideLogoWrap>
+        {role === 1 && (
+          <RequestFormButtonWrap>
+            <RequestFormButton onClick={onRequestButtonClick}>디자인 요청 등록</RequestFormButton>
+          </RequestFormButtonWrap>
+        )}
+        <MyRequestWrap>
+          <MyRequestTitleWrap>
+            <MyRequestIcon src={myrequestIcon} />
+            <MyRequestTitle>{getRoleTitle(role, userName)}</MyRequestTitle>
+          </MyRequestTitleWrap>
+          <MyRequestList>
+            {statusList.map((item) => (
+              <MyRequestItem key={item.status} item={item} />
+            ))}
+          </MyRequestList>
+        </MyRequestWrap>
+      </AsideTopFrame>
+      <Footer />
     </AsideFrame>
   )
 }
 
 const AsideFrame = styled.aside`
+  ${({ theme }) => theme.mixin.flex('', 'space-between')};
+  flex-direction: column;
   width: 240px;
   height: 100%;
   border-right: 1px solid ${({ theme }) => theme.colors.black};
+`;
+
+const AsideTopFrame = styled.div`
+  
 `;
 
 const AsideLogoWrap = styled.div`

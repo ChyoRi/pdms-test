@@ -84,6 +84,7 @@ const MainMenuItem = styled.li`
 const MainMenuItemButton = styled.button<{ $active?: boolean }>`
   color: ${({ theme, $active }) => ($active ? theme.colors.white01 : theme.colors.gray02)};
   font-family: 'Pretendard';
+  font-size: 15px;
   font-weight: 500;
   
   &:hover {

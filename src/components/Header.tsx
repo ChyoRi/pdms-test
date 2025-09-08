@@ -1,11 +1,15 @@
 import styled from "styled-components";
-import logo from "../assets/logo.svg";
-import { useEffect, useState } from "react";
+import homeplus from "../assets/homeplus-logo.svg";
+import nsmall from "../assets/nsmall-logo.svg";
+import { useEffect, useState, useMemo } from "react";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { auth, db } from "../firebaseconfig";
 import { doc, getDoc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import Nav from "./Nav";
+
+const COMPANY = { HOMEPLUS: "homeplus", NSMALL: "nsmall" } as const;
+type CompanyKind = "homeplus" | "nsmall" | null;
 
 export default function Header() {
   const [userName, setUserName] = useState("");
@@ -59,12 +63,31 @@ export default function Header() {
     }
   };
 
+  // 회사 종류
+  const companyKind: CompanyKind = useMemo(() => {
+    const k = String(userCompany ?? "").trim().replace(/\s+/g, "").toLowerCase();
+    if (k === "homeplus") return COMPANY.HOMEPLUS;
+    if (k === "nsmall" || k === "n-small") return COMPANY.NSMALL;
+    return null; // pushcomz 포함 비노출
+  }, [userCompany]);
+
+  // 로고 소스
+  const logoSrc = companyKind === "homeplus" ? homeplus
+                 : companyKind === "nsmall" ? nsmall
+                 : null;
+
+  const hasLogo = !!logoSrc;
+
   return (
     <HeaderElement>
-      <LogoWrap>
-        <HomePlusLogo src={logo}></HomePlusLogo>
+      <LogoFrame $hasLogo={hasLogo}>
+        {hasLogo && (
+          <LogoWrap>
+            <Logo src={logoSrc!} alt="company logo" />
+          </LogoWrap>
+        )}
         <Nav userRole={userRole} />
-      </LogoWrap>
+      </LogoFrame>
       <UtilWrap>
         <UserNameWrap><UserName>{userName}</UserName>님({getRoleName(userRole)}) {userCompany}환영합니다.</UserNameWrap>
         <LogoutButton onClick={logout}>로그아웃</LogoutButton>
@@ -76,17 +99,25 @@ export default function Header() {
 
 const HeaderElement = styled.header`
   ${({ theme }) => theme.mixin.flex('center', 'space-between')};
-  padding: 12px 48px;
+  height: 64px;
+  padding: 0 48px;
   font-family: 'Pretendard';
   background-color: ${({ theme }) => theme.colors.black};
 `;
 
-const LogoWrap = styled.div`
+const LogoFrame = styled.div<{ $hasLogo: boolean }>`
   ${({ theme }) => theme.mixin.flex('center')};
-  gap: 0 10px;
+  gap: ${({ $hasLogo }) => ($hasLogo ? "0 10px" : "0")};
 `
 
-const HomePlusLogo = styled.img``;
+const LogoWrap = styled.div`
+  width: 120px;
+`;
+
+const Logo = styled.img`
+  width: 100%;
+  vertical-align: sub;
+`;
 
 const UtilWrap = styled.div``;
 
