@@ -15,7 +15,7 @@ Chart.register(...registerables, ChartDataLabels);
 type RD = RequestData;
 
 // ───────── Logic helpers ─────────
-const COLORS = ["#4e79a7","#59a14f","#9c755f","#edc949","#e15759","#76b7b2","#f28e2b","#af7aa1","#ff9da7","#bab0ab"];
+const COLORS = ["#4e79a7","#ff9da7","#59a14f","#9c755f","#edc949","#e15759","#76b7b2","#f28e2b","#af7aa1","#bab0ab"];
 const CAPACITY_BY_COMPANY = {
   homeplus: 704,
   nsmall: 812,
@@ -287,7 +287,7 @@ export default function DashBoard({ capacityHoursPerMonth }: Props) {
         type: "bar",
         data: {
           labels: formArr.map(d=>d.name),
-          datasets: [{ label:"건수", data: formArr.map(d=>d.value) }],
+          datasets: [{ label:"건수", data: formArr.map(d=>d.value), backgroundColor: "rgba(255, 157, 167, 0.6)" }],
         },
         options: {
           responsive: true,

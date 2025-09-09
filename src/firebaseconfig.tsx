@@ -1,18 +1,21 @@
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApp, getApps } from "firebase/app";
+import type { FirebaseOptions } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 
-const firebaseConfig = {
-  apiKey: "AIzaSyDPpncxsw6-M6CvwfqvDFCOXgnUuHXo44o",
-  authDomain: "pdms-eda37.firebaseapp.com",
-  projectId: "pdms-eda37",
-  storageBucket: "pdms-eda37.firebasestorage.app",
-  messagingSenderId: "62711519276",
-  appId: "1:62711519276:web:1d66a26228c184d135d989"
-};
+/** base64 → JSON 파서 */
+function parseCfgFromB64(b64: string | undefined): FirebaseOptions {
+  if (!b64) throw new Error("[ENV] Missing VITE_FB_CFG_B64");
+  // atob는 브라우저 내장
+  const json = atob(b64.replace(/\s+/g, "")); // 혹시 줄바꿈이 들어가도 대비
+  return JSON.parse(json) as FirebaseOptions;
+}
 
-const app = initializeApp(firebaseConfig);
-const firestore = getFirestore(app);
-const db = getFirestore(app);
-const auth = getAuth(app);
-export { firestore, auth, db }
+const firebaseConfig = parseCfgFromB64(import.meta.env.VITE_FB_CFG_B64);
+
+const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+
+export const db = getFirestore(app);
+export const firestore = db; // 기존 호환
+export const auth = getAuth(app);
+export { app };

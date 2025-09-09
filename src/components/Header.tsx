@@ -2,11 +2,12 @@ import styled from "styled-components";
 import homeplus from "../assets/homeplus-logo.svg";
 import nsmall from "../assets/nsmall-logo.svg";
 import { useEffect, useState, useMemo } from "react";
-import { onAuthStateChanged, signOut } from "firebase/auth";
+import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "../firebaseconfig";
 import { doc, getDoc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import Nav from "./Nav";
+import { logoutAll } from "../utils/authClient"; // ★ 추가
 
 const COMPANY = { HOMEPLUS: "homeplus", NSMALL: "nsmall" } as const;
 type CompanyKind = "homeplus" | "nsmall" | null;
@@ -44,15 +45,14 @@ export default function Header() {
     return () => unsubscribe(); // 컴포넌트 언마운트 시 리스너 해제
   }, []);
 
-  const logout = () => {
-    signOut(auth)
-    .then(() => {
-      navigate("/"); // ✅ 로그아웃 후 로그인 페이지 이동
-    })
-    .catch((error) => {
+  const logout = async () => {
+    try {
+      await logoutAll(auth);  // ★ 쿠키 제거 + Firebase signOut
+      navigate("/");
+    } catch (error: any) {
       alert("로그아웃 중 오류가 발생했습니다: " + error.message);
-    });
-  }
+    }
+  };
 
   const getRoleName = (role: number | null) => {
     switch (role) {

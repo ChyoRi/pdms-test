@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled from "styled-components";
-import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../firebaseconfig";
+import { loginWithRemember } from "../utils/authClient";
 
 
 interface LoginPageProps {
@@ -12,22 +12,22 @@ interface LoginPageProps {
 export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [remember, setRemember] = useState(true);
   const navigate = useNavigate();
 
   const moveSignUp = () => {
     navigate('/signup');
   }
 
-  const login = () => {
-    signInWithEmailAndPassword(auth, email, password)
-    .then(() => {
-      onLoginSuccess();  // ✅ App.tsx에서 isAuthenticated = true
-      navigate('/main'); // ✅ 로그인 후 이동
-    })
-    .catch((err) => {
+  const login = async () => {
+    try {
+      await loginWithRemember(auth, email, password, remember); // ★ 변경
+      onLoginSuccess();
+      navigate('/main');
+    } catch (err: any) {
       alert("로그인 실패: " + err.message);
-    });
-  }
+    }
+  };
 
   return (
     <Container>
@@ -39,6 +39,12 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
         <LoginWrap>
           <Id_input type="text" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="이메일을 입력해주세요." />
           <Pw_input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="비밀번호를 입력해주세요." />
+          <RememberRow>
+            <label>
+              <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+              <span> 이 기기에서 로그인 유지</span>
+            </label>
+          </RememberRow>
         </LoginWrap>
         <LoginButton onClick={login}>로그인</LoginButton>
         <SignUpWrap>
@@ -108,6 +114,14 @@ const Pw_input = styled.input`
   font-size: 14px;
   line-height: 20px;
   color: #333;
+`;
+
+// ★ 추가
+const RememberRow = styled.div`
+  width: 460px;
+  margin-top: 10px;
+  color: #555;
+  font-size: 13px;
 `;
 
 const LoginButton = styled.button`
