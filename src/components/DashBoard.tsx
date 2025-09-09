@@ -158,7 +158,6 @@ export default function DashBoard({ capacityHoursPerMonth }: Props) {
   const producedCount = monthRows.filter(r => normalizeStatus(r.status) === "완료").length;
   const usedHours = sum(
     monthRows
-      .filter(r => normalizeStatus(r.status) !== "취소")
       .map(r => Number(r.out_work_hour) || 0)
   );
   const availHours = useMemo(() => {
