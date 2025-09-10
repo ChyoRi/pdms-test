@@ -23,6 +23,95 @@ const DEFAULT_STATUS = "진행 상태 선택";
 const DEFAULT_REQUESTER = "요청자 선택";
 const DEFAULT_DESIGNER = "디자이너 선택";
 
+const norm = (v: any) => String(v ?? "").trim();
+
+async function lookupTimesExact(
+  col: string,
+  fTask: string,
+  fDetail: string,
+  fTimes: string,
+  task: string,
+  detail: string
+): Promise<number | null> {
+  const qRef = query(
+    collection(db, col),
+    where(fTask, "==", task),
+    where(fDetail, "==", detail)
+  );
+  const snap = await getDocs(qRef);
+  if (!snap.empty) {
+    const n = Number((snap.docs[0].data() as any)[fTimes]);
+    return Number.isFinite(n) ? n : 1;
+  }
+  return null;
+}
+
+async function lookupTimesByTaskOnly(
+  col: string,
+  fTask: string,
+  fTimes: string,
+  task: string
+): Promise<number | null> {
+  const qRef = query(collection(db, col), where(fTask, "==", task));
+  const snap = await getDocs(qRef);
+  if (!snap.empty) {
+    const n = Number((snap.docs[0].data() as any)[fTimes]);
+    return Number.isFinite(n) ? n : 1;
+  }
+  return null;
+}
+
+// 회사/필드 기준으로 times(배율)만 정확 매칭해서 가져오기
+async function getWorkTimesForRequest(req: RequestData): Promise<number> {
+  const company = norm((req as any).company).toLowerCase();
+
+  // 1) NSmall → task_type + task_type_detail 일치
+  if (company === "nsmall") {
+    const qRef = query(
+      collection(db, "nsmall_task_work_hour"),
+      where("nsmall_task_type", "==", norm((req as any).task_type)),
+      where("nsmall_task_type_detail", "==", norm((req as any).task_type_detail))
+    );
+    const snap = await getDocs(qRef);
+    if (!snap.empty) {
+      const data = snap.docs[0].data() as any;
+      const times = Number(data.nsmall_task_work_times);
+      return Number.isFinite(times) ? times : 1;
+    }
+    return 1; // 못 찾으면 1
+  }
+
+  // 2) Homeplus → task_form + task_type 일치
+  if (company === "homeplus") {
+    const qRef = query(
+      collection(db, "homeplus_task_work_hour"),
+      where("homeplus_task_form", "==", norm((req as any).task_form)),
+      where("homeplus_task_type", "==", norm((req as any).task_type))
+    );
+    const snap = await getDocs(qRef);
+    if (!snap.empty) {
+      const data = snap.docs[0].data() as any;
+      const times = Number(data.homeplus_task_work_times);
+      return Number.isFinite(times) ? times : 1;
+    }
+    return 1;
+  }
+
+  // 3) 기타 회사일 때만 기존 공용 테이블 폴백
+  const fbSnap = await getDocs(
+    query(
+      collection(db, "task_work_hour"),
+      where("task_form", "==", norm((req as any).task_form)),
+      where("task_type", "==", norm((req as any).task_type))
+    )
+  );
+  if (!fbSnap.empty) {
+    const times = Number((fbSnap.docs[0].data() as any).task_work_times);
+    return Number.isFinite(times) ? times : 1;
+  }
+  return 1;
+}
+
 export default function Manager({ view, setIsDrawerOpen, setDetailData }: RequesterProps) {
   const [requests, setRequests] = useState<RequestData[]>([]);
   const [designerList, setDesignerList] = useState<any[]>([]);
@@ -283,52 +372,43 @@ export default function Manager({ view, setIsDrawerOpen, setDetailData }: Reques
    * - 저장 후 work_hour_edit_state = false
    */
   const saveWorkHour = async (requestId: string) => {
-    const req = requests.find((r) => r.id === requestId);
-    if (!req) return;
+  const req = requests.find((r) => r.id === requestId);
+  if (!req) return;
 
-    const raw = (workHours[requestId] ?? "").trim();
-    const input = Number(raw.replace(",", "."));
-    if (!Number.isFinite(input) || input < 0) {
-      alert("유효한 공수를 입력하세요.");
-      return;
-    }
+  const raw = (workHours[requestId] ?? "").trim();
+  const input = Number(raw.replace(",", "."));
+  if (!Number.isFinite(input) || input < 0) {
+    alert("유효한 공수를 입력하세요.");
+    return;
+  }
 
-    // 배율 조회 (task_work_times)
-    const twQuery = query(
-      collection(db, "task_work_hour"),
-      where("task_form", "==", req.task_form),
-      where("task_type", "==", req.task_type)
-    );
-    const twSnap = await getDocs(twQuery);
-    let multiplier = 1;
-    if (!twSnap.empty) {
-      const found = twSnap.docs[0].data() as any;
-      multiplier = Number(found.task_work_times) || 1;
-    }
+  // ⬇ 배율을 회사/업무타입 기준으로 조회
+  const multiplier = await getWorkTimesForRequest(req);
 
-    const computedIn = Number((input * multiplier).toFixed(2));
+  // 소수 오차 최소화(최대 3자리 유지)
+  const computedIn = Math.round(input * multiplier * 1000) / 1000;
 
-    await updateDoc(doc(db, "design_request", requestId), {
-      out_work_hour: input,       // ⬅ 입력값 그대로
-      in_work_hour: computedIn,   // ⬅ 계산값
-      work_hour_edit_state: false,
-    });
+  await updateDoc(doc(db, "design_request", requestId), {
+    out_work_hour: input,        // 매니저 입력값 그대로
+    in_work_hour: computedIn,    // 회사별 배율 적용 값
+    work_hour_edit_state: false,
+  });
 
-    setRequests((prev) =>
-      prev.map((r) =>
-        r.id === requestId
-          ? {
-              ...r,
-              out_work_hour: input,
-              in_work_hour: computedIn,
-              work_hour_edit_state: false,
-            }
-          : r
-      )
-    );
+  setRequests((prev) =>
+    prev.map((r) =>
+      r.id === requestId
+        ? {
+            ...r,
+            out_work_hour: input,
+            in_work_hour: computedIn,
+            work_hour_edit_state: false,
+          }
+        : r
+    )
+  );
 
-    alert("공수 수정 완료");
-  };
+  alert("공수 수정 완료");
+};
 
   const handleExportCSV = async () => {
     setExporting(true);

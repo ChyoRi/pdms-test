@@ -32,7 +32,7 @@ export default function App() {
   if (!booted) return null;
 
   return (
-    <Router basename="/pdms-test">
+    <Router>
       <Routes>
         {/* 이미 로그인되어 있으면 / → /main 으로 우회 */}
         <Route

@@ -56,6 +56,7 @@ export default function ManagerRequestItem({
   };
 
   const isEditingWorkHour = !!item.work_hour_edit_state;
+  const isDoneOrCanceled = item.status === "취소" || item.status === "완료";
 
    // 스코프를 벗어나는 blur만 취소로 처리
   const handleScopeBlur = useCallback(
@@ -152,16 +153,17 @@ export default function ManagerRequestItem({
               value={workHourValue}
               onChange={(e) => onChangeWorkHour(e.target.value)}
               onClick={(e) => e.stopPropagation()}
-              disabled={item.status === "취소"}
+              disabled={isDoneOrCanceled}
               autoFocus
             />
             <WorkHourSaveButton
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
+                if (isDoneOrCanceled) return;
                 onSaveWorkHour();
               }}
-              disabled={item.status === "취소"}
+              disabled={isDoneOrCanceled}
             >
               수정
             </WorkHourSaveButton>
@@ -172,9 +174,11 @@ export default function ManagerRequestItem({
               tabIndex={0}
               onClick={(e) => {
                 e.stopPropagation();
+                if (isDoneOrCanceled) return;
                 onStartEditWorkHour();
               }}
               onKeyDown={(e) => {
+                if (isDoneOrCanceled) return;
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
                   onStartEditWorkHour();
