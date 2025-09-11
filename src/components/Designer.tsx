@@ -48,6 +48,7 @@ type RowForm = {
 };
 
 const DEFAULT_STATUS = "진행 상태 선택";
+const DEFAULT_COMPANY = "회사 선택";
 
 export default function Designer({ view, setIsDrawerOpen, setDetailData }: RequesterProps) {
   const [assignedRequests, setAssignedRequests] = useState<DesignRequest[]>([]);
@@ -55,10 +56,14 @@ export default function Designer({ view, setIsDrawerOpen, setDetailData }: Reque
   const [formData, setFormData] = useState<{ [key: string]: RowForm  }>({});
   const [statusFilter, setStatusFilter] = useState<string>("진행 상태 선택");
   const [dateRange, setDateRange] = useState<{ start: Date | null; end: Date | null }>({ start: null, end: null });
+  const [companyOptions, setCompanyOptions] = useState<string[]>([]);
+  const [companyFilter, setCompanyFilter] = useState<string>(DEFAULT_COMPANY);
 
   // 🔍 검색: 입력값과 적용값 분리
   const [keywordInput, setKeywordInput] = useState<string>(""); // 인풋 바인딩(타이핑용)
   const [keyword, setKeyword] = useState<string>("");           // 검색 버튼 클릭 시에만 적용
+
+  const lockOthers = view === "allrequestlist";
 
   // ✅ 로그인 디자이너 이름 가져오기
   useEffect(() => {
@@ -94,9 +99,23 @@ export default function Designer({ view, setIsDrawerOpen, setDetailData }: Reque
     return () => unsubscribe();
   }, [designerName, view]);
 
+  // 회사 옵션(users.company에서 수집) — 제외 처리는 RequestFilter에서 함
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, "users"), (snap) => {
+      const set = new Set<string>();
+      snap.forEach((d) => {
+        const name = String((d.data() as any).company ?? "").trim();
+        if (name) set.add(name);
+      });
+      setCompanyOptions(Array.from(set).sort());
+    });
+    return () => unsub();
+  }, []);
+
   // 필터 적용 콜백 (하위에서 올라옴)
   const applyRange  = (r: { start: Date | null; end: Date | null }) => setDateRange(r); // ⬅️ 추가
   const applyStatus = (status: string) => setStatusFilter(status);
+  const applyCompany = (name: string) => setCompanyFilter(name);
 
   // ▼ 헬퍼: 요청일 가져오기 (Timestamp | string | Date 모두 대응)
   const toMidnight = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -176,7 +195,7 @@ export default function Designer({ view, setIsDrawerOpen, setDetailData }: Reque
     });
   }, [normalizedRequests]);
 
-  // ⭐ 화면에 보여줄 리스트
+  // 최종 표시 리스트 (상태 + 회사 + 기간 + 검색)
   const viewList = useMemo(() => {
     const s = dateRange.start ? toMidnight(dateRange.start) : null;
     const e = dateRange.end ? toMidnight(dateRange.end) : null;
@@ -184,26 +203,26 @@ export default function Designer({ view, setIsDrawerOpen, setDetailData }: Reque
     return preparedNormalized.filter((r: any) => {
       let ok = true;
 
-      // 1) 상태(표시값 기준) 필터
-      if (statusFilter && statusFilter !== DEFAULT_STATUS) {
+      // 1) 상태(표시값 기준)
+      if (ok && statusFilter && statusFilter !== DEFAULT_STATUS) {
         if (mapStatusForDesigner(r.status) !== statusFilter) ok = false;
       }
 
-      // 2) 날짜 필터
+      // 2) 회사 (정확 일치)
+      if (ok && companyFilter !== DEFAULT_COMPANY && String(r.company) !== companyFilter) ok = false;
+
+      // 3) 날짜
       if (ok && s && e) {
-        const rd =
-          parseLoose(r.request_date) ||
-          parseLoose(r.requested_at) ||
-          parseLoose(r.requestDate);
+        const rd = parseLoose(r.request_date) || parseLoose(r.requested_at) || parseLoose(r.requestDate);
         if (!rd || rd < s || rd > e) ok = false;
       }
 
-      // 3) 검색(문서번호 + 작업항목 / 초성 + 일반)
+      // 4) 검색(문서번호 + 작업항목)
       if (ok && keyword && !matchesQuery(r, keyword)) ok = false;
 
       return ok;
     });
-  }, [preparedNormalized, statusFilter, dateRange, keyword]);
+  }, [preparedNormalized, statusFilter, companyFilter, dateRange, keyword]);
 
   // 🔍 검색 버튼 클릭 시 적용
   const applySearch = (kw: string) => setKeyword(kw);
@@ -247,8 +266,17 @@ export default function Designer({ view, setIsDrawerOpen, setDetailData }: Reque
 
   const actionsDisabled = view === "allrequestlist";
 
+  // 행별 권한 체크(완료/취소는 항상 불가, 전체 목록에서는 본인 배정만 허용)
+  const canMutate = (id: string) => {
+    const row = assignedRequests.find(r => r.id === id);
+    if (!row) return false;
+    if (row.status === "완료" || row.status === "취소") return false;
+    if (view === "allrequestlist" && row.assigned_designer !== designerName) return false;
+    return true;
+  };
+
   const saveResponse = async (requestId: string) => {
-    if (actionsDisabled) return;
+    if (!canMutate(requestId)) return;
     const row = formData[requestId];
     if (!row) {
       alert("변경된 내용이 없습니다.");
@@ -276,14 +304,14 @@ export default function Designer({ view, setIsDrawerOpen, setDetailData }: Reque
       <MainTitle />
       {view === "allrequestlist" && (
         <MainContentWrap>
-          <RequestFilterSearchWrap roleNumber={2} onApplyStatus={applyStatus} onApplyRange={applyRange} onSearch={applySearch} keyword={keywordInput} onKeywordChange={setKeywordInput}/>
-          <DesignerRequestList requests={viewList} formData={formData} onChange={handleChange} onSave={saveResponse} onDetailClick={openDetail} disableActions={actionsDisabled}/>
+          <RequestFilterSearchWrap roleNumber={2} onApplyStatus={applyStatus} onApplyRange={applyRange} onSearch={applySearch} keyword={keywordInput} onKeywordChange={setKeywordInput} companyOptions={companyOptions} onApplyCompany={applyCompany} />
+          <DesignerRequestList requests={viewList} formData={formData} onChange={handleChange} onSave={saveResponse} onDetailClick={openDetail} disableActions={false} lockOthers={lockOthers} currentDesignerName={designerName} />
         </MainContentWrap>
       )}
       {view === "myrequestlist" && (
         <MainContentWrap>
           <DesignerRequestTitle>디자이너 화면</DesignerRequestTitle>
-          <RequestFilterSearchWrap roleNumber={2} onApplyStatus={applyStatus} onApplyRange={applyRange} onSearch={applySearch} keyword={keywordInput} onKeywordChange={setKeywordInput}/>
+          <RequestFilterSearchWrap roleNumber={2} onApplyStatus={applyStatus} onApplyRange={applyRange} onSearch={applySearch} keyword={keywordInput} onKeywordChange={setKeywordInput} companyOptions={companyOptions} onApplyCompany={applyCompany} />
           <DesignerRequestList requests={viewList} formData={formData} onChange={handleChange} onSave={saveResponse} onDetailClick={openDetail} disableActions={false}/>
         </MainContentWrap>
       )}

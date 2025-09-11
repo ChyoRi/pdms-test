@@ -147,6 +147,10 @@ const RequestListTableTd = styled.td`
     border-left: none;
   }
 
+  &:last-of-type {
+    border-right: none;
+  }
+
   &:nth-of-type(12) {
     border-right: 1px solid ${({ theme }) => theme.colors.black};
   }

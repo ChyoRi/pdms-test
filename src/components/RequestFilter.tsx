@@ -6,6 +6,8 @@ import DateCalendar from "./DateCalendar";
 const DEFAULT_STATUS = "진행 상태 선택";
 const DEFAULT_REQUESTER = "요청자 선택";
 const DEFAULT_DESIGNER = "디자이너 선택";
+const DEFAULT_COMPANY = "회사 선택";
+const EXCLUDED_COMPANIES = new Set(["PushComz"].map(s => s.toLowerCase()));
 const EMPTY_RANGE = { start: null, end: null };
 
 type RoleKey = "requester" | "designer" | "manager";
@@ -29,13 +31,15 @@ const mapSelectToFilterValue = (role: RoleKey, v: string) => {
   return v;
 };
 
-export default function RequestSearch({
+export default function RequestFilter({
   onApplyStatus,
   onApplyRange,
   isManager = false,
   requesterOptions = [],
   onApplyRequester,
   designerOptions = [],
+  companyOptions = [],
+  onApplyCompany,
   onApplyDesigner,
   roleNumber
 }: {
@@ -45,23 +49,28 @@ export default function RequestSearch({
   requesterOptions?: string[];
   onApplyRequester?: (name: string) => void;
   designerOptions?: string[];
+  companyOptions?: string[];
   onApplyDesigner?: (name: string) => void;
+  onApplyCompany?: (company: string) => void;
   roleNumber?: number | null;
 }) {
   const [range, setRange] = useState<{ start: Date | null; end: Date | null }>(EMPTY_RANGE);
   const [status, setStatus] = useState(DEFAULT_STATUS);
   const [requester, setRequester] = useState(DEFAULT_REQUESTER);
   const [designer, setDesigner] = useState(DEFAULT_DESIGNER);
+  const [company, setCompany]   = useState(DEFAULT_COMPANY);
 
   const reset = () => {
     setStatus(DEFAULT_STATUS);
     setRange(EMPTY_RANGE);
     setRequester(DEFAULT_REQUESTER);
     setDesigner(DEFAULT_DESIGNER);                // ★ 추가
+    setCompany(DEFAULT_COMPANY);
     onApplyStatus(DEFAULT_STATUS);
     onApplyRange(EMPTY_RANGE);
     onApplyRequester?.(DEFAULT_REQUESTER);
     onApplyDesigner?.(DEFAULT_DESIGNER);          // ★ 추가
+    onApplyCompany?.(DEFAULT_COMPANY);
   };
 
   const roleKey = toRoleKey(roleNumber);
@@ -76,6 +85,26 @@ export default function RequestSearch({
           onApplyRange(r);
         }}
       />
+
+      {/* ★ 회사 셀렉트: 요청자(role=1)는 숨김, 그 외(디자이너/매니저)만 표시 */}
+      {roleKey !== "requester" && (
+        <SelectBox
+          aria-label="회사 선택"
+          value={company}
+          onChange={(e) => {
+            const v = e.target.value;
+            setCompany(v);
+            onApplyCompany?.(v);
+          }}
+        >
+          <option value={DEFAULT_COMPANY}>{DEFAULT_COMPANY}</option>
+          {(companyOptions || [])
+            .filter(name => !!name && !EXCLUDED_COMPANIES.has(String(name).toLowerCase()))
+            .map((name) => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+        </SelectBox>
+      )}
 
       {isManager && (
         <>
@@ -141,9 +170,10 @@ const SelectBox = styled.select`
   -webkit-appearance: none;
   -moz-appearance: none;
 
-  width: 200px;
+  width: 150px;
+  height: 48px;
   margin-right: 8px;
-  padding: 13.5px 12px;
+  padding: 0 12px;
   border: 1px solid ${({ theme }) => theme.colors.gray02};
   border-radius: 4px;
   font-family: 'Pretendard';
@@ -170,4 +200,5 @@ const ResetButton = styled.button`
   font-weight: 400;
   background-color: ${({ theme }) => theme.colors.black};
   color: ${({ theme }) => theme.colors.white01};
+  white-space: nowrap;
 `

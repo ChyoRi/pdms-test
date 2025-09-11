@@ -173,6 +173,10 @@ const RequestListTableTd = styled.td`
   &:first-of-type {
     border-left: none;
   }
+
+  &:last-of-type {
+    border-right: none;
+  }
 `;
 
 const RequestListcompletionTd = styled.td`

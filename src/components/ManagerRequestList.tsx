@@ -142,6 +142,10 @@ const RequestListTableTh = styled.th`
     border-left: none;
   }
 
+  &:last-of-type {
+    border-right: none;
+  }
+
   &:nth-of-type(14) {
     border-right: 1px solid ${({ theme }) => theme.colors.black};
   }

@@ -41,6 +41,8 @@ export default function Requester({ view, setIsDrawerOpen, setEditData, setDetai
   // 🔍 검색: 입력값과 적용값 분리
   const [keywordInput, setKeywordInput] = useState<string>(""); // 인풋 바인딩(타이핑용)
   const [keyword, setKeyword] = useState<string>("");           // 검색 버튼 클릭 시에만 적용
+  // 전체 리스트에서 "타인 요청 수정/취소 잠금" 토글
+  const lockOthers = view === "allrequestlist";
 
   // ✅ 로그인 사용자 이름 가져오기
   // ✅ 로그인 사용자 이름 + company 가져오기
@@ -207,11 +209,17 @@ export default function Requester({ view, setIsDrawerOpen, setEditData, setDetai
     });
   }, [prepared, statusFilter, dateRange, keyword]);
 
-  const actionsDisabled = view === "allrequestlist";
+  const canMutate = (id: string) => {
+    const row = requests.find(r => r.id === id);
+    if (!row) return false;
+    if (row.status === "완료" || row.status === "취소") return false;
+    if (view === "allrequestlist" && row.requester !== userName) return false;
+    return true;
+  };
 
   // ✅ 검수완료 처리
   const reviewComplete = async (id: string) => {
-    if (actionsDisabled) return;
+    if (!canMutate(id)) return; // 🔒 권한 없음
     await updateDoc(doc(db, "design_request", id), {
       status: "완료",
       requester_review_status: "검수완료"
@@ -227,7 +235,7 @@ export default function Requester({ view, setIsDrawerOpen, setEditData, setDetai
   };
 
   const editRequest = async (id: string) => {
-    if (actionsDisabled) return;
+    if (!canMutate(id)) return; // 🔒 권한 없음
     const docRef = doc(db, "design_request", id);
     await updateDoc(docRef, { requester_edit_state: true });
 
@@ -247,16 +255,22 @@ export default function Requester({ view, setIsDrawerOpen, setEditData, setDetai
 
   // ✅ 취소 처리
   const cancelRequest = async (id: string) => {
-    if (actionsDisabled) return;
-    await updateDoc(doc(db, "design_request", id), {
-      status: "취소"
-    });
-
-    setRequests(prev =>
-      prev.map(req =>
-        req.id === id ? { ...req, status: "취소" } : req
-      )
+    if (!canMutate(id)) return; // 🔒 권한 없음
+    const row = requests.find(r => r.id === id);
+    const ok = window.confirm(
+      `문서번호 ${row?.design_request_id ?? ""} 요청을 취소하시겠습니까?` 
     );
+    if (!ok) return; // 사용자가 "취소" 누르면 아무 것도 안 함
+
+    try {
+      await updateDoc(doc(db, "design_request", id), { status: "취소" });
+      setRequests(prev =>
+        prev.map(req => (req.id === id ? { ...req, status: "취소" } : req))
+      );
+    } catch (e) {
+      console.error(e);
+      alert("취소 처리 중 오류가 발생했습니다. 다시 시도해 주세요.");
+    }
   };
 
   return (
@@ -280,7 +294,9 @@ export default function Requester({ view, setIsDrawerOpen, setEditData, setDetai
           />
           <RequesterRequestList
             data={viewList}
-            disableActions={actionsDisabled}
+            disableActions={false}
+            lockOthers={lockOthers}
+            currentUserName={userName}
             onReviewComplete={reviewComplete}
             onCancel={cancelRequest}
             onEditClick={editRequest}

@@ -13,6 +13,8 @@ export default function RequestFilterSearchWrap({
   requesterOptions = [],
   onApplyRequester,
   designerOptions = [],
+  companyOptions = [],
+  onApplyCompany,
   onApplyDesigner,
   roleNumber,
 }: {
@@ -25,6 +27,8 @@ export default function RequestFilterSearchWrap({
   requesterOptions?: string[];
   onApplyRequester?: (name: string) => void;
   designerOptions?: string[];
+  companyOptions?: string[];
+  onApplyCompany?: (name: string) => void;
   onApplyDesigner?: (name: string) => void;
   roleNumber?: number | null;
 }) {
@@ -37,6 +41,8 @@ export default function RequestFilterSearchWrap({
         requesterOptions={requesterOptions} 
         onApplyRequester={onApplyRequester}
         designerOptions={designerOptions}
+        companyOptions={companyOptions}
+        onApplyCompany={onApplyCompany}
         onApplyDesigner={onApplyDesigner}
         roleNumber={roleNumber}
       />

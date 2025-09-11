@@ -15,7 +15,9 @@ interface DesignerRequestListProps {
   onChange: (requestId: string, field: string, value: string) => void;
   onSave: (requestId: string) => void;
   onDetailClick: (item: RequestData) => void;
-  disableActions: boolean;
+  disableActions: boolean;   
+  lockOthers?: boolean;
+  currentDesignerName?: string;  
 }
 
 export default function DesignerRequestList({
@@ -24,7 +26,9 @@ export default function DesignerRequestList({
   formData,
   onSave,
   onDetailClick,
-  disableActions
+  disableActions,
+  lockOthers = false,
+  currentDesignerName = "",
 }: DesignerRequestListProps) {
   return (
     <RequestListTableWrap>
@@ -64,18 +68,22 @@ export default function DesignerRequestList({
         </thead>
         <tbody>
           {requests.length > 0 ? (
-            requests.map((item, index) => (
-              <DesignerRequestItem
-                key={item.id}
-                index={index + 1}
-                item={item}
-                row={formData[item.id] ?? {}}
-                onChange={onChange}
-                onSave={onSave}
-                onDetailClick={onDetailClick}
-                disableActions={disableActions}
-              />
-            ))
+            requests.map((item, index) => {
+              const isMine = item.assigned_designer === currentDesignerName;
+              const rowDisabled = disableActions || (lockOthers && !isMine); // ✨ 타인 행만 잠금
+              return (
+                <DesignerRequestItem
+                  key={item.id}
+                  index={index + 1}
+                  item={item}
+                  row={formData[item.id] ?? {}}
+                  onChange={onChange}
+                  onSave={onSave}
+                  onDetailClick={onDetailClick}
+                  disableActions={rowDisabled}
+                />
+              );
+            })
           ) : (
             <tr>
               <td colSpan={16} style={{ textAlign: "center" }}>
@@ -117,6 +125,10 @@ const RequestListTableTh = styled.th`
 
   &:first-of-type {
     border-left: none;
+  }
+
+  &:last-of-type {
+    border-right: none;
   }
 
   &:nth-of-type(13) {

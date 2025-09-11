@@ -125,7 +125,7 @@ export default function ManagerRequestItem({
       {/* ✅ 디자이너 선택 + 배정 */}
       <RequestListTableTd>
         <AssignSelect value={selectedDesigner} onChange={(e) => onDesignerSelect(e.target.value)} disabled={item.status === "취소" || item.status === "완료"}>
-          <option value="">디자이너 선택</option>
+          <option value="">선택</option>
           {designerList.map((designer) => (
             <option key={designer.id} value={designer.name}>
               {designer.name}
@@ -237,6 +237,10 @@ const RequestListTableTd = styled.td`
  
   &:first-of-type {
     border-left: none;
+  }
+
+  &:last-of-type {
+    border-right: none;
   }
 
   &:nth-of-type(14) {

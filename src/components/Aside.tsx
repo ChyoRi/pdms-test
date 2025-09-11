@@ -183,9 +183,8 @@ const MyRequestTitleWrap = styled.div`
 const MyRequestIcon = styled.img``;
 
 const MyRequestTitle = styled.h4`
-  white-space: nowrap;
   font-family: 'Pretendard';
-  font-size: 20px;
+  font-size: 17px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.black};
 `;

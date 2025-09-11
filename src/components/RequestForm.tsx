@@ -1,5 +1,6 @@
 import styled from "styled-components";
 import { useState, useEffect, useMemo } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { auth, db } from "../firebaseconfig";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, addDoc, updateDoc, doc, getDoc, serverTimestamp, Timestamp, query, where, getDocs } from "firebase/firestore";
@@ -82,6 +83,16 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
 
   const companyCfg = useMemo(() => getCompanyConfig(userCompany), [userCompany]);
 
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const goMyRequestList = () => {
+    const sp = new URLSearchParams(location.search);
+    sp.set("view", "myrequestlist");
+    // /main으로 확실히 보내고 싶다면 pathname: "/main" 사용
+    navigate({ pathname: "/main", search: sp.toString() }, { replace: true });
+  };
+
   // 상세옵션 안전 헬퍼
   const getNSmallDetails = (type?: string) => {
     const t = (type ?? "").trim();
@@ -123,7 +134,7 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
     setRequestData((prev) => ({ ...prev, [field]: value }));
   };
 
-  // ★ 추가: 공통 유효성 검사 헬퍼
+  // 공통 유효성 검사 헬퍼
   const isEmpty = (v?: any) => (typeof v !== "string" || v.trim() === "");
   const validateDesignForm = (f: Partial<RequestData>, ns: boolean): string | null => {
     if (isEmpty(f.completion_date)) return "완료 요청일을 선택하세요.";
@@ -167,7 +178,7 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
 
     const q = query(
       collection(db, "design_request"),
-      // ★ 변경: 3자리에서 4자리 시퀀스로 경계값 확장
+      // 3자리에서 4자리 시퀀스로 경계값 확장
       where("design_request_id", ">=", `H${year}${month}0000`), // ★ 변경
       where("design_request_id", "<",  `H${year}${month}9999`)  // ★ 변경
     );
@@ -175,9 +186,9 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
     return { year, month, base: snapshot.size };
   };
   const buildDocNumber = (y: string, m: string, seq: number) =>
-    `H${y}${m}${seq.toString().padStart(4, "0")}`; // ★ 변경: padStart(4, "0")
+    `H${y}${m}${seq.toString().padStart(4, "0")}`; // padStart(4, "0")
 
-  // ◎ 수정: Homeplus 폴백 쿼리 유틸
+  // Homeplus 폴백 쿼리 유틸
   const _queryHomeplusPreset = async (task_form: string, task_type: string) => {
     const qy = query(
       collection(db, "homeplus_task_work_hour"),
@@ -188,49 +199,49 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
     return snap;
   };
 
-  // ◎ 수정: 회사별 공수 프리셋 조회 로직으로 업데이트 (시그니처에 optional detail 추가)
+  // 회사별 공수 프리셋 조회 로직으로 업데이트 (시그니처에 optional detail 추가)
   const fetchWorkHourPreset = async (
     task_form?: string,
     task_type?: string,
     task_type_detail?: string
   ): Promise<{ base: number | null; times: number | null }> => {
     // NSMall 분기: type + detail 매칭
-    if (isNSMall(userCompany)) { // ◎ 수정
-      if (!task_type || !task_type_detail) return { base: null, times: null }; // ◎ 수정
+    if (isNSMall(userCompany)) {
+      if (!task_type || !task_type_detail) return { base: null, times: null };
       const qy = query(
-        collection(db, "nsmall_task_work_hour"), // ◎ 수정
-        where("nsmall_task_type", "==", task_type), // ◎ 수정
-        where("nsmall_task_type_detail", "==", task_type_detail) // ◎ 수정
+        collection(db, "nsmall_task_work_hour"),
+        where("nsmall_task_type", "==", task_type),
+        where("nsmall_task_type_detail", "==", task_type_detail)
       );
       const snap = await getDocs(qy);
       if (snap.empty) return { base: null, times: null };
       const data = snap.docs[0].data() as any;
-      const base = typeof data.nsmall_task_work_hour === "number" ? data.nsmall_task_work_hour : null; // ◎ 수정: 필드명 교정
-      const times = typeof data.nsmall_task_work_times === "number" ? data.nsmall_task_work_times : null; // ◎ 수정
-      console.log("[NSMALL preset]", { task_type, task_type_detail, base, times, docId: snap.docs[0].id }); // ◎ 수정: 디버그
+      const base = typeof data.nsmall_task_work_hour === "number" ? data.nsmall_task_work_hour : null;
+      const times = typeof data.nsmall_task_work_times === "number" ? data.nsmall_task_work_times : null;
+      console.log("[NSMALL preset]", { task_type, task_type_detail, base, times, docId: snap.docs[0].id });
       return { base, times };
     }
 
     // Homeplus 분기: form + type 매칭 (+ 폴백)
-    if (!task_form || !task_type) return { base: null, times: null }; // ◎ 수정
+    if (!task_form || !task_type) return { base: null, times: null };
 
     // 1차: 정확 매칭
-    let snap = await _queryHomeplusPreset(task_form, task_type); // ◎ 수정
+    let snap = await _queryHomeplusPreset(task_form, task_type);
     // 2차 폴백: MHC/GHS
     if (snap.empty && task_form !== "MHC/GHS") {
-      snap = await _queryHomeplusPreset("MHC/GHS", task_type); // ◎ 수정
+      snap = await _queryHomeplusPreset("MHC/GHS", task_type);
     }
     // 3차 폴백(선택): GHS↔MHC 상호 폴백
     if (snap.empty && (task_form === "GHS" || task_form === "MHC")) {
       const alt = task_form === "GHS" ? "MHC" : "GHS";
-      snap = await _queryHomeplusPreset(alt, task_type); // ◎ 수정
+      snap = await _queryHomeplusPreset(alt, task_type);
     }
 
     if (snap.empty) return { base: null, times: null };
     const data = snap.docs[0].data() as any;
-    const base = typeof data.homeplus_task_work_hour === "number" ? data.homeplus_task_work_hour : null; // ◎ 수정: 필드명 교정
-    const times = typeof data.homeplus_task_work_times === "number" ? data.homeplus_task_work_times : null; // ◎ 수정
-    console.log("[HOMEPLUS preset]", { task_form, task_type, base, times, docId: snap.docs[0].id }); // ◎ 수정: 디버그
+    const base = typeof data.homeplus_task_work_hour === "number" ? data.homeplus_task_work_hour : null;
+    const times = typeof data.homeplus_task_work_times === "number" ? data.homeplus_task_work_times : null;
+    console.log("[HOMEPLUS preset]", { task_form, task_type, base, times, docId: snap.docs[0].id });
     return { base, times };
   };
 
@@ -244,19 +255,19 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
     }
 
     if (isEdit && editData?.id) {
-      // ★ 추가: 부서/유형 변경 시 공수 재계산
+      // 부서/유형 변경 시 공수 재계산
       const formChanged = (requestData.task_form || "") !== (editData.task_form || "");
       const typeChanged = (requestData.task_type || "") !== (editData.task_type || "");
       const detailChanged = isNSMall(userCompany) && ( // ◎ 수정: NSMall 상세 변경도 감지
         (requestData.task_type_detail || "") !== ((editData as any).task_type_detail || "")
-      ); // ◎ 수정
+      );
 
       const patch: any = {
         completion_date: toTimestamp(requestData.completion_date),
         open_date: toTimestamp(requestData.open_date),
         merchandiser: requestData.merchandiser ?? "",
         task_form: requestData.task_form || companyCfg.formDefault,
-        task_type: isNSMall(userCompany) ? (requestData.task_type ?? "") : (requestData.task_type || companyCfg.typeDefault), // ★ 변경
+        task_type: isNSMall(userCompany) ? (requestData.task_type ?? "") : (requestData.task_type || companyCfg.typeDefault),
         task_type_detail: requestData.task_type_detail ?? "",
         requirement: requestData.requirement,
         url: requestData.url,
@@ -266,11 +277,11 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
         updated_date: serverTimestamp()
       };
 
-      if (formChanged || typeChanged || detailChanged) { // ◎ 수정
+      if (formChanged || typeChanged || detailChanged) {
         const { base: baseHour, times } = await fetchWorkHourPreset(
           patch.task_form,
           patch.task_type,
-          patch.task_type_detail // ◎ 수정: 상세 전달
+          patch.task_type_detail
         );
         patch.out_work_hour = baseHour;
         patch.in_work_hour = (baseHour != null && times != null) ? Number((baseHour * times).toFixed(2)) : null;
@@ -286,7 +297,7 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
     // 등록 모드 — 상단 + 추가 폼 일괄 등록
     const forms = [requestData, ...extras];
 
-    // ★ 변경: 모든 필수값 종합 검사 (폼별 메시지)
+    // 모든 필수값 종합 검사 (폼별 메시지)
     for (let i = 0; i < forms.length; i++) {
       const f = forms[i];
       const msg = validateDesignForm(f, isNSMall(userCompany));
@@ -309,13 +320,13 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
         ? ((f.task_type as string) || "") // ★ 변경: 등록 모드에서 placeholder는 ""
         : ((f.task_type as string) || companyCfg.typeDefault);
 
-      // ◎ 수정: 회사별 프리셋 조회에 상세 전달
+      // 회사별 프리셋 조회에 상세 전달
       const { base: baseHour, times } = await fetchWorkHourPreset(
         f.task_form as string,
         f.task_type as string,
-        f.task_type_detail as string // ◎ 수정
+        f.task_type_detail as string
       );
-      const computedIn = (baseHour != null && times != null) ? Number((baseHour * times).toFixed(2)) : null; // ◎ 수정(계산 동일)
+      const computedIn = (baseHour != null && times != null) ? Number((baseHour * times).toFixed(2)) : null;
 
       await addDoc(collection(db, "design_request"), {
         design_request_id,
@@ -353,6 +364,7 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
     alert(`${forms.length}건이 등록되었습니다!`);
     setExtras([]);
     setRequestData(defaultRequestData);
+    goMyRequestList();
     onClose();
   };
 
@@ -380,7 +392,7 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
     setRequestData({
       ...defaultRequestData,
       task_form: companyCfg.formDefault,
-      task_type: companyCfg.typeDefault, // ★ 변경: NSMALL이면 "", placeholder 사용
+      task_type: companyCfg.typeDefault, // NSMALL이면 "", placeholder 사용
       task_type_detail: ""
     });
     setExtras([]);
@@ -408,7 +420,7 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
         next.task_form = companyCfg.formDefault;
       }
       if (!companyCfg.types.includes((next.task_type as string) || "")) {
-        next.task_type = companyCfg.typeDefault; // ★ 변경: NSMALL이면 ""
+        next.task_type = companyCfg.typeDefault; // NSMALL이면 ""
         next.task_type_detail = "";
       }
       return next;
@@ -426,7 +438,7 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
           {!isEdit && 
             extras.map((f, idx) => {
               const detailOptions = isNSMall(userCompany) ? getNSmallDetails(f.task_type as string) : [];
-              const showDetail = isNSMall(userCompany) && !!f.task_type; // ★ 변경: truthy 체크
+              const showDetail = isNSMall(userCompany) && !!f.task_type; // truthy 체크
               return (
                 <div key={idx} style={{ marginBottom: 24 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "8px 0 4px" }}>
@@ -564,7 +576,7 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
               <tr>
                 <RequestFormTableTh><RequestFormItemLabel htmlFor="task_type">업무 유형</RequestFormItemLabel></RequestFormTableTh>
                 <RequestFormTableTd>
-                  {/* ★ 변경: 등록 모드에서만 placeholder 옵션을 노출, 수정 모드에선 숨김 */}
+                  {/* 등록 모드에서만 placeholder 옵션을 노출, 수정 모드에선 숨김 */}
                   <RequestFormSelectBox
                     id="task_type"
                     $wide={isNSMall(userCompany)}
@@ -576,7 +588,7 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
                     onChange={(e) => requsetForm("task_type", e.target.value)}
                   >
                     {isNSMall(userCompany) && !isEdit && (
-                      <option value="">업무 유형을 선택해주세요</option> // ★ 변경: placeholder 텍스트는 옵션 라벨로만
+                      <option value="">업무 유형을 선택해주세요</option> // placeholder 텍스트는 옵션 라벨로만
                     )}
                     {renderTypes.map((v) => <option key={v as string} value={v as string}>{v as string}</option>)}
                   </RequestFormSelectBox>

@@ -17,7 +17,7 @@ export default function ExportCSV({ onClick, loading, label = "Export CSV" }: Ex
 const ExportButton = styled.button`
   margin-bottom: 10px;
   padding: 8px 12px;
-  border-radius: 6px;
+  border-radius: 4px;
   border: 1px solid ${({ theme }) => theme.colors.black};
   background: ${({ theme }) => theme.colors.white01};
   font-size: 14px;

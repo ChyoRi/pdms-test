@@ -232,7 +232,7 @@ export default function DashBoard({ capacityHoursPerMonth }: Props) {
     const producedCount = allFilteredRows.filter(r => normalizeStatus(r.status) === "완료").length;
     const usedHours = sum(allFilteredRows.map(r => Number(r.in_work_hour) || 0)); // ★ 전체: in_work_hour 사용
     // 디자이너 수(회사 합산) × 근무일 × 8
-    const people = designers.filter(d => ["homeplus","nsmall","n-small"].includes(companyKey(d.company))).length;
+    const people = designers.length;
     const availHours = people * periodInfo.workingDays * 8;
     const usedRatio = availHours ? Math.round((usedHours/availHours)*100) : 0;
     return {
@@ -422,7 +422,7 @@ export default function DashBoard({ capacityHoursPerMonth }: Props) {
         <OperationItem><OperationTitle>실 제작건수(건)</OperationTitle><OpereationValue>{KPI?.producedCount ?? 0}</OpereationValue></OperationItem>
         <OperationItem><OperationTitle>사용공수</OperationTitle><OpereationValue>{KPI?.usedHoursDisplay ?? "0.00"}</OpereationValue></OperationItem>
         <OperationItem><OperationTitle>가용공수</OperationTitle><OpereationValue>{KPI?.availHours?.toLocaleString() ?? "0"}</OpereationValue></OperationItem>
-        <OperationItem><OperationTitle>사용공수비율</OperationTitle><OpereationValue>{KPI?.usedRatio ? `${KPI.usedRatio}%` : "-"}</OpereationValue></OperationItem>
+        <OperationItem><OperationTitle>사용공수비율</OperationTitle><OpereationValue>{KPI?.usedRatio ? `${KPI.usedRatio}%` : "0%"}</OpereationValue></OperationItem>
       </OperationList>
 
       {/* 차트 */}
@@ -469,8 +469,8 @@ const DateSelectBoxWrap = styled.div`
   display:flex; align-items:center; gap:8px; margin-left:auto;
 `;
 const SelectBox = styled.select`
-  appearance:none; width:200px; margin-right:8px; padding:13.5px 12px;
-  border:1px solid ${({ theme }) => theme.colors.gray02}; border-radius:8px;
+  appearance:none; width:150px; height: 48px; margin-right:8px; padding:0 12px;
+  border:1px solid ${({ theme }) => theme.colors.gray02}; border-radius:4px;
   font-family:'Pretendard'; font-size:16px; font-weight:400; color:${({ theme }) => theme.colors.black};
   background:${({ theme }) => theme.colors.white01} url(${selectBoxArrow}) no-repeat right 12px center / 16px 16px;
   &:focus { outline:none; border-color:${({ theme }) => theme.colors.black}; }

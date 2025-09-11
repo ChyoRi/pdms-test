@@ -4,6 +4,8 @@ import RequesterRequestItem from "./RequesterRequestItem";
 interface RequestListProps {
   data: RequestData[];
   disableActions: boolean;
+  lockOthers?: boolean;
+  currentUserName?: string;
   onReviewComplete: (id: string) => void;
   onCancel: (id: string) => void;
   onEditClick: (id: string) => void;
@@ -11,7 +13,7 @@ interface RequestListProps {
   onDetailClick: (item: RequestData) => void;
 }
 
-export default function RequesterRequestList({ data, disableActions, onReviewComplete, onCancel, onEditClick, onDetailClick }: RequestListProps) {
+export default function RequesterRequestList({ data, disableActions = false, lockOthers = false, currentUserName = "", onReviewComplete, onCancel, onEditClick, onDetailClick }: RequestListProps) {
   return (
     <RequestListTableWrap>
       <RequestListTable>
@@ -50,17 +52,30 @@ export default function RequesterRequestList({ data, disableActions, onReviewCom
         </thead>
         <tbody>
           {data.length > 0 ? (
-            data.map((item, index) => (
-              <RequesterRequestItem key={item.id} index={index + 1} item={item} disableActions={disableActions} onReviewComplete={onReviewComplete} onCancel={onCancel} onEditClick={onEditClick} onDetailClick={onDetailClick} />
-            ))
+            data.map((item, index) => {
+              const isMine = item.requester === currentUserName;
+              const rowDisabled = disableActions || (lockOthers && !isMine); // ✨ 타인 글만 잠금
+              return (
+                <RequesterRequestItem
+                  key={item.id}
+                  index={index + 1}
+                  item={item}
+                  disableActions={rowDisabled}
+                  onReviewComplete={onReviewComplete}
+                  onCancel={onCancel}
+                  onEditClick={onEditClick}
+                  onDetailClick={onDetailClick}
+                />
+              );
+            })
           ) : (
             <tr>
-              <td colSpan={17} style={{ textAlign: "center", padding: "20px" }}>
+              <td colSpan={17} style={{ textAlign: "center", padding: 20 }}>
                 등록된 요청이 없습니다.
               </td>
             </tr>
           )}
-      </tbody>
+        </tbody>
       </RequestListTable>
     </RequestListTableWrap>
   );
@@ -103,6 +118,10 @@ const RequestListTableTh = styled.th`
 
   &:first-of-type {
     border-left: none;
+  }
+
+  &:last-of-type {
+    border-right: none;
   }
 
   &:nth-of-type(12) {
