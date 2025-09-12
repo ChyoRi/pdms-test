@@ -1,17 +1,33 @@
+// ★ 전체 업데이트: company 인풋 수정 불가 + URL 파라미터 변경 시 자동 갱신
+
 import styled from "styled-components"
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { auth, db } from "../firebaseconfig";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
+
+// ★ 회사 매핑
+const COMPANY_MAP: Record<string, string> = {
+  homeplus: "HomePlus",
+  nsmall: "NSmall",
+};
 
 export default function SignUpPage() {
   const [name, setName] = useState("");
-  const [company, setCompany] = useState("");
+  const [company, setCompany] = useState("");           // ← 표시만, 사용자 편집 불가
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [passwordCheck, setPasswordCheck] = useState("");
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  // ★ 변경: URL의 ?company= 값이 바뀔 때마다 항상 반영 (초기 1회 제한 제거)
+  useEffect(() => {
+    const raw = (searchParams.get("company") || "").toLowerCase();
+    const mapped = COMPANY_MAP[raw];
+    setCompany(mapped ?? ""); // 잘못된 값이면 비움
+  }, [searchParams]);
 
   const signUp = async () => {
     const nameTrim = name.trim();
@@ -27,19 +43,18 @@ export default function SignUpPage() {
       .then(async (userCredential) => {
         const user = userCredential.user;
 
-        await updateProfile(user, { displayName: name }); // ✅ 이름 추가
+        await updateProfile(user, { displayName: name });
 
-        // ✅ Firestore에 role 저장 (users/{uid})
         await setDoc(doc(db, "users", user.uid), {
           name: nameTrim,
-          company: companyTrim,
-          role: 2, // 기본값: 요청자
+          company: companyTrim, // URL로 잠근 값이 저장됨
+          role: 1,
           createdAt: serverTimestamp(),
         });
       })
       .then(() => {
         alert("회원가입이 완료되었습니다!");
-        navigate("/"); // 회원가입 후 로그인 페이지로 이동
+        navigate("/"); // HashRouter면 #/로 이동
       })
       .catch((error) => {
         alert("회원가입 중 오류 발생: " + error.message);
@@ -54,11 +69,41 @@ export default function SignUpPage() {
           <SubTitle>Pushcomz Design Management System</SubTitle>
         </SignUpHeader>
         <LoginWrap>
-          <Name_input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="이름을 입력해주세요." />
-          <Company_input type="text" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="회사명을 입력해주세요." /> {/* ⬅ 추가 */}
-          <Id_input type="text" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="이메일을 입력해주세요." />
-          <Pw_input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="비밀번호를 입력해주세요." />
-          <PwCheck_input type="password" value={passwordCheck} onChange={(e) => setPasswordCheck(e.target.value)} placeholder="비밀번호 확인을 입력해주세요." />
+          <Name_input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="이름을 입력해주세요."
+          />
+
+          {/* ★ 변경: readOnly로 잠금, onChange 제거, URL이 바뀌면 위 useEffect로 자동 갱신 */}
+          <Company_input
+            type="text"
+            value={company}
+            readOnly                                 // ★ 추가: 편집 불가
+            aria-readonly="true"                    // ★ 접근성
+            placeholder="회사명이 자동으로 설정됩니다."
+            title="이 필드는 캠페인 링크로 자동 설정됩니다."
+          />
+
+          <Id_input
+            type="text"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="이메일을 입력해주세요."
+          />
+          <Pw_input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="비밀번호를 입력해주세요."
+          />
+          <PwCheck_input
+            type="password"
+            value={passwordCheck}
+            onChange={(e) => setPasswordCheck(e.target.value)}
+            placeholder="비밀번호 확인을 입력해주세요."
+          />
         </LoginWrap>
         <SignUpButton onClick={signUp}>등록하기</SignUpButton>
       </SignUpFrame>
@@ -106,7 +151,7 @@ const LoginWrap = styled.div`
   gap: 10px;
 `;
 
-const Name_input = styled.input`
+const BaseInput = styled.input`
   width: 460px;
   padding: 14px;
   border: 1px solid #ddd;
@@ -114,46 +159,20 @@ const Name_input = styled.input`
   font-size: 14px;
   line-height: 20px;
   color: #333;
+  &:focus { outline: none; border-color: #c7d2fe; box-shadow: 0 0 0 3px rgba(59,130,246,0.15); }
 `;
 
-const Company_input = styled.input`
-  width: 460px;
-  padding: 14px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
-  line-height: 20px;
-  color: #333;
-`;
+// ★ 공통 인풋
+const Name_input = styled(BaseInput)``;
+const Id_input = styled(BaseInput)``;
+const Pw_input = styled(BaseInput)``;
+const PwCheck_input = styled(BaseInput)``;
 
-const Id_input = styled.input`
-  width: 460px;
-  padding: 14px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
-  line-height: 20px;
-  color: #333;
-`;
-
-const Pw_input = styled.input`
-  width: 460px;
-  padding: 14px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
-  line-height: 20px;
-  color: #333;
-`;
-
-const PwCheck_input = styled.input`
-  width: 460px;
-  padding: 14px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
-  line-height: 20px;
-  color: #333;
+// ★ 잠금 표시 스타일 (읽기 전용)
+const Company_input = styled(BaseInput)`
+  background-color: #f5f6f7;      /* 잠금 느낌 */
+  color: #555;
+  cursor: not-allowed;            /* 포인터로도 수정 불가 느낌 */
 `;
 
 const SignUpButton = styled.button`

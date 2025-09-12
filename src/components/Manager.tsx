@@ -17,6 +17,7 @@ interface RequesterProps {
   view: ViewType;
   setIsDrawerOpen: (value: boolean) => void;
   setDetailData: (data: RequestData) => void;
+  userRole: number | null; 
 }
 
 const DEFAULT_STATUS = "진행 상태 선택";
@@ -77,7 +78,7 @@ async function getWorkTimesForRequest(req: RequestData): Promise<number> {
   return 1;
 }
 
-export default function Manager({ view, setIsDrawerOpen, setDetailData }: RequesterProps) {
+export default function Manager({ view, setIsDrawerOpen, setDetailData, userRole }: RequesterProps) {
   const [requests, setRequests] = useState<RequestData[]>([]);
   const [designerList, setDesignerList] = useState<any[]>([]);
   const [selectedDesigners, setSelectedDesigners] = useState<{ [key: string]: string }>({});
@@ -510,10 +511,9 @@ export default function Manager({ view, setIsDrawerOpen, setDetailData }: Reques
 
   return (
     <Container>
-      <MainTitle />
+      <MainTitle userRole={userRole}/>
       {view === "myrequestlist" && (
         <MainContentWrap>
-          <ManagerRequestTitle>매니저 요청리스트</ManagerRequestTitle>
           <RequestFilterSearchWrap 
             roleNumber={3}
             onApplyStatus={applyStatus} 
@@ -570,8 +570,4 @@ const DashBoardWrap = styled.div`
   max-height: 766px;
   padding: 0 48px;
   overflow: auto;
-`;
-
-const ManagerRequestTitle = styled.h2`
-  margin-top: 20px;
 `;

@@ -13,6 +13,7 @@ type ViewType = "dashboard" | "myrequestlist" | "allrequestlist" | "inworkhour";
 
 interface RequesterProps {
   view: ViewType;
+  userRole: number | null;
   setIsDrawerOpen: (value: boolean) => void;
   setDetailData: (data: RequestData) => void;
 }
@@ -50,7 +51,7 @@ type RowForm = {
 const DEFAULT_STATUS = "진행 상태 선택";
 const DEFAULT_COMPANY = "회사 선택";
 
-export default function Designer({ view, setIsDrawerOpen, setDetailData }: RequesterProps) {
+export default function Designer({ view, userRole, setIsDrawerOpen, setDetailData }: RequesterProps) {
   const [assignedRequests, setAssignedRequests] = useState<DesignRequest[]>([]);
   const [designerName, setDesignerName] = useState(""); // ✅ 로그인 디자이너 이름
   const [formData, setFormData] = useState<{ [key: string]: RowForm  }>({});
@@ -264,8 +265,6 @@ export default function Designer({ view, setIsDrawerOpen, setDetailData }: Reque
     return isNaN(+dt) ? null : Timestamp.fromDate(dt);
   };
 
-  const actionsDisabled = view === "allrequestlist";
-
   // 행별 권한 체크(완료/취소는 항상 불가, 전체 목록에서는 본인 배정만 허용)
   const canMutate = (id: string) => {
     const row = assignedRequests.find(r => r.id === id);
@@ -301,7 +300,7 @@ export default function Designer({ view, setIsDrawerOpen, setDetailData }: Reque
 
   return (
     <Container>
-      <MainTitle />
+      <MainTitle userRole={userRole} />
       {view === "allrequestlist" && (
         <MainContentWrap>
           <RequestFilterSearchWrap roleNumber={2} onApplyStatus={applyStatus} onApplyRange={applyRange} onSearch={applySearch} keyword={keywordInput} onKeywordChange={setKeywordInput} companyOptions={companyOptions} onApplyCompany={applyCompany} />
@@ -310,7 +309,6 @@ export default function Designer({ view, setIsDrawerOpen, setDetailData }: Reque
       )}
       {view === "myrequestlist" && (
         <MainContentWrap>
-          <DesignerRequestTitle>디자이너 화면</DesignerRequestTitle>
           <RequestFilterSearchWrap roleNumber={2} onApplyStatus={applyStatus} onApplyRange={applyRange} onSearch={applySearch} keyword={keywordInput} onKeywordChange={setKeywordInput} companyOptions={companyOptions} onApplyCompany={applyCompany} />
           <DesignerRequestList requests={viewList} formData={formData} onChange={handleChange} onSave={saveResponse} onDetailClick={openDetail} disableActions={false}/>
         </MainContentWrap>
@@ -334,8 +332,4 @@ const DashBoardWrap = styled.div`
   max-height: 766px;
   padding: 0 48px;
   overflow: auto;
-`;
-
-const DesignerRequestTitle = styled.h2`
-  margin-top: 20px;
 `;

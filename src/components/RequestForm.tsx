@@ -435,6 +435,104 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
       </RequestTitleWrap>
       <RequestFormContainer onSubmit={requestFormSubmit}>
         <RequestFormTableWrap>
+          <RequestFormTable>
+            <RequestFormTableCaption>디자인 요청 등록</RequestFormTableCaption>
+            <colgroup><col style={{ width: '120px' }} /></colgroup>
+            <tbody>
+              <tr>
+                <RequestFormTableTh>문서번호</RequestFormTableTh>
+                <RequestFormTableTd>{isEdit ? editData?.design_request_id : ""}</RequestFormTableTd>
+              </tr>
+              <tr>
+                <RequestFormTableTh><RequestFormItemLabel htmlFor="completion_date">완료 요청일</RequestFormItemLabel></RequestFormTableTh>
+                <RequestFormTableTd>
+                  <RequestFormDateInput type="date" id="completion_date" value={requestData.completion_date} onChange={(e) => requsetForm("completion_date", e.target.value)} />
+                </RequestFormTableTd>
+              </tr>
+              <tr>
+                <RequestFormTableTh><RequestFormItemLabel htmlFor="open_date">오픈일</RequestFormItemLabel></RequestFormTableTh>
+                <RequestFormTableTd>
+                  <RequestFormDateInput type="date" id="open_date" value={requestData.open_date} onChange={(e) => requsetForm("open_date", e.target.value)} />
+                </RequestFormTableTd>
+              </tr>
+              <tr>
+                <RequestFormTableTh><RequestFormItemLabel htmlFor="merchandiser">담당 MD</RequestFormItemLabel></RequestFormTableTh>
+                <RequestFormTableTd>
+                  <RequestFormTextInput type="text" id="merchandiser" value={requestData.merchandiser || ""} onChange={(e) => requsetForm("merchandiser", e.target.value)} placeholder="담당 MD 이름을 입력하세요." />
+                </RequestFormTableTd>
+              </tr>
+              <tr>
+                <RequestFormTableTh><RequestFormItemLabel htmlFor="task_form">업무 부서</RequestFormItemLabel></RequestFormTableTh>
+                <RequestFormTableTd>
+                  <RequestFormSelectBox id="task_form" $wide={isNSMall(userCompany)} value={requestData.task_form || companyCfg.formDefault} onChange={(e) => requsetForm("task_form", e.target.value)}>
+                    {renderForms.map(v => <option key={v} value={v}>{v}</option>)}
+                  </RequestFormSelectBox>
+                </RequestFormTableTd>
+              </tr>
+              <tr>
+                <RequestFormTableTh><RequestFormItemLabel htmlFor="task_type">업무 유형</RequestFormItemLabel></RequestFormTableTh>
+                <RequestFormTableTd>
+                  {/* 등록 모드에서만 placeholder 옵션을 노출, 수정 모드에선 숨김 */}
+                  <RequestFormSelectBox
+                    id="task_type"
+                    $wide={isNSMall(userCompany)}
+                    value={
+                      isNSMall(userCompany)
+                        ? (isEdit ? (requestData.task_type || (renderTypes[0] as string || "")) : (requestData.task_type ?? "")) // ★ 변경
+                        : (requestData.task_type || companyCfg.typeDefault)
+                    }
+                    onChange={(e) => requsetForm("task_type", e.target.value)}
+                  >
+                    {isNSMall(userCompany) && !isEdit && (
+                      <option value="">업무 유형을 선택해주세요</option> // placeholder 텍스트는 옵션 라벨로만
+                    )}
+                    {renderTypes.map((v) => <option key={v as string} value={v as string}>{v as string}</option>)}
+                  </RequestFormSelectBox>
+                  {isNSMall(userCompany) && !!requestData.task_type && (
+                    <RequestFormSelectBox
+                      id="task_type_detail"
+                      $wide
+                      value={requestData.task_type_detail || ""}
+                      onChange={(e) => requsetForm("task_type_detail", e.target.value)}
+                    >
+                      <option value="">상세 유형을 선택해주세요</option>
+                      {mainDetailOptions.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                    </RequestFormSelectBox>
+                  )}
+                </RequestFormTableTd>
+              </tr>
+              <tr>
+                <RequestFormTableTh><RequestFormItemLabel htmlFor="requirement">작업 항목</RequestFormItemLabel></RequestFormTableTh>
+                <RequestFormTableTd>
+                  <RequestFormTextInput type="text" id="requirement" value={requestData.requirement} onChange={(e) => requsetForm("requirement", e.target.value)} placeholder="작업 항목을 입력하세요." />
+                </RequestFormTableTd>
+              </tr>
+              <tr>
+                <RequestFormTableTh><RequestFormItemLabel htmlFor="emergency">긴급 일정</RequestFormItemLabel></RequestFormTableTh>
+                <RequestFormTableTd>
+                  <EmergencyWrap>
+                    <RequestFormChackBoxLabel htmlFor="emergency">
+                      <RequestFormChackBoxInput type="checkbox" id="emergency" checked={requestData.emergency} onChange={(e) => requsetForm("emergency", e.target.checked)} />
+                      <RequestFormChackBox />
+                      <span>긴급 일정으로 설정</span>
+                    </RequestFormChackBoxLabel>
+                  </EmergencyWrap>
+                </RequestFormTableTd>
+              </tr>
+              <tr>
+                <RequestFormTableTh><RequestFormItemLabel htmlFor="url">요청서 URL</RequestFormItemLabel></RequestFormTableTh>
+                <RequestFormTableTd>
+                  <RequestFormTextArea id="url" value={requestData.url} onChange={(e) => requsetForm("url", e.target.value)} placeholder="요청 기획안 URL을 입력하세요." />
+                </RequestFormTableTd>
+              </tr>
+              <tr>
+                <RequestFormTableTh><RequestFormItemLabel htmlFor="note">메모</RequestFormItemLabel></RequestFormTableTh>
+                <RequestFormTableTd>
+                  <RequestFormMemoTextArea id="note" rows={2} value={requestData.note} onChange={(e) => requsetForm("note", e.target.value)} placeholder="메모를 입력하세요." />
+                </RequestFormTableTd>
+              </tr>
+            </tbody>
+          </RequestFormTable>
           {!isEdit && 
             extras.map((f, idx) => {
               const detailOptions = isNSMall(userCompany) ? getNSmallDetails(f.task_type as string) : [];
@@ -538,105 +636,6 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
                 </div>
               );
             })}
-
-          <RequestFormTable>
-            <RequestFormTableCaption>디자인 요청 등록</RequestFormTableCaption>
-            <colgroup><col style={{ width: '120px' }} /></colgroup>
-            <tbody>
-              <tr>
-                <RequestFormTableTh>문서번호</RequestFormTableTh>
-                <RequestFormTableTd>{isEdit ? editData?.design_request_id : ""}</RequestFormTableTd>
-              </tr>
-              <tr>
-                <RequestFormTableTh><RequestFormItemLabel htmlFor="completion_date">완료 요청일</RequestFormItemLabel></RequestFormTableTh>
-                <RequestFormTableTd>
-                  <RequestFormDateInput type="date" id="completion_date" value={requestData.completion_date} onChange={(e) => requsetForm("completion_date", e.target.value)} />
-                </RequestFormTableTd>
-              </tr>
-              <tr>
-                <RequestFormTableTh><RequestFormItemLabel htmlFor="open_date">오픈일</RequestFormItemLabel></RequestFormTableTh>
-                <RequestFormTableTd>
-                  <RequestFormDateInput type="date" id="open_date" value={requestData.open_date} onChange={(e) => requsetForm("open_date", e.target.value)} />
-                </RequestFormTableTd>
-              </tr>
-              <tr>
-                <RequestFormTableTh><RequestFormItemLabel htmlFor="merchandiser">담당 MD</RequestFormItemLabel></RequestFormTableTh>
-                <RequestFormTableTd>
-                  <RequestFormTextInput type="text" id="merchandiser" value={requestData.merchandiser || ""} onChange={(e) => requsetForm("merchandiser", e.target.value)} placeholder="담당 MD 이름을 입력하세요." />
-                </RequestFormTableTd>
-              </tr>
-              <tr>
-                <RequestFormTableTh><RequestFormItemLabel htmlFor="task_form">업무 부서</RequestFormItemLabel></RequestFormTableTh>
-                <RequestFormTableTd>
-                  <RequestFormSelectBox id="task_form" $wide={isNSMall(userCompany)} value={requestData.task_form || companyCfg.formDefault} onChange={(e) => requsetForm("task_form", e.target.value)}>
-                    {renderForms.map(v => <option key={v} value={v}>{v}</option>)}
-                  </RequestFormSelectBox>
-                </RequestFormTableTd>
-              </tr>
-              <tr>
-                <RequestFormTableTh><RequestFormItemLabel htmlFor="task_type">업무 유형</RequestFormItemLabel></RequestFormTableTh>
-                <RequestFormTableTd>
-                  {/* 등록 모드에서만 placeholder 옵션을 노출, 수정 모드에선 숨김 */}
-                  <RequestFormSelectBox
-                    id="task_type"
-                    $wide={isNSMall(userCompany)}
-                    value={
-                      isNSMall(userCompany)
-                        ? (isEdit ? (requestData.task_type || (renderTypes[0] as string || "")) : (requestData.task_type ?? "")) // ★ 변경
-                        : (requestData.task_type || companyCfg.typeDefault)
-                    }
-                    onChange={(e) => requsetForm("task_type", e.target.value)}
-                  >
-                    {isNSMall(userCompany) && !isEdit && (
-                      <option value="">업무 유형을 선택해주세요</option> // placeholder 텍스트는 옵션 라벨로만
-                    )}
-                    {renderTypes.map((v) => <option key={v as string} value={v as string}>{v as string}</option>)}
-                  </RequestFormSelectBox>
-                  {isNSMall(userCompany) && !!requestData.task_type && (
-                    <RequestFormSelectBox
-                      id="task_type_detail"
-                      $wide
-                      value={requestData.task_type_detail || ""}
-                      onChange={(e) => requsetForm("task_type_detail", e.target.value)}
-                    >
-                      <option value="">상세 유형을 선택해주세요</option>
-                      {mainDetailOptions.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
-                    </RequestFormSelectBox>
-                  )}
-                </RequestFormTableTd>
-              </tr>
-              <tr>
-                <RequestFormTableTh><RequestFormItemLabel htmlFor="requirement">작업 항목</RequestFormItemLabel></RequestFormTableTh>
-                <RequestFormTableTd>
-                  <RequestFormTextInput type="text" id="requirement" value={requestData.requirement} onChange={(e) => requsetForm("requirement", e.target.value)} placeholder="작업 항목을 입력하세요." />
-                </RequestFormTableTd>
-              </tr>
-              <tr>
-                <RequestFormTableTh><RequestFormItemLabel htmlFor="emergency">긴급 일정</RequestFormItemLabel></RequestFormTableTh>
-                <RequestFormTableTd>
-                  <EmergencyWrap>
-                    <RequestFormChackBoxLabel htmlFor="emergency">
-                      <RequestFormChackBoxInput type="checkbox" id="emergency" checked={requestData.emergency} onChange={(e) => requsetForm("emergency", e.target.checked)} />
-                      <RequestFormChackBox />
-                      <span>긴급 일정으로 설정</span>
-                    </RequestFormChackBoxLabel>
-                  </EmergencyWrap>
-                </RequestFormTableTd>
-              </tr>
-              <tr>
-                <RequestFormTableTh><RequestFormItemLabel htmlFor="url">요청서 URL</RequestFormItemLabel></RequestFormTableTh>
-                <RequestFormTableTd>
-                  <RequestFormTextArea id="url" value={requestData.url} onChange={(e) => requsetForm("url", e.target.value)} placeholder="요청 기획안 URL을 입력하세요." />
-                </RequestFormTableTd>
-              </tr>
-              <tr>
-                <RequestFormTableTh><RequestFormItemLabel htmlFor="note">메모</RequestFormItemLabel></RequestFormTableTh>
-                <RequestFormTableTd>
-                  <RequestFormMemoTextArea id="note" rows={2} value={requestData.note} onChange={(e) => requsetForm("note", e.target.value)} placeholder="메모를 입력하세요." />
-                </RequestFormTableTd>
-              </tr>
-            </tbody>
-          </RequestFormTable>
         </RequestFormTableWrap>
         <RequestSubmitButtonWrap>
           <RequestSubmitButton type="submit">{isEdit ? "수정 완료" : "등록하기"}</RequestSubmitButton>

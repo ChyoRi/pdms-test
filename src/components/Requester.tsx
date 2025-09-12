@@ -16,6 +16,7 @@ interface RequesterProps {
   setIsDrawerOpen: (value: boolean) => void;
   setEditData: (data: RequestData) => void;
   setDetailData: (data: RequestData) => void;
+  userRole: number | null;
 }
 
 const DEFAULT_STATUS = "진행 상태 선택";
@@ -31,7 +32,7 @@ const companyVariants = (raw: string) => {
   return Array.from(new Set([t, lower, upper, cap]));
 };
 
-export default function Requester({ view, setIsDrawerOpen, setEditData, setDetailData }: RequesterProps) {
+export default function Requester({ view, userRole, setIsDrawerOpen, setEditData, setDetailData }: RequesterProps) {
   const [userName, setUserName] = useState("");
   const [userCompany, setUserCompany] = useState<string>("");
   const [requests, setRequests] = useState<RequestData[]>([]); // request DB 배열
@@ -275,7 +276,7 @@ export default function Requester({ view, setIsDrawerOpen, setEditData, setDetai
 
   return (
     <>
-      <MainTitle />
+      <MainTitle userRole={userRole} />
       {view === "dashboard" && (
         <DashBoardWrap>
           <DashBoard capacityHoursPerMonth={704} />

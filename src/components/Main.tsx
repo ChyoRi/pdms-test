@@ -32,9 +32,9 @@ export default function Main({ userRole, setIsDrawerOpen, setEditData, setDetail
 
   // ✅ 권한별 컴포넌트 렌더링
   const renderComponent = () => {
-    if (userRole === 1) return <Requester view={view} setIsDrawerOpen={setIsDrawerOpen} setEditData={setEditData} setDetailData={setDetailData} />;
-    if (userRole === 2) return <Designer view={view} setIsDrawerOpen={setIsDrawerOpen} setDetailData={setDetailData} />;
-    if (userRole === 3) return <Manager view={view} setIsDrawerOpen={setIsDrawerOpen} setDetailData={setDetailData} />;
+    if (userRole === 1) return <Requester view={view} userRole={userRole} setIsDrawerOpen={setIsDrawerOpen} setEditData={setEditData} setDetailData={setDetailData} />;
+    if (userRole === 2) return <Designer view={view} userRole={userRole} setIsDrawerOpen={setIsDrawerOpen} setDetailData={setDetailData} />;
+    if (userRole === 3) return <Manager view={view} userRole={userRole} setIsDrawerOpen={setIsDrawerOpen} setDetailData={setDetailData} />;
   }
 
   return <Container>{renderComponent()}</Container>;
