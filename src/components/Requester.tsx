@@ -213,6 +213,7 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
   const canMutate = (id: string) => {
     const row = requests.find(r => r.id === id);
     if (!row) return false;
+    if (row.manager_review_status === "검수완료") return false;
     if (row.status === "완료" || row.status === "취소") return false;
     if (view === "allrequestlist" && row.requester !== userName) return false;
     return true;

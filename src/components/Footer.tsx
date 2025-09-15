@@ -1,6 +1,8 @@
 import styled from "styled-components"
-import slackIcon from "../assets/icon_slack.svg";
-import googleDriveIcon from "../assets/icon_google_drive.svg";
+import slackIconGray from "../assets/icon_slack_gray.svg";
+import slackIconWhite from "../assets/icon_slack_white.svg";
+import googleDriveIconGray from "../assets/icon_google_drive_gray.svg";
+import googleDriveIconWhite from "../assets/icon_google_drive_white.svg";
 
 export default function Footer() {
   return (
@@ -11,10 +13,10 @@ export default function Footer() {
       </FooterInFo>
       <FooterSnsList>
         <FooterSnsItem>
-          <FooterSnsLink target="_blank" $icon={slackIcon} />
+          <FooterSnsLink target="_blank" $icon={slackIconGray} $iconHover={slackIconWhite} />
         </FooterSnsItem>
         <FooterSnsItem>
-          <FooterSnsLink target="_blank" $icon={googleDriveIcon} href="https://drive.google.com/drive/folders/1-hQiEmPEomtaDFgnRqt0bAaxIFEWEvYn" />
+          <FooterSnsLink target="_blank" $icon={googleDriveIconGray} $iconHover={googleDriveIconWhite} href="https://drive.google.com/drive/folders/1-hQiEmPEomtaDFgnRqt0bAaxIFEWEvYn" />
         </FooterSnsItem>
       </FooterSnsList>
     </Container>
@@ -24,18 +26,19 @@ export default function Footer() {
 const Container = styled.footer`
   ${({ theme }) => theme.mixin.flex("center", "space-between")};
   font-family: 'Pretendard';
-  padding: 5px 10px;
+  padding: 24px;
+  padding-top: 0px;
+  gap: 0 13px;
 `;
 
 const FooterInFo = styled.div`
-  ${({ theme }) => theme.mixin.flex("center")};
-  gap: 0 5px;
+  ${({ theme }) => theme.mixin.flex("flex-start")};
+  flex-direction: column;
 `;
 
 const FooterLogo = styled.strong`
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 700;
-  line-height: 30px;
   color: ${({ theme }) => theme.colors.gray05};
 `;
 
@@ -50,18 +53,32 @@ const FooterCopy = styled.span`
 
 const FooterSnsList = styled.ul`
   ${({ theme }) => theme.mixin.flex("center", "space-between")};
-  margin-right: 5px;
+  gap: 0 8px;
 `;
 
 const FooterSnsItem = styled.li`
+  ${({ theme }) => theme.mixin.flex("center", "center")};
+  width: 36px;
+  height: 36px;
+  background-color: ${({ theme }) => theme.colors.gray01};
+  border-radius: 50%;
+  &:hover {
+    background-color: ${({ theme }) => theme.colors.black};
+  }
 `;
 
-const FooterSnsLink = styled.a<{ $icon: string }>`
+const FooterSnsLink = styled.a<{ $icon: string; $iconHover: string }>`
   display: block;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background-color: ${({ theme }) => theme.colors.gray06};
-  background: ${({ $icon }) => `url(${$icon}) no-repeat center / 25px 25px`};
+  width: 20px;
+  height: 20px;
+  background: ${({ $icon }) => `url(${$icon}) no-repeat center / 20px 20px`};
   cursor: pointer;
+
+  &:hover {
+    background-image: ${({ $iconHover }) => `url(${$iconHover})`};
+  }
+  
+  ${FooterSnsItem}:hover & {
+    background-image: ${({ $iconHover }) => `url(${$iconHover})`};
+  }
 `;

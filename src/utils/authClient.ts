@@ -1,5 +1,4 @@
 // src/utils/authClient.ts
-// 서버 없이 '가림(암호화+base64) + 자동로그인' 유틸
 
 import {
   signInWithEmailAndPassword,
@@ -46,20 +45,9 @@ function deleteCookie(name: string, path = "/") {
 /** ───── 키 파생(PBKDF2) ───── */
 async function deriveKey(passphrase: string, saltAb: ArrayBuffer): Promise<CryptoKey> {
   const enc = new TextEncoder();
-  const baseKey = await crypto.subtle.importKey(
-    "raw",
-    enc.encode(passphrase),
-    "PBKDF2",
-    false,
-    ["deriveKey"]
-  );
+  const baseKey = await crypto.subtle.importKey("raw", enc.encode(passphrase), "PBKDF2", false, ["deriveKey"]);
   return crypto.subtle.deriveKey(
-    {
-      name: "PBKDF2",
-      salt: saltAb,
-      iterations: 100_000,
-      hash: "SHA-256",
-    },
+    { name: "PBKDF2", salt: saltAb, iterations: 100_000, hash: "SHA-256" },
     baseKey,
     { name: "AES-GCM", length: 256 },
     false,
@@ -67,22 +55,19 @@ async function deriveKey(passphrase: string, saltAb: ArrayBuffer): Promise<Crypt
   );
 }
 
-/** ───── 암/복호화 ─────
- * 저장 바이트 포맷: [1B ver][12B IV][16B salt][cipher...]
- */
+/** ───── 암/복호화 ───── */
 const VERSION = 1;
-
 async function encryptToB64(plain: object, passphrase: string): Promise<string> {
   const enc = new TextEncoder();
   const ivU8 = crypto.getRandomValues(new Uint8Array(12));
   const saltU8 = crypto.getRandomValues(new Uint8Array(16));
 
-  const ivAB   = u8ToArrayBuffer(ivU8);
-  const saltAB = u8ToArrayBuffer(saltU8);
-  const dataAB = u8ToArrayBuffer(enc.encode(JSON.stringify(plain)));
-
-  const key = await deriveKey(passphrase, saltAB);
-  const cipherAB = await crypto.subtle.encrypt({ name: "AES-GCM", iv: ivAB }, key, dataAB);
+  const key = await deriveKey(passphrase, u8ToArrayBuffer(saltU8));
+  const cipherAB = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv: u8ToArrayBuffer(ivU8) },
+    key,
+    u8ToArrayBuffer(enc.encode(JSON.stringify(plain)))
+  );
 
   const header = new Uint8Array(1 + ivU8.length + saltU8.length);
   header[0] = VERSION;
@@ -99,17 +84,16 @@ async function encryptToB64(plain: object, passphrase: string): Promise<string> 
 async function decryptFromB64(b64: string, passphrase: string): Promise<any> {
   const all = new Uint8Array(b64decode(b64));
   if (all[0] !== VERSION) throw new Error("Unsupported version");
-
-  const ivU8     = all.slice(1, 13);
-  const saltU8   = all.slice(13, 29);
+  const ivU8 = all.slice(1, 13);
+  const saltU8 = all.slice(13, 29);
   const cipherU8 = all.slice(29);
 
-  const ivAB     = u8ToArrayBuffer(ivU8);
-  const saltAB   = u8ToArrayBuffer(saltU8);
-  const cipherAB = u8ToArrayBuffer(cipherU8);
-
-  const key = await deriveKey(passphrase, saltAB);
-  const plainAB = await crypto.subtle.decrypt({ name: "AES-GCM", iv: ivAB }, key, cipherAB);
+  const key = await deriveKey(passphrase, u8ToArrayBuffer(saltU8));
+  const plainAB = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: u8ToArrayBuffer(ivU8) },
+    key,
+    u8ToArrayBuffer(cipherU8)
+  );
   return JSON.parse(new TextDecoder().decode(plainAB));
 }
 
@@ -118,13 +102,19 @@ export async function initAuthMemoryPersistence(auth: Auth) {
   await setPersistence(auth, inMemoryPersistence);
 }
 
-/** ───── 자동로그인 쿠키 설정 ───── */
+/** ───── 자동로그인 쿠키 ───── */
 const COOKIE_NAME = "pcz_auth_shadow";
+// 환경변수 비어있으면 개발 기본키 사용
+const PASSPHRASE = import.meta.env.VITE_AUTH_PASSPHRASE || "dev-only-fallback-change-this";
 
-// ★ 변경: .env 의 VITE_AUTH_PASSPHRASE 사용 (없을 때만 개발용 기본값)
-const PASSPHRASE =
-  import.meta.env.VITE_AUTH_PASSPHRASE || "dev-only-fallback-change-this";
+/** ★ 추가: 회원가입/기타 상황에서 바로 저장할 때 사용 */
+export async function saveAutoLoginCookie(email: string, password: string, days = 7) {
+  const payload = { email, password, t: Date.now() };
+  const b64 = await encryptToB64(payload, PASSPHRASE);
+  setCookie(COOKIE_NAME, b64, days);
+}
 
+/** 기존 로그인 함수: 체크박스에 따라 저장/삭제 */
 export async function loginWithRemember(
   auth: Auth,
   email: string,
@@ -133,11 +123,8 @@ export async function loginWithRemember(
   days = 7
 ) {
   const cred = await signInWithEmailAndPassword(auth, email, password);
-
   if (remember) {
-    const payload = { email, password, t: Date.now() };
-    const b64 = await encryptToB64(payload, PASSPHRASE);
-    setCookie(COOKIE_NAME, b64, days);
+    await saveAutoLoginCookie(email, password, days); // ★ 변경: 재사용
   } else {
     deleteCookie(COOKIE_NAME);
   }

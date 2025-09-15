@@ -25,7 +25,7 @@ export default function MainTitle({ userRole }: MainTitleProps) {
       // 디자이너
       return {
         ...common,
-        myrequestlist: "나의 작업 리스트",
+        myrequestlist: "작업 리스트",
         allrequestlist: "전체 작업 리스트",
       };
     }
@@ -40,10 +40,17 @@ export default function MainTitle({ userRole }: MainTitleProps) {
     // 요청자(기본)
     return {
       ...common,
-      myrequestlist: "나의 요청 리스트",
+      myrequestlist: "요청 리스트",
       allrequestlist: "전체 요청 리스트",
     };
   }, [role]);
+
+  const roleSuffix = useMemo(() => {
+    if (view !== "myrequestlist") return ""; // 다른 뷰는 표시 없음
+    if (role === 2) return " (디자이너)";
+    if (role === 3) return " (매니저)";
+    return ""; // 요청자 등 그 외
+  }, [view, role]); // ★ 추가
 
   const today = new Date();
   const year = today.getFullYear();
@@ -51,7 +58,7 @@ export default function MainTitle({ userRole }: MainTitleProps) {
 
   return (
     <MainTitleWrap>
-      <MainTitleText>{year}년 {month}월 디자인 {VIEW_LABEL[view]}</MainTitleText>
+      <MainTitleText>{year}년 {month}월 디자인 {VIEW_LABEL[view]}{roleSuffix}</MainTitleText>
     </MainTitleWrap>
   );
 }

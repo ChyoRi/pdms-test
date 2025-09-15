@@ -118,8 +118,8 @@ export default function DesignerRequestItem({
           <option value="대기">대기</option>
           <option value="진행중">진행중</option>
           <option value="검수요청">검수요청</option>
-          <option value="완료">완료</option>
-          <option value="취소">취소</option>
+          <option value="완료" disabled>완료</option>
+          <option value="취소" disabled>취소</option>
         </select>
       </RequestListTableTd>
       <RequestListTableTd>

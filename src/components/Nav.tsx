@@ -27,13 +27,13 @@ export default function Nav({ userRole }: NavProps) {
   const labels = useMemo(() => {
     switch (role) {
       case 1: // 요청자
-        return { my: "나의 요청 리스트", all: "전체 요청 리스트" };
+        return { my: "요청 리스트", all: "전체 요청 리스트" };
       case 2: // 디자이너
-        return { my: "나의 작업 리스트", all: "전체 작업 리스트" };
+        return { my: "작업 리스트", all: "전체 작업 리스트" };
       case 3: // 매니저
         return { my: "요청 리스트", all: "" }; // 매니저는 단일 메뉴
       default:
-        return { my: "나의 요청 리스트", all: "전체 요청 리스트" };
+        return { my: "요청 리스트", all: "전체 요청 리스트" };
     }
   }, [role]);
 

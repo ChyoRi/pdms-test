@@ -29,18 +29,42 @@ const defaultRequestData: Partial<RequestData> = {
 }
 
 // 회사별 옵션 정의
-const HOMEPLUS_FORMS = ["GHS", "MHC", "MHC/GHS"] as readonly string[];
-const HOMEPLUS_TYPES = [
-  "프론트테마","별도기획전","일자별배너","핫새배너","큐레이션배너",
-  "GNB-기획전(전문관)","GNB-주류이지픽업","GNB-택배배송관","페이/카드프로모션",
-  "이벤트배너","상품상세","제휴","클럽","팝업","푸시","홈테마","즉시배송",
-  "트레이딩","이벤트","기타"
-] as readonly string[];
-
+const HOMEPLUS_FORMS = ["GHS", "MHC"] as readonly string[];
+const HOMEPLUS_TYPES_GHS = [
+  "핫새배너",
+  "홈테마",
+  "프론트테마",
+  "페이/카드프로모션",
+  "팝업",
+  "트레이딩",
+  "즉시배송",
+  "제휴",
+  "일자별배너",
+  "이벤트배너",
+  "별도기획전",
+  "GNB-택배배송관",
+  "GNB-주류이지픽업",
+  "GNB-기획전",
+  "이벤트",
+  "기타",
+] as const;
+const HOMEPLUS_TYPES_MHC = [
+  "프론트테마",
+  "푸시",
+  "트레이딩",
+  "클럽",
+  "이벤트배너",
+  "이벤트",
+  "기타",
+] as const;
+const HOMEPLUS_TYPES_BY_FORM: Record<string, readonly string[]> = {
+  GHS: HOMEPLUS_TYPES_GHS,
+  MHC: HOMEPLUS_TYPES_MHC,
+};
 const NSMALL_FORMS = [
   "M영업기획팀","디지털마케팅팀","M상품1팀","M상품2팀","M상품3팀",
   "TV영업기획팀","TC영업기획팀","미디어컨텐츠팀","전략기획팀","MC서비스기획팀"
-] as readonly string[];
+] as const;
 const NSMALL_TYPES = [
   "프로모션","배너(프로모션,연관)","배너(마케팅)","배너(상품)","배너(etv/etcom)","배너(엔라방)","썸네일(그룹)"
 ] as readonly string[];
@@ -57,20 +81,37 @@ const NSMALL_DETAIL_MAP: Record<string, string[]> = {
 const normalize = (s?: string) => (s ?? "").trim().toLowerCase();
 const isNSMall = (company?: string) => normalize(company) === "nsmall";
 
+const getHomeplusTypesByForm = (form?: string): string[] => {
+  const key = (form ?? "").trim();
+  const list = HOMEPLUS_TYPES_BY_FORM[key];
+  if (list && list.length) return [...list] as string[];
+  // 안전 폴백: 두 세트 합집합(옵션만, DB 스키마엔 영향 없음)
+  return Array.from(new Set<string>([...HOMEPLUS_TYPES_GHS, ...HOMEPLUS_TYPES_MHC]));
+};
+
+// Homeplus 부서 기본 업무유형 = 해당 부서 리스트의 첫 항목
+const getDefaultHomeplusType = (form?: string) => {
+  const arr = getHomeplusTypesByForm(form);
+  return arr[0] ?? "";
+};
+
 const getCompanyConfig = (company?: string) => {
   if (isNSMall(company)) {
     return {
       forms: [...NSMALL_FORMS],
       types: [...NSMALL_TYPES],
       formDefault: NSMALL_FORMS[0],
-      typeDefault: "" as string
+      typeDefault: "" as string, // placeholder 사용
     };
   }
+  // Homeplus
+  const formDefault = HOMEPLUS_FORMS[0];
   return {
     forms: [...HOMEPLUS_FORMS],
-    types: [...HOMEPLUS_TYPES],
-    formDefault: HOMEPLUS_FORMS[0],
-    typeDefault: HOMEPLUS_TYPES[0]
+    // types는 렌더 시 부서 기반 필터링, 여기선 합집합만 보유
+    types: Array.from(new Set<string>([...HOMEPLUS_TYPES_GHS, ...HOMEPLUS_TYPES_MHC])),
+    formDefault,
+    typeDefault: getDefaultHomeplusType(formDefault),
   };
 };
 
@@ -107,27 +148,47 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
   // 수정모드 보존 렌더 목록
   const renderForms = useMemo(() => {
     const list = [...companyCfg.forms];
-    if (isEdit && requestData.task_form && !list.includes(requestData.task_form as string)) {
-      list.unshift(requestData.task_form as string);
+    if (isEdit && requestData.task_form && !list.includes(requestData.task_form as any)) {
+      list.unshift(requestData.task_form as any);
     }
-    return list;
+    return list as string[];
   }, [companyCfg.forms, isEdit, requestData.task_form]);
 
   const renderTypes = useMemo(() => {
-    const list = [...companyCfg.types];
+    if (isNSMall(userCompany)) {
+      const list = [...companyCfg.types];
+      if (isEdit && requestData.task_type && !list.includes(requestData.task_type as any)) {
+        list.unshift(requestData.task_type as any);
+      }
+      return list as string[];
+    }
+    const form = (requestData.task_form as string) || companyCfg.formDefault;
+    const list = getHomeplusTypesByForm(form);
     if (isEdit && requestData.task_type && !list.includes(requestData.task_type as string)) {
       list.unshift(requestData.task_type as string);
     }
     return list;
-  }, [companyCfg.types, isEdit, requestData.task_type]);
+  }, [userCompany, companyCfg.types, companyCfg.formDefault, isEdit, requestData.task_form, requestData.task_type]);
 
   // 입력 변경
   const requsetForm = (field: string, value: string | boolean) => {
+    // NSMall: type 변경 시 detail 초기화
     if (field === "task_type" && isNSMall(userCompany)) {
       setRequestData((prev) => ({
         ...prev,
         task_type: value as string,
         task_type_detail: "",
+      }));
+      return;
+    }
+    // ★ 추가: Homeplus 부서 변경 시 유형 자동 보정
+    if (field === "task_form" && !isNSMall(userCompany)) {
+      const newForm = value as string;
+      const allowed = getHomeplusTypesByForm(newForm);
+      setRequestData((prev) => ({
+        ...prev,
+        task_form: newForm,
+        task_type: allowed.includes((prev.task_type as string) || "") ? prev.task_type : allowed[0],
       }));
       return;
     }
@@ -227,10 +288,6 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
 
     // 1차: 정확 매칭
     let snap = await _queryHomeplusPreset(task_form, task_type);
-    // 2차 폴백: MHC/GHS
-    if (snap.empty && task_form !== "MHC/GHS") {
-      snap = await _queryHomeplusPreset("MHC/GHS", task_type);
-    }
     // 3차 폴백(선택): GHS↔MHC 상호 폴백
     if (snap.empty && (task_form === "GHS" || task_form === "MHC")) {
       const alt = task_form === "GHS" ? "MHC" : "GHS";
@@ -298,7 +355,7 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
     const forms = [requestData, ...extras];
 
     // 모든 필수값 종합 검사 (폼별 메시지)
-    for (let i = 0; i < forms.length; i++) {
+     for (let i = 0; i < forms.length; i++) {
       const f = forms[i];
       const msg = validateDesignForm(f, isNSMall(userCompany));
       if (msg) {
@@ -317,10 +374,9 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
 
       const formValue = (f.task_form as string) || companyCfg.formDefault;
       const typeValue = isNSMall(userCompany)
-        ? ((f.task_type as string) || "") // ★ 변경: 등록 모드에서 placeholder는 ""
-        : ((f.task_type as string) || companyCfg.typeDefault);
+        ? ((f.task_type as string) || "")
+        : ((f.task_type as string) || getDefaultHomeplusType(formValue)); // ★ 변경: 부서 기준 기본값
 
-      // 회사별 프리셋 조회에 상세 전달
       const { base: baseHour, times } = await fetchWorkHourPreset(
         f.task_form as string,
         f.task_type as string,
@@ -478,16 +534,17 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
                     $wide={isNSMall(userCompany)}
                     value={
                       isNSMall(userCompany)
-                        ? (isEdit ? (requestData.task_type || (renderTypes[0] as string || "")) : (requestData.task_type ?? "")) // ★ 변경
-                        : (requestData.task_type || companyCfg.typeDefault)
+                        ? (isEdit ? (requestData.task_type || (renderTypes[0] as string || "")) : (requestData.task_type ?? ""))
+                        : (requestData.task_type || getDefaultHomeplusType((requestData.task_form as string) || companyCfg.formDefault)) // ★ 변경
                     }
                     onChange={(e) => requsetForm("task_type", e.target.value)}
                   >
                     {isNSMall(userCompany) && !isEdit && (
-                      <option value="">업무 유형을 선택해주세요</option> // placeholder 텍스트는 옵션 라벨로만
+                      <option value="">업무 유형을 선택해주세요</option>
                     )}
-                    {renderTypes.map((v) => <option key={v as string} value={v as string}>{v as string}</option>)}
+                    {renderTypes.map((v) => <option key={v} value={v}>{v}</option>)}
                   </RequestFormSelectBox>
+
                   {isNSMall(userCompany) && !!requestData.task_type && (
                     <RequestFormSelectBox
                       id="task_type_detail"
@@ -536,7 +593,7 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
           {!isEdit && 
             extras.map((f, idx) => {
               const detailOptions = isNSMall(userCompany) ? getNSmallDetails(f.task_type as string) : [];
-              const showDetail = isNSMall(userCompany) && !!f.task_type; // truthy 체크
+              const showDetail = isNSMall(userCompany) && !!f.task_type;
               return (
                 <div key={idx} style={{ marginBottom: 24 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "8px 0 4px" }}>
@@ -550,12 +607,6 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
                     <tbody>
                       <tr><RequestFormTableTh>문서번호</RequestFormTableTh><RequestFormTableTd /></tr>
                       <tr>
-                        <RequestFormTableTh><RequestFormItemLabel htmlFor={`merchandiser_ex_${idx}`}>담당 MD</RequestFormItemLabel></RequestFormTableTh>
-                        <RequestFormTableTd>
-                          <RequestFormTextInput id={`merchandiser_ex_${idx}`} type="text" value={(f.merchandiser as string) || ""} onChange={(e) => updateExtra(idx, "merchandiser", e.target.value)} placeholder="담당 MD 이름 또는 ID를 입력하세요." />
-                        </RequestFormTableTd>
-                      </tr>
-                      <tr>
                         <RequestFormTableTh><RequestFormItemLabel htmlFor={`completion_date_ex_${idx}`}>완료 요청일</RequestFormItemLabel></RequestFormTableTh>
                         <RequestFormTableTd>
                           <RequestFormDateInput id={`completion_date_ex_${idx}`} type="date" value={(f.completion_date as string) || ""} onChange={(e) => updateExtra(idx, "completion_date", e.target.value)} />
@@ -565,6 +616,12 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
                         <RequestFormTableTh><RequestFormItemLabel htmlFor={`open_date_ex_${idx}`}>오픈일</RequestFormItemLabel></RequestFormTableTh>
                         <RequestFormTableTd>
                           <RequestFormDateInput id={`open_date_ex_${idx}`} type="date" value={(f.open_date as string) || ""} onChange={(e) => updateExtra(idx, "open_date", e.target.value)} />
+                        </RequestFormTableTd>
+                      </tr>
+                      <tr>
+                        <RequestFormTableTh><RequestFormItemLabel htmlFor={`merchandiser_ex_${idx}`}>담당 MD</RequestFormItemLabel></RequestFormTableTh>
+                        <RequestFormTableTd>
+                          <RequestFormTextInput id={`merchandiser_ex_${idx}`} type="text" value={(f.merchandiser as string) || ""} onChange={(e) => updateExtra(idx, "merchandiser", e.target.value)} placeholder="담당 MD 이름 또는 ID를 입력하세요." />
                         </RequestFormTableTd>
                       </tr>
                       <tr>
@@ -581,11 +638,19 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
                           <RequestFormSelectBox
                             id={`task_type_ex_${idx}`}
                             $wide={isNSMall(userCompany)}
-                            value={isNSMall(userCompany) ? ((f.task_type as string) || "") : ((f.task_type as string) || companyCfg.typeDefault)} // ★ 변경
+                            value={
+                              isNSMall(userCompany)
+                                ? ((f.task_type as string) || "")
+                                : ((f.task_type as string) || getDefaultHomeplusType((f.task_form as string) || companyCfg.formDefault)) // ★ 변경
+                            }
                             onChange={(e) => updateExtra(idx, "task_type", e.target.value)}
                           >
-                            {isNSMall(userCompany) && <option value="">업무 유형을 선택해주세요</option>} {/* ★ 변경: 등록에서만 placeholder */}
-                            {companyCfg.types.map((v) => <option key={v as string} value={v as string}>{v as string}</option>)}
+                            {isNSMall(userCompany) && <option value="">업무 유형을 선택해주세요</option>}
+                            {(
+                              isNSMall(userCompany)
+                                ? companyCfg.types
+                                : getHomeplusTypesByForm((f.task_form as string) || companyCfg.formDefault) // ★ 변경
+                            ).map((v) => <option key={v as string} value={v as string}>{v as string}</option>)}
                           </RequestFormSelectBox>
 
                           {showDetail && (

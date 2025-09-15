@@ -12,6 +12,7 @@ interface RequestItemProps {
 }
 
 export default function RequesterRequestItem({ item, index, disableActions, onReviewComplete, onCancel, onEditClick, onDetailClick }: RequestItemProps) {
+  const lockedByManager = item.manager_review_status === "검수완료";
 
   // 날짜 포맷 함수
   const formatDate = (timestamp: any) => {
@@ -93,10 +94,10 @@ export default function RequesterRequestItem({ item, index, disableActions, onRe
         )}
       </RequestListTableTd>
       <RequestListTableTd>
-        <EditButton onClick={() => onEditClick(item.id)} disabled={disableActions || item.status === "취소" || item.status === "완료"}>수정</EditButton>
+        <EditButton onClick={() => onEditClick(item.id)} disabled={disableActions || lockedByManager || item.status === "취소" || item.status === "완료"}>수정</EditButton>
       </RequestListTableTd>
       <RequestListTableTd>
-        <CancelButton onClick={() => onCancel(item.id)} disabled={disableActions || item.status === "취소" || item.status === "완료"}>취소</CancelButton>
+        <CancelButton onClick={() => onCancel(item.id)} disabled={disableActions || lockedByManager || item.status === "취소" || item.status === "완료"}>취소</CancelButton>
       </RequestListTableTd>
     </RequestListTableTr>
   );

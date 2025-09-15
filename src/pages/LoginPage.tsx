@@ -3,10 +3,37 @@ import { useNavigate } from 'react-router-dom';
 import styled from "styled-components";
 import { auth } from "../firebaseconfig";
 import { loginWithRemember } from "../utils/authClient";
-
+import { FirebaseError } from "firebase/app";
 
 interface LoginPageProps {
   onLoginSuccess: () => void; // ✅ props 타입 정의
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function mapLoginError(err: unknown): string {
+  const fallback = "로그인에 실패했습니다. 입력 정보를 확인해 주세요.";
+  if (!(err instanceof FirebaseError)) return fallback;
+
+  switch (err.code) {
+    case "auth/invalid-email":
+      return "이메일 형식이 올바르지 않습니다.";
+    case "auth/user-not-found":
+      return "해당 이메일의 계정을 찾을 수 없습니다. 아이디를 확인해 주세요.";
+    // 🔑 비밀번호 관련은 전부 '비밀번호 불일치'로 통일
+    case "auth/wrong-password":
+    case "auth/invalid-credential":
+    case "auth/invalid-login-credentials":
+      return "비밀번호가 일치하지 않습니다.";
+    case "auth/too-many-requests":
+      return "로그인 시도가 너무 많습니다. 잠시 후 다시 시도해 주세요.";
+    case "auth/network-request-failed":
+      return "네트워크 오류로 로그인할 수 없습니다. 연결 상태를 확인해 주세요.";
+    case "auth/user-disabled":
+      return "해당 계정은 비활성화되어 로그인할 수 없습니다.";
+    default:
+      return fallback;
+  }
 }
 
 export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
@@ -20,12 +47,19 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
   }
 
   const login = async () => {
+    const emailTrim = email.trim();
+
+    // 입력 검증
+    if (!emailTrim) { alert("이메일을 입력해주세요."); return; }
+    if (!EMAIL_RE.test(emailTrim)) { alert("올바른 이메일 형식이 아닙니다. 예) name@example.com"); return; }
+    if (!password) { alert("비밀번호를 입력해주세요."); return; }
+
     try {
-      await loginWithRemember(auth, email, password, remember); // ★ 변경
+      await loginWithRemember(auth, emailTrim, password, remember);
       onLoginSuccess();
       navigate('/main');
-    } catch (err: any) {
-      alert("로그인 실패: " + err.message);
+    } catch (err) {
+      alert(mapLoginError(err));
     }
   };
 
@@ -116,7 +150,6 @@ const Pw_input = styled.input`
   color: #333;
 `;
 
-// ★ 추가
 const RememberRow = styled.div`
   width: 460px;
   margin-top: 10px;
