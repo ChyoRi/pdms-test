@@ -30,6 +30,12 @@ export default function RequesterRequestItem({ item, index, disableActions, onRe
     onDetailClick(item);
   };
 
+  const isRequesterDone = item.requester_review_status === "검수완료";
+
+  const designers = Array.isArray(item.assigned_designers)
+    ? (item.assigned_designers as string[])
+    : null;
+
   return (
     <RequestListTableTr isCanceled={item.status === "취소"}>
       <RequestListTableTd>{index}</RequestListTableTd>
@@ -71,7 +77,17 @@ export default function RequesterRequestItem({ item, index, disableActions, onRe
           }
         </StautsBadge>
       </RequestListTableTd>
-      <RequestListTableTd>{item.assigned_designer || "미배정"}</RequestListTableTd>
+      <RequestListTableTd>
+        {designers && designers.length > 0 ? (
+          <DesignersWrap>
+            {designers.map((name, i) => (
+              <DesignerSpan key={`${name}-${i}`}>{name}</DesignerSpan>
+            ))}
+          </DesignersWrap>
+        ) : (
+          item.assigned_designers || "미배정"
+        )}
+      </RequestListTableTd>
       <RequestListTableTd>
         {item.manager_review_status === "검수완료" && item.result_url ? (
           <UrlLink
@@ -83,7 +99,9 @@ export default function RequesterRequestItem({ item, index, disableActions, onRe
         )}
       </RequestListTableTd>
       <RequestListTableTd>
-        {item.manager_review_status === "검수완료" ? (
+        {isRequesterDone ? (
+          <CompletedText>검수완료</CompletedText>
+        ) : item.manager_review_status === "검수완료" ? (
           item.status !== "완료" ? (
             <ReviewButton onClick={() => onReviewComplete(item.id)} disabled={disableActions}>검수완료</ReviewButton>
           ) : (
@@ -357,4 +375,12 @@ const CancelButton = styled.button`
     cursor: default;
     pointer-events: none;
   }
+`;
+
+const DesignersWrap = styled.div`
+  ${({ theme }) => theme.mixin.flex('center')};
+  flex-direction: column;
+`;
+const DesignerSpan = styled.span`
+  line-height: 1.2;
 `;

@@ -12,29 +12,17 @@ interface LoginPageProps {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function mapLoginError(err: unknown): string {
-  const fallback = "로그인에 실패했습니다. 입력 정보를 확인해 주세요.";
-  if (!(err instanceof FirebaseError)) return fallback;
+  const unified = "이메일 또는 비밀번호가 올바르지 않습니다."; // 단일 문구
+  if (!(err instanceof FirebaseError)) return unified;
 
-  switch (err.code) {
-    case "auth/invalid-email":
-      return "이메일 형식이 올바르지 않습니다.";
-    case "auth/user-not-found":
-      return "해당 이메일의 계정을 찾을 수 없습니다. 아이디를 확인해 주세요.";
-    // 🔑 비밀번호 관련은 전부 '비밀번호 불일치'로 통일
-    case "auth/wrong-password":
-    case "auth/invalid-credential":
-    case "auth/invalid-login-credentials":
-      return "비밀번호가 일치하지 않습니다.";
-    case "auth/too-many-requests":
-      return "로그인 시도가 너무 많습니다. 잠시 후 다시 시도해 주세요.";
-    case "auth/network-request-failed":
-      return "네트워크 오류로 로그인할 수 없습니다. 연결 상태를 확인해 주세요.";
-    case "auth/user-disabled":
-      return "해당 계정은 비활성화되어 로그인할 수 없습니다.";
-    default:
-      return fallback;
+  if (err.code === "auth/invalid-email") {
+    return "이메일 형식이 올바르지 않습니다.";
   }
+
+  return unified;
 }
+
+
 
 export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [email, setEmail] = useState('');
@@ -42,20 +30,20 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [remember, setRemember] = useState(true);
   const navigate = useNavigate();
 
-  const moveSignUp = () => {
-    navigate('/signup');
-  }
+  const moveSignUp = () => navigate('/signup');
+  const moveFindPassword = () => navigate('/find-password');
 
   const login = async () => {
-    const emailTrim = email.trim();
+    // ★ 변경: 정규화 제거, 입력값 그대로 사용
+    const emailInput = email;
 
-    // 입력 검증
-    if (!emailTrim) { alert("이메일을 입력해주세요."); return; }
-    if (!EMAIL_RE.test(emailTrim)) { alert("올바른 이메일 형식이 아닙니다. 예) name@example.com"); return; }
+    // 입력 검증(형식까지만 세분화)
+    if (!emailInput) { alert("이메일을 입력해주세요."); return; }
+    if (!EMAIL_RE.test(emailInput)) { alert("이메일 형식이 올바르지 않습니다. 예) name@example.com"); return; }
     if (!password) { alert("비밀번호를 입력해주세요."); return; }
 
     try {
-      await loginWithRemember(auth, emailTrim, password, remember);
+      await loginWithRemember(auth, emailInput, password, remember);
       onLoginSuccess();
       navigate('/main');
     } catch (err) {
@@ -73,12 +61,13 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
         <LoginWrap>
           <Id_input type="text" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="이메일을 입력해주세요." />
           <Pw_input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="비밀번호를 입력해주세요." />
-          <RememberRow>
-            <label>
+          <LoginInfo>
+            <StayLoginLabel>
               <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-              <span> 이 기기에서 로그인 유지</span>
-            </label>
-          </RememberRow>
+              <span>새로고침시 로그인 유지</span>
+            </StayLoginLabel>
+            <FindPasswordButton type="button" onClick={moveFindPassword}>비밀번호 찾기</FindPasswordButton>
+          </LoginInfo>
         </LoginWrap>
         <LoginButton onClick={login}>로그인</LoginButton>
         <SignUpWrap>
@@ -150,11 +139,28 @@ const Pw_input = styled.input`
   color: #333;
 `;
 
-const RememberRow = styled.div`
-  width: 460px;
-  margin-top: 10px;
+const LoginInfo = styled.div`
+  ${({ theme }) => theme.mixin.flex('center', 'space-between')};
+  width: 100%;
+  margin-top: 15px;
   color: #555;
   font-size: 13px;
+`;
+
+const StayLoginLabel = styled.label`
+   ${({ theme }) => theme.mixin.flex('center')};
+
+   input {
+    margin-right: 5px;
+   }
+
+   span {
+    color: ${({ theme }) => theme.colors.navy};
+   }
+`;
+
+const FindPasswordButton = styled.button`
+  color: ${({ theme }) => theme.colors.navy};
 `;
 
 const LoginButton = styled.button`

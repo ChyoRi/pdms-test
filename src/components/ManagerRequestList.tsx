@@ -4,12 +4,12 @@ import ManagerRequestItem from "./ManagerRequestItem";
 interface ManagerRequestListProps {
   data: RequestData[];
   designerList: any[];
-  selectedDesigners: { [key: string]: string };
-  designerSelect: (requestId: string, designerName: string) => void;
+  selectedDesigners: { [key: string]: string[] };
+  designerSelect: (requestId: string, designerNames: string[]) => void;
   assignDesigner: (requestId: string) => void;
   sendToRequester: (requestId: string) => void;
   onDetailClick: (item: RequestData) => void;
-  // ★ 추가
+  unassignDesigner: (requestId: string, designerName: string) => void;
   workHours: { [id: string]: string };
   onChangeWorkHour: (requestId: string, val: string) => void;
   onSaveWorkHour: (requestId: string) => void;
@@ -23,6 +23,7 @@ export default function ManagerRequestList({
   selectedDesigners,
   designerSelect,
   assignDesigner,
+  unassignDesigner,
   sendToRequester,
   onDetailClick,
   workHours,
@@ -78,9 +79,10 @@ export default function ManagerRequestList({
                                   index={index + 1} 
                                   item={item}
                                   designerList={designerList}
-                                  selectedDesigner={selectedDesigners[item.id] || ""}
-                                  onDesignerSelect={(name) => designerSelect(item.id, name)}
+                                  selectedDesigners={selectedDesigners[item.id] || []}
+                                  onDesignerSelect={(names) => designerSelect(item.id, names)}
                                   onAssignDesigner={() => assignDesigner(item.id)}
+                                  onUnassignDesigner={(name) => unassignDesigner(item.id, name)}
                                   onSendToRequester={() => sendToRequester(item.id)} 
                                   onDetailClick={onDetailClick}
                                   workHourValue={workHours[item.id] ?? ""}

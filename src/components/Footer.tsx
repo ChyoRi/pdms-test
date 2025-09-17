@@ -13,7 +13,7 @@ export default function Footer() {
       </FooterInFo>
       <FooterSnsList>
         <FooterSnsItem>
-          <FooterSnsLink target="_blank" $icon={slackIconGray} $iconHover={slackIconWhite} />
+          <FooterSnsLink target="_blank" $icon={slackIconGray} $iconHover={slackIconWhite} href="https://thepdms.slack.com/?redir=%2Fssb%2Fredirect%3Fentry_point%3Dyour_workspaces%26geocode%3Dko-kr"/>
         </FooterSnsItem>
         <FooterSnsItem>
           <FooterSnsLink target="_blank" $icon={googleDriveIconGray} $iconHover={googleDriveIconWhite} href="https://drive.google.com/drive/folders/1-hQiEmPEomtaDFgnRqt0bAaxIFEWEvYn" />

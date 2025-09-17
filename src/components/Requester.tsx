@@ -21,7 +21,7 @@ interface RequesterProps {
 
 const DEFAULT_STATUS = "진행 상태 선택";
 
-// ★ 추가: 회사 문자열 변형 세트(공백 trim + 대/소문자 변형)
+// 회사 문자열 변형 세트(공백 trim + 대/소문자 변형)
 const companyVariants = (raw: string) => {
   const t = (raw ?? "").trim();
   if (!t) return [] as string[];
@@ -56,7 +56,7 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
       const usnap = await getDoc(uref);
       if (usnap.exists()) {
         const data = usnap.data() as any;
-        setUserCompany((data?.company ?? "").trim()); // ★ 변경: trim
+        setUserCompany((data?.company ?? "").trim());
       } else {
         setUserCompany("");
       }
@@ -69,7 +69,7 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
   // ✅ 목록 구독: view/userCompany/userName 변화에 반응
   useEffect(() => {
     // 항상 먼저 비워서 이전 구독 잔상 제거
-    setRequests([]); // ★ 변경: 스테일 데이터 제거
+    setRequests([]);
 
     // 대시보드/공수 화면은 이 컴포넌트에서 목록 없음
     if (view === "dashboard" || view === "inworkhour") {
@@ -98,7 +98,6 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
     if (view === "allrequestlist") {
       if (!userCompany) return;
 
-      // ★ 추가: 변형값 여러 개를 동시에 구독 → 병합
       const variants = companyVariants(userCompany);
       const col = collection(db, "design_request");
 
@@ -119,7 +118,7 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
         const qRef = query(
           col,
           where("company", "==", v),
-          orderBy("design_request_id", "desc") // ★ 주의: 복합 인덱스 필요할 수 있음
+          orderBy("design_request_id", "desc")
         );
         const unsub = onSnapshot(qRef, (snap) => {
           snap.docs.forEach((d) => {
@@ -132,7 +131,7 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
 
       return () => unsubs.forEach((f) => f());
     }
-  }, [view, userCompany, userName]); // ★ 변경: 의존성 정리
+  }, [view, userCompany, userName]);
 
   // 필터 적용 콜백 (하위에서 올라옴)
   const applyRange  = (r: { start: Date | null; end: Date | null }) => setDateRange(r); // ⬅️ 추가
@@ -185,6 +184,8 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
 
   // ⭐ 화면에 보여줄 리스트
   // ② 뷰 리스트(기간 + 상태 + 실시간 검색)
+  type Action = "review" | "edit" | "cancel";
+
   const viewList = useMemo(() => {
     const s = dateRange.start ? toMidnight(dateRange.start) : null;
     const e = dateRange.end ? toMidnight(dateRange.end) : null;
@@ -210,18 +211,25 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
     });
   }, [prepared, statusFilter, dateRange, keyword]);
 
-  const canMutate = (id: string) => {
+  const canMutate = (id: string, action: Action) => {
     const row = requests.find(r => r.id === id);
     if (!row) return false;
-    if (row.manager_review_status === "검수완료") return false;
-    if (row.status === "완료" || row.status === "취소") return false;
+
+    // allrequestlist에서 타인 문서는 모든 액션 금지
     if (view === "allrequestlist" && row.requester !== userName) return false;
+
+    // 완료/취소 문서는 어떤 액션도 금지
+    if (row.status === "완료" || row.status === "취소") return false;
+
+    // 매니저 검수완료 이후 잠금: 단, 'review'(요청자 검수확정)만 예외 허용
+    if (row.manager_review_status === "검수완료" && action !== "review") return false;
+
     return true;
   };
 
   // ✅ 검수완료 처리
   const reviewComplete = async (id: string) => {
-    if (!canMutate(id)) return; // 🔒 권한 없음
+    if (!canMutate(id, "review")) return;
     await updateDoc(doc(db, "design_request", id), {
       status: "완료",
       requester_review_status: "검수완료"
@@ -237,7 +245,7 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
   };
 
   const editRequest = async (id: string) => {
-    if (!canMutate(id)) return; // 🔒 권한 없음
+    if (!canMutate(id, "edit")) return;
     const docRef = doc(db, "design_request", id);
     await updateDoc(docRef, { requester_edit_state: true });
 
@@ -257,7 +265,7 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
 
   // ✅ 취소 처리
   const cancelRequest = async (id: string) => {
-    if (!canMutate(id)) return; // 🔒 권한 없음
+    if (!canMutate(id, "cancel")) return; // 🔒 권한 없음
     const row = requests.find(r => r.id === id);
     const ok = window.confirm(
       `문서번호 ${row?.design_request_id ?? ""} 요청을 취소하시겠습니까?` 

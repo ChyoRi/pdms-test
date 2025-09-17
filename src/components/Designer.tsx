@@ -31,6 +31,7 @@ interface DesignRequest {
   requirement: string;
   url?: string;
   note?: string;
+  assigned_designers?: string[]; // 신규
   assigned_designer?: string;
   review_status?: string;
   designer_start_date?: string;
@@ -50,6 +51,7 @@ type RowForm = {
 
 const DEFAULT_STATUS = "진행 상태 선택";
 const DEFAULT_COMPANY = "회사 선택";
+const SPECIAL_SOLO_NAME = "홈돌이";
 
 export default function Designer({ view, userRole, setIsDrawerOpen, setDetailData }: RequesterProps) {
   const [assignedRequests, setAssignedRequests] = useState<DesignRequest[]>([]);
@@ -76,30 +78,50 @@ export default function Designer({ view, userRole, setIsDrawerOpen, setDetailDat
 
   // ✅ Firestore에서 로그인 디자이너에게 배정된 요청만 가져오기
   useEffect(() => {
-    if (!designerName) return;
+  if (!designerName) return;
 
-    if (view === "dashboard" || view === "inworkhour") {
-      setAssignedRequests([]);
-      return;
-    }
+  if (view === "dashboard" || view === "inworkhour") {
+    setAssignedRequests([]);
+    return;
+  }
 
-    const qRef =
-      view === "allrequestlist"
-        ? query(collection(db, "design_request"), orderBy("design_request_id", "desc"))
-        : query(
-            collection(db, "design_request"),
-            where("assigned_designer", "==", designerName),
-            orderBy("design_request_id", "desc")
-          );
-
-    const unsubscribe = onSnapshot(qRef, (snapshot) => {
-      const data: DesignRequest[] = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as Omit<DesignRequest, "id">)}));
-      setAssignedRequests(data);
+  if (view === "allrequestlist") {
+    const qAll = query(collection(db, "design_request"), orderBy("design_request_id", "desc"));
+    const unsubAll = onSnapshot(qAll, snap => {
+      setAssignedRequests(snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })));
     });
+    return () => unsubAll();
+  }
 
-    return () => unsubscribe();
+  // ✅ 내 작업: 배열/단일 레거시 2개 쿼리 병합
+  const qArr = query(
+    collection(db, "design_request"),
+    where("assigned_designers", "array-contains", designerName),
+    orderBy("design_request_id", "desc")
+  );
+  const qStr = query(
+    collection(db, "design_request"),
+    where("assigned_designer", "==", designerName),
+    orderBy("design_request_id", "desc")
+  );
+
+  let arrA: any[] = [];
+  let arrB: any[] = [];
+  const mergeAndSet = () => {
+    const map = new Map<string, any>();
+    [...arrA, ...arrB].forEach(x => map.set(x.id, x));
+    // 주문번호 desc 정렬 유지
+    const merged = [...map.values()].sort((a, b) =>
+      String(b.design_request_id ?? "").localeCompare(String(a.design_request_id ?? ""))
+    );
+    setAssignedRequests(merged);
+  };
+
+  const unsubA = onSnapshot(qArr, snap => { arrA = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })); mergeAndSet(); });
+  const unsubB = onSnapshot(qStr, snap => { arrB = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })); mergeAndSet(); });
+
+    return () => { unsubA(); unsubB(); };
   }, [designerName, view]);
-
   // 회사 옵션(users.company에서 수집) — 제외 처리는 RequestFilter에서 함
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "users"), (snap) => {
@@ -196,6 +218,25 @@ export default function Designer({ view, userRole, setIsDrawerOpen, setDetailDat
     });
   }, [normalizedRequests]);
 
+  // 문서에서 배정자 목록을 안전하게 꺼내기
+  const getAssignees = (r: any): string[] => {
+    if (Array.isArray(r.assigned_designers)) {
+      return r.assigned_designers.filter(Boolean).map((s: string) => s.trim());
+    }
+    if (r.assigned_designer) return [String(r.assigned_designer).trim()];
+    return [];
+  };
+
+  // 현재 로그인 디자이너가 이 문서를 볼 수 있는지(“홈돌이 단일만 노출” 규칙)
+  const isVisibleForDesigner = (r: any, me: string): boolean => {
+    // 홈돌이가 아닐 땐 기존과 동일하게 모두 노출
+    if (me !== SPECIAL_SOLO_NAME) return true;
+
+    const assignees = getAssignees(r);
+    // 홈돌이가 포함되어 있고, ‘혼자’ 배정일 때만 노출
+    return assignees.includes(SPECIAL_SOLO_NAME) && assignees.length === 1;
+  };
+
   // 최종 표시 리스트 (상태 + 회사 + 기간 + 검색)
   const viewList = useMemo(() => {
     const s = dateRange.start ? toMidnight(dateRange.start) : null;
@@ -203,6 +244,8 @@ export default function Designer({ view, userRole, setIsDrawerOpen, setDetailDat
 
     return preparedNormalized.filter((r: any) => {
       let ok = true;
+
+      if (ok && !isVisibleForDesigner(r, designerName)) ok = false;
 
       // 1) 상태(표시값 기준)
       if (ok && statusFilter && statusFilter !== DEFAULT_STATUS) {
@@ -267,10 +310,16 @@ export default function Designer({ view, userRole, setIsDrawerOpen, setDetailDat
 
   // 행별 권한 체크(완료/취소는 항상 불가, 전체 목록에서는 본인 배정만 허용)
   const canMutate = (id: string) => {
-    const row = assignedRequests.find(r => r.id === id);
+    const row: any = assignedRequests.find(r => r.id === id);
     if (!row) return false;
     if (row.status === "완료" || row.status === "취소") return false;
-    if (view === "allrequestlist" && row.assigned_designer !== designerName) return false;
+
+    const mine =
+      Array.isArray(row.assigned_designers)
+        ? row.assigned_designers.includes(designerName)
+        : row.assigned_designer === designerName;
+
+    if (view === "allrequestlist" && !mine) return false;
     return true;
   };
 

@@ -399,7 +399,7 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
         url: f.url,
         note: f.note,
         status: "대기",
-        assigned_designer: "미배정",
+        assigned_designers: [],
         requester_review_status: "검수대기",
         manager_review_status: "",
         result_url: "",

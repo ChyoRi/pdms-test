@@ -69,7 +69,10 @@ export default function DesignerRequestList({
         <tbody>
           {requests.length > 0 ? (
             requests.map((item, index) => {
-              const isMine = item.assigned_designer === currentDesignerName;
+              const isMine =
+                Array.isArray(item.assigned_designers)
+                  ? item.assigned_designers.includes(currentDesignerName)
+                  : item.assigned_designer === currentDesignerName;
               const rowDisabled = disableActions || (lockOthers && !isMine); // ✨ 타인 행만 잠금
               return (
                 <DesignerRequestItem

@@ -262,7 +262,7 @@ export default function DashBoard({ capacityHoursPerMonth }: Props) {
     for (const r of rows) {
       const ts = pickDateMillis(r);
       if (ts===null || ts<periodInfo.start || ts>periodInfo.end || isWeekend(ts)) continue;
-      const name = (r.assigned_designer && String(r.assigned_designer).trim()) || "미지정";
+      const name = (r.assigned_designers && String(r.assigned_designers).trim()) || "미지정";
       const e = m.get(name) || { hp:0, ns:0, total:0 };
       if (isHomeplus(r)) e.hp += 1; else if (isNSmall(r)) e.ns += 1;
       e.total = e.hp + e.ns; m.set(name, e);

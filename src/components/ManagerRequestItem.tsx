@@ -6,9 +6,10 @@ interface ManagerRequestItemProps {
   index: number;
   item: RequestData;
   designerList: any[];
-  selectedDesigner: string;
-  onDesignerSelect: (designerName: string) => void;
+  selectedDesigners: string[];
+  onDesignerSelect: (designerNames: string[]) => void;
   onAssignDesigner: () => void;
+  onUnassignDesigner: (designerName: string) => void;
   onSendToRequester: () => void;
   onDetailClick: (item: RequestData) => void;
   workHourValue: string;
@@ -22,9 +23,10 @@ export default function ManagerRequestItem({
   index,
   item,
   designerList,
-  selectedDesigner,
+  selectedDesigners,
   onDesignerSelect,
   onAssignDesigner,
+  onUnassignDesigner,
   onSendToRequester,
   onDetailClick,
   workHourValue,
@@ -69,6 +71,17 @@ export default function ManagerRequestItem({
     },
     [onCancelEditWorkHour]
   );
+
+  // 이미 배정된 사람들
+  const assignedList: string[] = Array.isArray((item as any).assigned_designers)
+    ? (item as any).assigned_designers
+    : ((item as any).assigned_designer ? [(item as any).assigned_designer] : []);
+
+  // ★ 멀티 선택 onChange
+  const onChangeSingle = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const v = e.target.value;
+    onDesignerSelect(v ? [v] : []); // 선택 해제 시 빈 배열
+  };
   
   return(
     <RequestListTableTr isCanceled={item.status === "취소"}>
@@ -124,15 +137,51 @@ export default function ManagerRequestItem({
       <RequestListTableTd>{formatDate(item.designer_end_date)}</RequestListTableTd>
       {/* ✅ 디자이너 선택 + 배정 */}
       <RequestListTableTd>
-        <AssignSelect value={selectedDesigner} onChange={(e) => onDesignerSelect(e.target.value)} disabled={item.status === "취소" || item.status === "완료"}>
-          <option value="">선택</option>
-          {designerList.map((designer) => (
-            <option key={designer.id} value={designer.name}>
-              {designer.name}
-            </option>
-          ))}
-        </AssignSelect>
-        <AssignButton onClick={onAssignDesigner} disabled={item.status === "취소" || item.status === "완료"}>배정</AssignButton>
+        {/* 배정된 태그 */}
+        {assignedList.length > 0 && (
+          <AssignedWrap>
+            {assignedList.map((name) => (
+              <AssignedTag key={name}>
+                {name}
+                <RemoveBtn
+                  type="button"
+                  onClick={() => { if (!isDoneOrCanceled) onUnassignDesigner(name); }}
+                  disabled={isDoneOrCanceled}
+                  aria-label={`${name} 배정 해제`}
+                >
+                  ×
+                </RemoveBtn>
+              </AssignedTag>
+            ))}
+          </AssignedWrap>
+        )}
+
+        {/* ★ 멀티 셀렉트 + 이미 배정된 사람은 disabled */}
+        <AssignRow>
+          <AssignSelect
+            value={selectedDesigners[0] ?? ""}  // 한 명만 표시
+            onChange={onChangeSingle}
+            disabled={isDoneOrCanceled}
+          >
+            <option value="">선택</option>      {/* placeholder */}
+            {designerList.map((designer) => {
+              const name = designer.name as string;
+              const used = assignedList.includes(name);
+              return (
+                <option key={designer.id} value={name} disabled={used}>
+                  {name}{used ? " (배정됨)" : ""}
+                </option>
+              );
+            })}
+          </AssignSelect>
+
+          <AssignButton
+            onClick={onAssignDesigner}
+            disabled={isDoneOrCanceled || selectedDesigners.length === 0}
+          >
+            배정
+          </AssignButton>
+        </AssignRow>
       </RequestListTableTd>
       {/* ✅ 요청자 전달 버튼 */}
       <RequestListTableTd>
@@ -470,3 +519,17 @@ const WorkHourScope = styled.div`
   align-items: center;
   gap: 8px;
 `;
+
+const AssignedWrap = styled.div`
+  display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; justify-content: center;
+`;
+const AssignedTag = styled.span`
+  display: inline-flex; align-items: center; gap: 6px;
+  background: #f2f4f7; border: 1px solid #d0d5dd; border-radius: 12px; padding: 2px 8px; font-size: 12px;
+`;
+const RemoveBtn = styled.button`
+  border: none; background: transparent; font-size: 14px; line-height: 1; cursor: pointer; color: #666;
+  &:disabled { color: #bbb; cursor: default; }
+`;
+
+const AssignRow = styled.div` display: flex; align-items: center; justify-content: center; `;

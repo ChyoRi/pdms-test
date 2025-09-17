@@ -69,6 +69,7 @@ export default function SignUpPage() {
 
       await setDoc(doc(db, "users", user.uid), {
         name: nameTrim,
+        email: emailTrim,
         company: companyTrim,
         role,
         createdAt: serverTimestamp(),
@@ -121,7 +122,7 @@ export default function SignUpPage() {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="비밀번호를 입력해주세요."
+            placeholder="비밀번호를 6자이상 입력해주세요."
           />
           <PwCheck_input
             type="password"

@@ -1,7 +1,7 @@
 // src/components/InWorkHour.tsx
 import { useEffect, useMemo, useState } from "react";
 import styled from "styled-components";
-import { collection, onSnapshot, query } from "firebase/firestore";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "../firebaseconfig";
 
 /** ───────── Types ───────── */
@@ -17,6 +17,7 @@ type DesignerRow = {
 
 type RequestDoc = {
   id: string;
+  assigned_designers?: string[];
   assigned_designer?: string;
   status?: string;
   in_work_hour?: number;
@@ -25,6 +26,9 @@ type RequestDoc = {
   open_date?: any;
   created_date?: any;
 };
+
+const SPECIAL_SOLO = "홈돌이";
+const DISPLAY_BLACKLIST = new Set<string>(["미배정"]);
 
 /** ───────── Utilities ───────── */
 const months = [
@@ -77,18 +81,35 @@ const isProgress = (s?: string) =>
 // 월 목표 공수(고정 160h)
 const MONTHLY_TARGET_HOURS = 160;
 
-// ★ 추가: 소수점 n자리 "버림(끊기)" 유틸 (부동소수 보정 포함)
+// 소수점 n자리 "버림(끊기)" 유틸 (부동소수 보정 포함)
 const floorTo = (n: number, digits = 2) => {
   const p = Math.pow(10, digits);
   // 작은 epsilon을 더해 0.43000000000006 같은 경우도 안정적으로 처리
   return Math.sign(n) * Math.floor(Math.abs(n) * p + 1e-9) / p;
 };
 
-// ★ 추가: 출력용(최대 2자리, 불필요한 0 제거)
+// 출력용(최대 2자리, 불필요한 0 제거)
 const formatMax2 = (n: number) => {
   // 두 자리로 고정한 뒤, 끝의 0과 점을 정리 -> "0.40" → "0.4", "1.00" → "1"
   return n.toFixed(2).replace(/\.?0+$/,"");
 };
+
+// 🔧 문서에서 “실제 배정된 디자이너 배열”을 안전하게 꺼내기
+// const getAssignees = (r: RequestDoc): string[] => {
+//   if (Array.isArray(r.assigned_designers) && r.assigned_designers.length)
+//     return r.assigned_designers.filter(Boolean).map(s => s.trim());
+//   if (r.assigned_designer) return [String(r.assigned_designer).trim()];
+//   return [];
+// };
+
+// 🔧 이 문서가 특정 디자이너에게 차지하는 내부공수(= in_work_hour ÷ 배정인원)
+// const shareHourFor = (r: RequestDoc, who: string): number => {
+//   const list = getAssignees(r);
+//   if (!list.includes(who)) return 0;
+//   const n = Math.max(1, list.length);
+//   const base = Number(r.in_work_hour) || 0; // (예: 0.5 외부 × times 0.5 = 0.25 가 DB의 in_work_hour)
+//   return base / n; // ← 인원만큼 나눔
+// };
 
 /** ───────── Component ───────── */
 export default function InWorkHour({
@@ -101,10 +122,22 @@ export default function InWorkHour({
   targetDate?: Date;
 }) {
   const [docs, setDocs] = useState<RequestDoc[]>([]);
+  const [designerNames, setDesignerNames] = useState<string[]>([]);
   const day = toMidnight(targetDate ?? new Date());
   const year = day.getFullYear();
 
-  // 실시간 디자인요청 문서 구독
+  useEffect(() => {
+    const qUsers = query(collection(db, "users"), where("role", "==", 2));
+    const unSub = onSnapshot(qUsers, (snap) => {
+      const names = snap.docs
+        .map(d => String((d.data() as any).name || "").trim())
+        .filter(Boolean);
+      setDesignerNames(names);
+    });
+    return () => unSub();
+  }, []);
+
+  // 실시간 구독
   useEffect(() => {
     const qRef = query(collection(db, "design_request"));
     const unSub = onSnapshot(qRef, (snap) => {
@@ -114,61 +147,81 @@ export default function InWorkHour({
     return () => unSub();
   }, []);
 
-  // 디자이너별 집계
+  // 기존: getAssignees() 유지해도 되지만, "실제 집계 대상" 헬퍼를 하나 더 둡니다.
+  const getAssignees = (r: RequestDoc): string[] => {
+    if (Array.isArray(r.assigned_designers) && r.assigned_designers.length)
+      return r.assigned_designers.filter(Boolean).map(s => s.trim());
+    if (r.assigned_designer) return [String(r.assigned_designer).trim()];
+    return [];
+  };
+
+  // ✅ 제외 대상(홈돌이 등)을 뺀 "실제 집계 대상"만 반환
+  const getEffectiveAssignees = (r: RequestDoc): string[] => {
+    // 원본에서 공백 제거 + 빈값 제거
+    const raw = getAssignees(r).map(s => s.trim()).filter(Boolean);
+
+    // '미배정'은 항상 제외
+    const cleaned = raw.filter(n => n !== "미배정");
+
+    // 홈돌이 단독 배정이면 그대로 포함
+    if (cleaned.length === 1 && cleaned[0] === SPECIAL_SOLO) {
+      return [SPECIAL_SOLO];
+    }
+
+    // 동배정(2명 이상)이고 그중 홈돌이가 포함되면 홈돌이는 제외
+    return cleaned.filter(n => n !== SPECIAL_SOLO);
+  };
+
+  // ✅ 문서가 특정 디자이너에게 차지하는 내부공수 = in_work_hour ÷ (제외자 뺀 배정 인원)
+  //  - 본인이 효과 배정 대상이 아닐 때 0
+  //  - 전원이 제외일 땐 0 (공수 미배정 취급)
+  const shareHourFor = (r: RequestDoc, who: string): number => {
+    const eff = getEffectiveAssignees(r);
+    if (!eff.includes(who)) return 0;          // 홈돌이는 항상 0
+    const base = Number(r.in_work_hour) || 0;
+    const n = eff.length || 1;
+    return base / n;
+  };
+
+  // 디자이너별 집계 (배정 배열 기반)
   const rows: DesignerRow[] = useMemo(() => {
-    // 디자이너 유니크 추출 (빈값/미배정 제외)
-    const designers = Array.from(
-      new Set(
-        docs
-          .map((d) => (d.assigned_designer || "").trim())
-          .filter((n) => n.length > 0 && n !== "미배정")
-      )
-    ).sort((a, b) => a.localeCompare(b, "ko"));
+    // ⬇️ 행으로 보여줄 이름들: users + 문서(제외 없이 합집합)
+    const fromDocs = Array.from(new Set(docs.flatMap(d => getAssignees(d))));
+    const designers = Array.from(new Set([...designerNames, ...fromDocs]))
+      .filter(n => n && !DISPLAY_BLACKLIST.has(n))    // ← '미배정'은 행에서 제거
+      .sort((a, b) => a.localeCompare(b, "ko"));
 
     return designers.map((name) => {
-      const mine = docs.filter((d) => d.assigned_designer === name);
+      // ⬇️ 공수/카운트 집계는 “실제 분배 대상” 문서만 (홈돌이는 항상 0이 됨)
+      const mine = docs.filter(d => getEffectiveAssignees(d).includes(name));
+      const dayDocs = mine.filter(d => sameDay(anchorDate(d), day));
 
-      // ✅ 해당 "일" 기준 문서(요청일 계열 기준)
-      const dayDocs = mine.filter((d) => sameDay(anchorDate(d), day));
+      const wait = dayDocs.filter(d => isWait(d.status)).length;
+      const progress = dayDocs.filter(d => isProgress(d.status)).length;
+      const done = dayDocs.filter(d => isDone(d.status)).length;
 
-      // 상태 카운트(해당 일 기준 문서의 현재 status로 카운트)
-      const wait = dayDocs.filter((d) => isWait(d.status)).length;
-      const progress = dayDocs.filter((d) => isProgress(d.status)).length;
-      const done = dayDocs.filter((d) => isDone(d.status)).length;
+      const usedHoursRaw = dayDocs.reduce((s, d) => s + shareHourFor(d, name), 0);
+      const usedHours = floorTo(usedHoursRaw, 2);
 
-      // ✅ 사용공수: 상태와 무관하게 해당 일 문서들의 in_work_hour 합산
-      const usedHoursRaw = dayDocs.reduce(
-        (s, d) => s + (Number(d.in_work_hour) || 0),
-        0
-      );
-      const usedHours = floorTo(usedHoursRaw, 2); // ★ 변경: 둘째 자리 버림(끊기)
-
-      // ✅ 월별: rate(공수율) + count(요청건수) — 전부 anchorDate 기준
       const monthly: MonthlyStat[] = Array.from({ length: 12 }, (_, m) => {
-        // 공수율 = (해당 월 in_work_hour 합 / 160) × 100
         const monthHours = mine
-          .filter((d) => {
+          .filter(d => {
             const dt = anchorDate(d);
             return dt && dt.getFullYear() === year && dt.getMonth() === m;
           })
-          .reduce((s, d) => s + (Number(d.in_work_hour) || 0), 0);
-
-        const rate = Math.round(
-          (monthHours / MONTHLY_TARGET_HOURS) * 100
-        );
-
-        // 건수 = 해당 월 문서 개수(요청 기준)
-        const count = mine.filter((d) => {
+          .reduce((s, d) => s + shareHourFor(d, name), 0);
+        const rate = Math.round((monthHours / MONTHLY_TARGET_HOURS) * 100);
+        const count = mine.filter(d => {
           const dt = anchorDate(d);
           return dt && dt.getFullYear() === year && dt.getMonth() === m;
         }).length;
-
         return { rate, count };
       });
 
       return { name, wait, progress, done, usedHours, monthly };
     });
-  }, [docs, day, year]);
+  }, [docs, day, year, designerNames]);
+
 
   // 연평균/연총건수 계산
   const computed = useMemo(() => {
@@ -235,7 +288,6 @@ export default function InWorkHour({
                 <InWorkHourTableTd>{r.wait}</InWorkHourTableTd>
                 <InWorkHourTableTd>{r.progress}</InWorkHourTableTd>
                 <InWorkHourTableTd>{r.done}</InWorkHourTableTd>
-                {/* ★ 변경: 표시 시에도 최대 2자리까지만 보이도록 포맷 */}
                 <InWorkHourTableTd>{formatMax2(r.usedHours)}</InWorkHourTableTd>
 
                 {r.monthly.map((m, i) => (
