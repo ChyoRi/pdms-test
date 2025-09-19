@@ -21,13 +21,14 @@ type RequestDoc = {
   assigned_designer?: string;
   status?: string;
   in_work_hour?: number;
+  company?: string;
   // 날짜 필드(서로 다른 스키마 대비)
   request_date?: any;
   open_date?: any;
   created_date?: any;
 };
 
-const SPECIAL_SOLO = "홈돌이";
+const SPECIAL_SOLO = "손미나";
 const DISPLAY_BLACKLIST = new Set<string>(["미배정"]);
 
 /** ───────── Utilities ───────── */
@@ -94,6 +95,15 @@ const formatMax2 = (n: number) => {
   return n.toFixed(2).replace(/\.?0+$/,"");
 };
 
+// company 정규화
+const normCompany = (c?: string): "nsmall" | "homeplus" | "other" => {
+  const k = String(c ?? "").trim().replace(/\s+/g, "").toLowerCase();
+  if (k === "nsmall" || k === "n-small") return "nsmall";
+  if (k === "homeplus") return "homeplus";
+  return "other";
+};
+
+
 // 🔧 문서에서 “실제 배정된 디자이너 배열”을 안전하게 꺼내기
 // const getAssignees = (r: RequestDoc): string[] => {
 //   if (Array.isArray(r.assigned_designers) && r.assigned_designers.length)
@@ -147,7 +157,7 @@ export default function InWorkHour({
     return () => unSub();
   }, []);
 
-  // 기존: getAssignees() 유지해도 되지만, "실제 집계 대상" 헬퍼를 하나 더 둡니다.
+  // 원본 배정 배열
   const getAssignees = (r: RequestDoc): string[] => {
     if (Array.isArray(r.assigned_designers) && r.assigned_designers.length)
       return r.assigned_designers.filter(Boolean).map(s => s.trim());
@@ -155,21 +165,30 @@ export default function InWorkHour({
     return [];
   };
 
-  // ✅ 제외 대상(홈돌이 등)을 뺀 "실제 집계 대상"만 반환
+  // ★ 변경: company별 "실제 집계 대상" 계산
+  // - NSmall/기타: 기존 규칙 유지
+  //   · 단독 홈돌이 → 포함
+  //   · 동배정에 홈돌이 포함 → 홈돌이 제외
+  // - HomePlus: 동배정이면 **균등 분배** → 홈돌이 포함하여 인원 나눔
   const getEffectiveAssignees = (r: RequestDoc): string[] => {
-    // 원본에서 공백 제거 + 빈값 제거
     const raw = getAssignees(r).map(s => s.trim()).filter(Boolean);
+    const cleaned = raw.filter(n => n !== "미배정"); // 항상 제외
 
-    // '미배정'은 항상 제외
-    const cleaned = raw.filter(n => n !== "미배정");
+    const comp = normCompany(r.company);
 
-    // 홈돌이 단독 배정이면 그대로 포함
-    if (cleaned.length === 1 && cleaned[0] === SPECIAL_SOLO) {
-      return [SPECIAL_SOLO];
+    // 단일 배정이면 그대로(두 회사 공통 규칙)
+    if (cleaned.length <= 1) return cleaned;
+
+    if (comp === "homeplus") {
+      // ★ HomePlus: 동배정 → 모두 포함(홈돌이 포함)하여 균등 분배
+      return cleaned;
     }
 
-    // 동배정(2명 이상)이고 그중 홈돌이가 포함되면 홈돌이는 제외
-    return cleaned.filter(n => n !== SPECIAL_SOLO);
+    // ★ NSmall/기타: 동배정에 홈돌이가 있으면 홈돌이만 제외
+    if (cleaned.includes(SPECIAL_SOLO)) {
+      return cleaned.filter(n => n !== SPECIAL_SOLO);
+    }
+    return cleaned;
   };
 
   // ✅ 문서가 특정 디자이너에게 차지하는 내부공수 = in_work_hour ÷ (제외자 뺀 배정 인원)
@@ -177,7 +196,7 @@ export default function InWorkHour({
   //  - 전원이 제외일 땐 0 (공수 미배정 취급)
   const shareHourFor = (r: RequestDoc, who: string): number => {
     const eff = getEffectiveAssignees(r);
-    if (!eff.includes(who)) return 0;          // 홈돌이는 항상 0
+    if (!eff.includes(who)) return 0;
     const base = Number(r.in_work_hour) || 0;
     const n = eff.length || 1;
     return base / n;
@@ -185,14 +204,12 @@ export default function InWorkHour({
 
   // 디자이너별 집계 (배정 배열 기반)
   const rows: DesignerRow[] = useMemo(() => {
-    // ⬇️ 행으로 보여줄 이름들: users + 문서(제외 없이 합집합)
     const fromDocs = Array.from(new Set(docs.flatMap(d => getAssignees(d))));
     const designers = Array.from(new Set([...designerNames, ...fromDocs]))
-      .filter(n => n && !DISPLAY_BLACKLIST.has(n))    // ← '미배정'은 행에서 제거
+      .filter(n => n && !DISPLAY_BLACKLIST.has(n))
       .sort((a, b) => a.localeCompare(b, "ko"));
 
     return designers.map((name) => {
-      // ⬇️ 공수/카운트 집계는 “실제 분배 대상” 문서만 (홈돌이는 항상 0이 됨)
       const mine = docs.filter(d => getEffectiveAssignees(d).includes(name));
       const dayDocs = mine.filter(d => sameDay(anchorDate(d), day));
 

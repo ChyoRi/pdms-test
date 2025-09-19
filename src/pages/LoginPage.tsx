@@ -30,7 +30,7 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [remember, setRemember] = useState(true);
   const navigate = useNavigate();
 
-  const moveSignUp = () => navigate('/signup');
+  // const moveSignUp = () => navigate('/signup');
   const moveFindPassword = () => navigate('/find-password');
 
   const login = async () => {
@@ -70,9 +70,9 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
           </LoginInfo>
         </LoginWrap>
         <LoginButton onClick={login}>로그인</LoginButton>
-        <SignUpWrap>
+        {/* <SignUpWrap>
           <SignUpWrapText>계정이 없습니까?</SignUpWrapText><SignUp onClick={moveSignUp}>등록하기</SignUp>
-        </SignUpWrap>
+        </SignUpWrap> */}
       </LoginFrame>
       <CopyLight>© Pushcomz Corp.</CopyLight>
     </Container>
@@ -183,16 +183,16 @@ const CopyLight = styled.p`
   text-align: center;
 `;
 
-const SignUpWrap = styled.div`
+// const SignUpWrap = styled.div`
   
-`;
+// `;
 
-const SignUpWrapText = styled.span`
-  margin-right: 10px;
-  font-size: 13px;
-`;
+// const SignUpWrapText = styled.span`
+//   margin-right: 10px;
+//   font-size: 13px;
+// `;
 
-const SignUp = styled.button`
-  font-size: 13px;
-  color: ${({ theme }) => theme.colors.navy};
-`;
+// const SignUp = styled.button`
+//   font-size: 13px;
+//   color: ${({ theme }) => theme.colors.navy};
+// `;

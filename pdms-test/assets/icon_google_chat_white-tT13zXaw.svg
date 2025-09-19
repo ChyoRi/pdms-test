@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_레이어_1" data-name="레이어_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 311 320">
+  <!-- Generator: Adobe Illustrator 29.5.1, SVG Export Plug-In . SVG Version: 2.1.0 Build 141)  -->
+  <defs>
+    <style>
+      .st0 {
+        stroke: #1375eb;
+      }
+
+      .st0, .st1, .st2, .st3, .st4, .st5, .st6, .st7 {
+        fill: none;
+        stroke-width: 2px;
+      }
+
+      .st1 {
+        stroke: #138495;
+      }
+
+      .st8 {
+        fill: #fff;
+      }
+
+      .st2 {
+        stroke: #f3801d;
+      }
+
+      .st3 {
+        stroke: #75783e;
+      }
+
+      .st4 {
+        stroke: #7eb426;
+      }
+
+      .st5 {
+        stroke: #00983a;
+      }
+
+      .st6 {
+        stroke: #91a080;
+      }
+
+      .st7 {
+        stroke: #7e916f;
+      }
+    </style>
+  </defs>
+  <g>
+    <path class="st7" d="M76.37.51v76.47" vector-effect="non-scaling-stroke"/>
+    <path class="st0" d="M76.38,76.98l-76.38-.02" vector-effect="non-scaling-stroke"/>
+    <path class="st2" d="M235.08,1.09c-.11.04-.2.08-.27.13-.11.06-.17.15-.17.28l-.02,75.51" vector-effect="non-scaling-stroke"/>
+    <path class="st4" d="M234.62,77.01h-.05" vector-effect="non-scaling-stroke"/>
+    <path class="st6" d="M76.41,77.01s-.02-.02-.03-.03" vector-effect="non-scaling-stroke"/>
+    <path class="st3" d="M310.53,76.77l-75.91.24" vector-effect="non-scaling-stroke"/>
+    <path class="st1" d="M76.43,182.69l-76.43-.02" vector-effect="non-scaling-stroke"/>
+    <path class="st5" d="M76.44,259.13v-38.28" vector-effect="non-scaling-stroke"/>
+  </g>
+  <path class="st8" d="M76.37.51v76.47s-76.37-.02-76.37-.02V20.77c.57-3.97,1.74-7.31,3.53-10.01C7.94,4.08,14.34.72,22.75.67c17.77-.09,35.65-.15,53.62-.16Z"/>
+  <path class="st8" d="M76.37.51l157.42.02c.33,0,.65.1.92.29l.37.27c-.11.04-.2.08-.27.13-.11.06-.17.15-.17.28l-.02,75.51H76.41s-.02-.02-.03-.03V.51Z"/>
+  <path class="st8" d="M235.08,1.09l75.45,75.68-75.91.24.02-75.51c0-.13.06-.22.17-.28.07-.05.16-.09.27-.13Z"/>
+  <path class="st8" d="M0,76.96l76.38.02s.02.02.03.03l.02,105.68-76.43-.02v-105.71Z"/>
+  <path class="st8" d="M310.53,76.77l.47.34v161.9c-1.77,9.69-6.79,15.94-15.06,18.77-2.95,1.01-7.29,1.51-13.03,1.5-37.26-.06-74.9-.12-112.92-.17-5.52,0-11.12.03-16.8.12-.31,0-.58.12-.8.34-18.6,18.51-37.27,37.19-56,56.02-2.87,2.89-6.12,4.5-10.24,3.89-3.84-.57-6.67-2.55-8.49-5.94-.77-1.44-1.16-4.07-1.17-7.88-.05-15.46-.06-30.97-.05-46.53v-38.28s37.77-37.78,37.77-37.78c.33-.33.79-.52,1.26-.52l118.3.04c.46,0,.83-.37.83-.83h0l-.03-104.75h.05l75.91-.24Z"/>
+  <path class="st8" d="M76.43,182.69v76.44c-15.97.09-31.81.12-47.52.09-6.55-.01-11.26-.53-14.15-1.54-8.09-2.83-13.01-9.09-14.76-18.8v-56.21l76.43.02Z"/>
+</svg>
