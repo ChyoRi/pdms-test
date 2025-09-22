@@ -89,7 +89,7 @@ export default function DesignerRequestList({
             })
           ) : (
             <tr>
-              <td colSpan={16} style={{ textAlign: "center" }}>
+              <td colSpan={18} style={{ textAlign: "center" }}>
                 배정된 요청이 없습니다.
               </td>
             </tr>
@@ -102,7 +102,7 @@ export default function DesignerRequestList({
 
 const RequestListTableWrap = styled.div`
   position: relative;
-  max-height: 535px;
+  height: calc(100vh - 302px);
   border-top: 2px solid ${({ theme }) => theme.colors.black};
   overflow-y: auto;
   scrollbar-width: thin;

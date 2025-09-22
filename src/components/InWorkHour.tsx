@@ -80,7 +80,7 @@ const isProgress = (s?: string) =>
   s === "진행중" || s === "검수중" || s === "검수요청";
 
 // 월 목표 공수(고정 160h)
-const MONTHLY_TARGET_HOURS = 160;
+const MONTHLY_TARGET_HOURS = 162.3;
 
 // 소수점 n자리 "버림(끊기)" 유틸 (부동소수 보정 포함)
 const floorTo = (n: number, digits = 2) => {
@@ -261,76 +261,85 @@ export default function InWorkHour({
   }
 
   return (
-    <InWorkHourWrap>
-      <InWorkHourTable>
-        <colgroup>
-          <col style={{ width: '50px' }} /><col style={{ width: '140px' }} />
-          <col style={{ width: '70px' }} /><col style={{ width: '70px' }} />
-          <col style={{ width: '70px' }} /><col style={{ width: '70px' }} />
-          <col style={{ width: '80px' }} /><col style={{ width: '80px' }} />
-          <col style={{ width: '80px' }} /><col style={{ width: '80px' }} />
-          <col style={{ width: '80px' }} /><col style={{ width: '80px' }} />
-          <col style={{ width: '80px' }} /><col style={{ width: '80px' }} />
-          <col style={{ width: '80px' }} /><col style={{ width: '80px' }} />
-          <col style={{ width: '80px' }} /><col style={{ width: '80px' }} />
-          <col style={{ width: '110px' }} />
-        </colgroup>
-        <thead>
-          <tr>
-            <InWorkHourTableTh rowSpan={2}>번호</InWorkHourTableTh>
-            <InWorkHourTableTh rowSpan={2}>디자이너명</InWorkHourTableTh>
-            <InWorkHourTableTh colSpan={4}>현재현황(일공수 : {dailyHours}h)</InWorkHourTableTh>
-            <InWorkHourTableTh colSpan={12}>월별 진행현황(공수달성율 / 제작건수)</InWorkHourTableTh>
-            <InWorkHourTableTh rowSpan={2}>연평균</InWorkHourTableTh>
-          </tr>
-          <tr>
-            <InWorkHourTableTh>대기</InWorkHourTableTh>
-            <InWorkHourTableTh>진행중</InWorkHourTableTh>
-            <InWorkHourTableTh>완료</InWorkHourTableTh>
-            <InWorkHourTableTh>사용공수(h)</InWorkHourTableTh>
-            {months.map((m) => (
-              <InWorkHourTableTh key={m}>{m}</InWorkHourTableTh>
-            ))}
-          </tr>
-        </thead>
-
-        <tbody>
-          {rows.map((r, idx) => {
-            const { index, avgRate, totalCount } = computed[idx];
-            return (
-              <tr key={r.name + idx}>
-                <InWorkHourTableTd>{index}</InWorkHourTableTd>
-                <InWorkHourTableTd>{r.name}</InWorkHourTableTd>
-
-                <InWorkHourTableTd>{r.wait}</InWorkHourTableTd>
-                <InWorkHourTableTd>{r.progress}</InWorkHourTableTd>
-                <InWorkHourTableTd>{r.done}</InWorkHourTableTd>
-                <InWorkHourTableTd>{formatMax2(r.usedHours)}</InWorkHourTableTd>
-
-                {r.monthly.map((m, i) => (
-                  <InWorkHourTableTd key={i}>
-                    <div>{m.rate}%</div>
-                    <div>{m.count}</div>
+    <InWorkHourFrame>
+      <InWorkHourWrap>
+        <InWorkHourTable>
+          <colgroup>
+            <col style={{ width: '50px' }} /><col style={{ width: '140px' }} />
+            <col style={{ width: '70px' }} /><col style={{ width: '70px' }} />
+            <col style={{ width: '70px' }} /><col style={{ width: '70px' }} />
+            <col style={{ width: '80px' }} /><col style={{ width: '80px' }} />
+            <col style={{ width: '80px' }} /><col style={{ width: '80px' }} />
+            <col style={{ width: '80px' }} /><col style={{ width: '80px' }} />
+            <col style={{ width: '80px' }} /><col style={{ width: '80px' }} />
+            <col style={{ width: '80px' }} /><col style={{ width: '80px' }} />
+            <col style={{ width: '80px' }} /><col style={{ width: '80px' }} />
+            <col style={{ width: '110px' }} />
+          </colgroup>
+          <thead>
+            <tr>
+              <InWorkHourTableTh rowSpan={2}>번호</InWorkHourTableTh>
+              <InWorkHourTableTh rowSpan={2}>디자이너명</InWorkHourTableTh>
+              <InWorkHourTableTh colSpan={4}>현재현황(일공수 : {dailyHours}h)</InWorkHourTableTh>
+              <InWorkHourTableTh colSpan={12}>월별 진행현황(공수달성율 / 제작건수)</InWorkHourTableTh>
+              <InWorkHourTableTh rowSpan={2}>연평균</InWorkHourTableTh>
+            </tr>
+            <tr>
+              <InWorkHourTableTh>대기</InWorkHourTableTh>
+              <InWorkHourTableTh>진행중</InWorkHourTableTh>
+              <InWorkHourTableTh>완료</InWorkHourTableTh>
+              <InWorkHourTableTh>사용공수(h)</InWorkHourTableTh>
+              {months.map((m) => (
+                <InWorkHourTableTh key={m}>{m}</InWorkHourTableTh>
+              ))}
+            </tr>
+          </thead>
+  
+          <tbody>
+            {rows.map((r, idx) => {
+              const { index, avgRate, totalCount } = computed[idx];
+              return (
+                <tr key={r.name + idx}>
+                  <InWorkHourTableTd>{index}</InWorkHourTableTd>
+                  <InWorkHourTableTd>{r.name}</InWorkHourTableTd>
+  
+                  <InWorkHourTableTd>{r.wait}</InWorkHourTableTd>
+                  <InWorkHourTableTd>{r.progress}</InWorkHourTableTd>
+                  <InWorkHourTableTd>{r.done}</InWorkHourTableTd>
+                  <InWorkHourTableTd>{formatMax2(r.usedHours)}</InWorkHourTableTd>
+  
+                  {r.monthly.map((m, i) => (
+                    <InWorkHourTableTd key={i}>
+                      <div>{m.rate}%</div>
+                      <div>{m.count}</div>
+                    </InWorkHourTableTd>
+                  ))}
+  
+                  <InWorkHourTableTd>
+                    <div>{avgRate.toFixed(0)}%</div>
+                    <div>{totalCount}</div>
                   </InWorkHourTableTd>
-                ))}
-
-                <InWorkHourTableTd>
-                  <div>{avgRate.toFixed(0)}%</div>
-                  <div>{totalCount}</div>
-                </InWorkHourTableTd>
-              </tr>
-            );
-          })}
-        </tbody>
-      </InWorkHourTable>
-    </InWorkHourWrap>
+                </tr>
+              );
+            })}
+          </tbody>
+        </InWorkHourTable>
+      </InWorkHourWrap>
+    </InWorkHourFrame>
   );
 }
 
 /** ───────── styled ───────── */
+const InWorkHourFrame = styled.div`
+  padding: 22px 48px;
+  height: calc(100vh - 178px);
+  overflow: hidden;
+`;
+
 const InWorkHourWrap = styled.div`
-  padding: 0 48px;
-  margin-top: 20px;
+  height: 100%;
+  overflow-y: auto;
+  scrollbar-width: thin;
 `;
 
 const Empty = styled.div`

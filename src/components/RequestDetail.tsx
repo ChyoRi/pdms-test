@@ -77,7 +77,7 @@ export default function RequestDetail({ data, onClose }: RequestDetailProps) {
           <tr>
             <RequestDetailTableTh>요청서 URL</RequestDetailTableTh>
             <RequestDetailTableTd>
-              {data?.url ? <UrlLink href={data?.url} target="_blank" rel="noreferrer">{data?.url}</UrlLink> : "-"}
+              {data?.url ? <UrlLink href={data?.url} target="_blank" rel="noreferrer">{data?.url}</UrlLink> : ""}
             </RequestDetailTableTd>
           </tr>
           <tr>

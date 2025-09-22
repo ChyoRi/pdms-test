@@ -565,7 +565,7 @@ export default function Manager({ view, setIsDrawerOpen, setDetailData, userRole
 const Container = styled.div``;
 
 const MainContentWrap = styled.div`
-  padding: 0 48px;
+  padding: 0 48px 22px;
 `;
 
 const DashBoardWrap = styled.div`

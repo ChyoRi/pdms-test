@@ -82,6 +82,8 @@ export default function ManagerRequestItem({
     const v = e.target.value;
     onDesignerSelect(v ? [v] : []); // 선택 해제 시 빈 배열
   };
+
+  const hasUrl = !!item.url && item.url.trim().length > 0;
   
   return(
     <RequestListTableTr isCanceled={item.status === "취소"}>
@@ -111,7 +113,9 @@ export default function ManagerRequestItem({
         </RequestListEmergencyWrap>
       </RequestListRequirementTd>
       <RequestListTableTd>
-        <UrlLink href={item.url} target="_blank" />
+        {hasUrl ? (
+          <UrlLink href={item.url} target="_blank" />
+        ) : null}
       </RequestListTableTd>
       <RequestListMemoTd>
         <RequestListMemoText onClick={openDetail}>

@@ -7,6 +7,7 @@ import { collection, addDoc, updateDoc, doc, getDoc, serverTimestamp, Timestamp,
 import requestFormExitButton from "../assets/requestformexit-button.svg";
 import checkBoxChecked from "../assets/checkbox-checked.svg";
 import selectBoxArrow from "../assets/selectbox-arrow.svg";
+import SelectBox from "./SelectBox";
 
 interface RequestFormProps {
   userName: string;
@@ -528,33 +529,48 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
               <tr>
                 <RequestFormTableTh><RequestFormItemLabel htmlFor="task_type">업무 유형</RequestFormItemLabel></RequestFormTableTh>
                 <RequestFormTableTd>
-                  {/* 등록 모드에서만 placeholder 옵션을 노출, 수정 모드에선 숨김 */}
-                  <RequestFormSelectBox
-                    id="task_type"
-                    $wide={isNSMall(userCompany)}
-                    value={
-                      isNSMall(userCompany)
-                        ? (isEdit ? (requestData.task_type || (renderTypes[0] as string || "")) : (requestData.task_type ?? ""))
-                        : (requestData.task_type || getDefaultHomeplusType((requestData.task_form as string) || companyCfg.formDefault)) // ★ 변경
-                    }
-                    onChange={(e) => requsetForm("task_type", e.target.value)}
-                  >
-                    {isNSMall(userCompany) && !isEdit && (
-                      <option value="">업무 유형을 선택해주세요</option>
-                    )}
-                    {renderTypes.map((v) => <option key={v} value={v}>{v}</option>)}
-                  </RequestFormSelectBox>
+                  {isNSMall(userCompany) ? (
+                    <>
+                      {/* 기존 NSmall 셀렉트 그대로 유지 */}
+                      <RequestFormSelectBox
+                        id="task_type"
+                        $wide
+                        value={isEdit ? (requestData.task_type || (renderTypes[0] as string || "")) : (requestData.task_type ?? "")}
+                        onChange={(e) => requsetForm("task_type", e.target.value)}
+                      >
+                        {!isEdit && <option value="">업무 유형을 선택해주세요</option>}
+                        {renderTypes.map((v) => (
+                          <option key={v} value={v}>{v}</option>
+                        ))}
+                      </RequestFormSelectBox>
 
-                  {isNSMall(userCompany) && !!requestData.task_type && (
-                    <RequestFormSelectBox
-                      id="task_type_detail"
-                      $wide
-                      value={requestData.task_type_detail || ""}
-                      onChange={(e) => requsetForm("task_type_detail", e.target.value)}
-                    >
-                      <option value="">상세 유형을 선택해주세요</option>
-                      {mainDetailOptions.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
-                    </RequestFormSelectBox>
+                      {!!requestData.task_type && (
+                        <RequestFormSelectBox
+                          id="task_type_detail"
+                          $wide
+                          value={requestData.task_type_detail || ""}
+                          onChange={(e) => requsetForm("task_type_detail", e.target.value)}
+                        >
+                          <option value="">상세 유형을 선택해주세요</option>
+                          {mainDetailOptions.map((opt) => (
+                            <option key={opt} value={opt}>{opt}</option>
+                          ))}
+                        </RequestFormSelectBox>
+                      )}
+                    </>
+                  ) : (
+                    // ★ Homeplus만 커스텀 SelectDown 사용 (항상 아래로 펼침)
+                    <SelectBox
+                      value={
+                        requestData.task_type ||
+                        getDefaultHomeplusType(
+                          (requestData.task_form as string) || companyCfg.formDefault
+                        )
+                      }
+                      options={renderTypes as string[]}
+                      onChange={(v) => requsetForm("task_type", v)}
+                      // wide={false} // 필요 시 폭 조절 (기본 168px)
+                    />
                   )}
                 </RequestFormTableTd>
               </tr>
@@ -621,7 +637,7 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
                       <tr>
                         <RequestFormTableTh><RequestFormItemLabel htmlFor={`merchandiser_ex_${idx}`}>담당 MD</RequestFormItemLabel></RequestFormTableTh>
                         <RequestFormTableTd>
-                          <RequestFormTextInput id={`merchandiser_ex_${idx}`} type="text" value={(f.merchandiser as string) || ""} onChange={(e) => updateExtra(idx, "merchandiser", e.target.value)} placeholder="담당 MD 이름 또는 ID를 입력하세요." />
+                          <RequestFormTextInput id={`merchandiser_ex_${idx}`} type="text" value={(f.merchandiser as string) || ""} onChange={(e) => updateExtra(idx, "merchandiser", e.target.value)} placeholder="담당 이름을 입력하세요." />
                         </RequestFormTableTd>
                       </tr>
                       <tr>
@@ -635,34 +651,48 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
                       <tr>
                         <RequestFormTableTh><RequestFormItemLabel htmlFor={`task_type_ex_${idx}`}>업무 유형</RequestFormItemLabel></RequestFormTableTh>
                         <RequestFormTableTd>
-                          <RequestFormSelectBox
-                            id={`task_type_ex_${idx}`}
-                            $wide={isNSMall(userCompany)}
-                            value={
-                              isNSMall(userCompany)
-                                ? ((f.task_type as string) || "")
-                                : ((f.task_type as string) || getDefaultHomeplusType((f.task_form as string) || companyCfg.formDefault)) // ★ 변경
-                            }
-                            onChange={(e) => updateExtra(idx, "task_type", e.target.value)}
-                          >
-                            {isNSMall(userCompany) && <option value="">업무 유형을 선택해주세요</option>}
-                            {(
-                              isNSMall(userCompany)
-                                ? companyCfg.types
-                                : getHomeplusTypesByForm((f.task_form as string) || companyCfg.formDefault) // ★ 변경
-                            ).map((v) => <option key={v as string} value={v as string}>{v as string}</option>)}
-                          </RequestFormSelectBox>
+                          {isNSMall(userCompany) ? (
+                            <>
+                              {/* 기존 NSmall 셀렉트 그대로 유지 */}
+                              <RequestFormSelectBox
+                                id="task_type"
+                                $wide
+                                value={isEdit ? (requestData.task_type || (renderTypes[0] as string || "")) : (requestData.task_type ?? "")}
+                                onChange={(e) => requsetForm("task_type", e.target.value)}
+                              >
+                                {!isEdit && <option value="">업무 유형을 선택해주세요</option>}
+                                {renderTypes.map((v) => (
+                                  <option key={v} value={v}>{v}</option>
+                                ))}
+                              </RequestFormSelectBox>
 
-                          {showDetail && (
-                            <RequestFormSelectBox
-                              id={`task_type_detail_ex_${idx}`}
-                              $wide={isNSMall(userCompany)}
-                              value={(f.task_type_detail as string) || ""}
-                              onChange={(e) => updateExtra(idx, "task_type_detail", e.target.value)}
-                            >
-                              <option value="">상세 유형을 선택해주세요</option>
-                              {detailOptions.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
-                            </RequestFormSelectBox>
+                              {!!requestData.task_type && (
+                                <RequestFormSelectBox
+                                  id="task_type_detail"
+                                  $wide
+                                  value={requestData.task_type_detail || ""}
+                                  onChange={(e) => requsetForm("task_type_detail", e.target.value)}
+                                >
+                                  <option value="">상세 유형을 선택해주세요</option>
+                                  {mainDetailOptions.map((opt) => (
+                                    <option key={opt} value={opt}>{opt}</option>
+                                  ))}
+                                </RequestFormSelectBox>
+                              )}
+                            </>
+                          ) : (
+                            // ★ Homeplus만 커스텀 SelectDown 사용 (항상 아래로 펼침)
+                            <SelectBox
+                              value={
+                                requestData.task_type ||
+                                getDefaultHomeplusType(
+                                  (requestData.task_form as string) || companyCfg.formDefault
+                                )
+                              }
+                              options={renderTypes as string[]}
+                              onChange={(v) => requsetForm("task_type", v)}
+                              // wide={false} // 필요 시 폭 조절 (기본 168px)
+                            />
                           )}
                         </RequestFormTableTd>
                       </tr>

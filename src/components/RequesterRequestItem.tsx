@@ -36,6 +36,8 @@ export default function RequesterRequestItem({ item, index, disableActions, onRe
     ? (item.assigned_designers as string[])
     : null;
 
+  const hasUrl = !!item.url && item.url.trim().length > 0;
+
   return (
     <RequestListTableTr isCanceled={item.status === "취소"}>
       <RequestListTableTd>{index}</RequestListTableTd>
@@ -62,7 +64,9 @@ export default function RequesterRequestItem({ item, index, disableActions, onRe
         </RequestListEmergencyWrap>
       </RequestListRequirementTd>
       <RequestListTableTd>
-        <UrlLink href={item.url} target="_blank" />
+        {hasUrl ? (
+          <UrlLink href={item.url} target="_blank" />
+        ) : null}
       </RequestListTableTd>
       <RequestListMemoTd>
         <RequestListMemoText onClick={openDetail}>

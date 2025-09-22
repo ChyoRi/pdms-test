@@ -78,49 +78,36 @@ export default function Designer({ view, userRole, setIsDrawerOpen, setDetailDat
 
   // ✅ Firestore에서 로그인 디자이너에게 배정된 요청만 가져오기
   useEffect(() => {
-  if (!designerName) return;
+    if (!designerName) return;
 
-  if (view === "dashboard" || view === "inworkhour") {
-    setAssignedRequests([]);
-    return;
-  }
+    if (view === "dashboard" || view === "inworkhour") {
+      setAssignedRequests([]);
+      return;
+    }
 
-  if (view === "allrequestlist") {
-    const qAll = query(collection(db, "design_request"), orderBy("design_request_id", "desc"));
-    const unsubAll = onSnapshot(qAll, snap => {
+    // 전체 요청 리스트
+    if (view === "allrequestlist") {
+      const qAll = query(
+        collection(db, "design_request"),
+        orderBy("design_request_id", "desc")
+      );
+      const unsubAll = onSnapshot(qAll, snap => {
+        setAssignedRequests(snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })));
+      });
+      return () => unsubAll();
+    }
+
+    // 내 작업 리스트 (이제 배열만 사용)
+    const qArr = query(
+      collection(db, "design_request"),
+      where("assigned_designers", "array-contains", designerName),
+      orderBy("design_request_id", "desc")
+    );
+
+    const unsub = onSnapshot(qArr, snap => {
       setAssignedRequests(snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })));
     });
-    return () => unsubAll();
-  }
-
-  // ✅ 내 작업: 배열/단일 레거시 2개 쿼리 병합
-  const qArr = query(
-    collection(db, "design_request"),
-    where("assigned_designers", "array-contains", designerName),
-    orderBy("design_request_id", "desc")
-  );
-  const qStr = query(
-    collection(db, "design_request"),
-    where("assigned_designer", "==", designerName),
-    orderBy("design_request_id", "desc")
-  );
-
-  let arrA: any[] = [];
-  let arrB: any[] = [];
-  const mergeAndSet = () => {
-    const map = new Map<string, any>();
-    [...arrA, ...arrB].forEach(x => map.set(x.id, x));
-    // 주문번호 desc 정렬 유지
-    const merged = [...map.values()].sort((a, b) =>
-      String(b.design_request_id ?? "").localeCompare(String(a.design_request_id ?? ""))
-    );
-    setAssignedRequests(merged);
-  };
-
-  const unsubA = onSnapshot(qArr, snap => { arrA = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })); mergeAndSet(); });
-  const unsubB = onSnapshot(qStr, snap => { arrB = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })); mergeAndSet(); });
-
-    return () => { unsubA(); unsubB(); };
+    return () => unsub();
   }, [designerName, view]);
   // 회사 옵션(users.company에서 수집) — 제외 처리는 RequestFilter에서 함
   useEffect(() => {
@@ -228,12 +215,10 @@ export default function Designer({ view, userRole, setIsDrawerOpen, setDetailDat
   };
 
   // 현재 로그인 디자이너가 이 문서를 볼 수 있는지(“홈돌이 단일만 노출” 규칙)
-  const isVisibleForDesigner = (r: any, me: string): boolean => {
-    // 홈돌이가 아닐 땐 기존과 동일하게 모두 노출
+  const isVisibleForDesigner = (r: any, me: string, v: ViewType): boolean => {
+    if (v === "allrequestlist") return true; // 전체 리스트는 항상 보이게
     if (me !== SPECIAL_SOLO_NAME) return true;
-
     const assignees = getAssignees(r);
-    // 홈돌이가 포함되어 있고, ‘혼자’ 배정일 때만 노출
     return assignees.includes(SPECIAL_SOLO_NAME) && assignees.length === 1;
   };
 
@@ -245,14 +230,14 @@ export default function Designer({ view, userRole, setIsDrawerOpen, setDetailDat
     return preparedNormalized.filter((r: any) => {
       let ok = true;
 
-      if (ok && !isVisibleForDesigner(r, designerName)) ok = false;
+      if (ok && !isVisibleForDesigner(r, designerName, view)) ok = false;
 
-      // 1) 상태(표시값 기준)
+      // 1) 상태
       if (ok && statusFilter && statusFilter !== DEFAULT_STATUS) {
         if (mapStatusForDesigner(r.status) !== statusFilter) ok = false;
       }
 
-      // 2) 회사 (정확 일치)
+      // 2) 회사
       if (ok && companyFilter !== DEFAULT_COMPANY && String(r.company) !== companyFilter) ok = false;
 
       // 3) 날짜
@@ -261,12 +246,12 @@ export default function Designer({ view, userRole, setIsDrawerOpen, setDetailDat
         if (!rd || rd < s || rd > e) ok = false;
       }
 
-      // 4) 검색(문서번호 + 작업항목)
+      // 4) 검색
       if (ok && keyword && !matchesQuery(r, keyword)) ok = false;
 
       return ok;
     });
-  }, [preparedNormalized, statusFilter, companyFilter, dateRange, keyword]);
+  }, [preparedNormalized, statusFilter, companyFilter, dateRange, keyword, view, designerName]);
 
   // 🔍 검색 버튼 클릭 시 적용
   const applySearch = (kw: string) => setKeyword(kw);

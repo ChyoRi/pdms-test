@@ -107,7 +107,7 @@ export default function ManagerRequestList({
 
 const RequestListTableWrap = styled.div`
   position: relative;
-  max-height: 535px;
+  height: calc(100vh - 336px);
   border-top: 2px solid ${({ theme }) => theme.colors.black};
   overflow-y: auto;
   scrollbar-width: thin;

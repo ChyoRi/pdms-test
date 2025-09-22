@@ -83,7 +83,7 @@ export default function RequesterRequestList({ data, disableActions = false, loc
 
 const RequestListTableWrap = styled.div`
   position: relative;
-  max-height: 535px;
+  height: calc(100vh - 302px);
   border-top: 2px solid ${({ theme }) => theme.colors.black};
   overflow-y: auto;
   scrollbar-width: thin;

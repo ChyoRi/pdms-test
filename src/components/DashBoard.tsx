@@ -15,7 +15,7 @@ type RD = RequestData;
 const COLORS = ["#4e79a7","#ff9da7","#59a14f","#9c755f","#edc949","#e15759","#76b7b2","#f28e2b","#af7aa1","#bab0ab"];
 const CAPACITY_BY_COMPANY = { homeplus: 704, nsmall: 812 } as const; // (유지)
 const companyKey = (v: any) => String(v ?? "").replace(/\s+/g, "").toLowerCase();
-const isHomeplus = (r: RD) => companyKey(r.company) === "homeplus";
+// const isHomeplus = (r: RD) => companyKey(r.company) === "homeplus";
 const isNSmall   = (r: RD) => ["nsmall","n-small"].includes(companyKey(r.company));
 
 function pickDateMillis(d: RD): number | null {
@@ -81,7 +81,7 @@ export default function DashBoard({ capacityHoursPerMonth }: Props) {
   // ───────── 기존: 년/월 셀렉트(HP/NS 유지)
   const now = new Date();
   const [ym, setYM] = useState({ y: now.getFullYear(), m: now.getMonth()+1 });
-  const ymLabel = `${ym.y}.${String(ym.m).padStart(2,"0")}`;
+  // const ymLabel = `${ym.y}.${String(ym.m).padStart(2,"0")}`;
 
   // ───────── 전체 탭 전용: 기준일+기간 탭
   const [baseDate] = useState<Date>(new Date());                 // 기준일 = 오늘
@@ -93,7 +93,7 @@ export default function DashBoard({ capacityHoursPerMonth }: Props) {
   const [roleReady, setRoleReady] = useState(false);
 
   // 회사 탭
-  const [companyMode, setCompanyMode] = useState<"homeplus" | "nsmall" | "all">("homeplus");
+  const [companyMode, setCompanyMode] = useState<"homeplus" | "nsmall" | "all">("nsmall");
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
@@ -156,7 +156,7 @@ export default function DashBoard({ capacityHoursPerMonth }: Props) {
       const ts = pickDateMillis(r);
       const inMonth = ts !== null && ts >= monthRange.start && ts <= monthRange.end;
       let inCompany = true;
-      if (effectiveMode === "homeplus") inCompany = isHomeplus(r);
+      if (effectiveMode === "homeplus") /* inCompany = isHomeplus(r)*/ inCompany = false;
       else if (effectiveMode === "nsmall") inCompany = isNSmall(r);
       return inMonth && inCompany;
     });
@@ -168,9 +168,9 @@ export default function DashBoard({ capacityHoursPerMonth }: Props) {
     const producedCount = monthRows.filter(r => normalizeStatus(r.status) === "완료").length;
     const usedHours = sum(monthRows.map(r => Number(r.out_work_hour) || 0)); // (유지)
     const availHours =
-      effectiveMode === "homeplus"
+      /* effectiveMode === "homeplus"
         ? (capacityHoursPerMonth ?? CAPACITY_BY_COMPANY.homeplus)
-        : CAPACITY_BY_COMPANY.nsmall;
+        :*/ CAPACITY_BY_COMPANY.nsmall;
     const usedRatio = availHours ? Math.round((usedHours/availHours)*100) : 0;
     return {
       totalRequests, producedCount,
@@ -231,16 +231,18 @@ export default function DashBoard({ capacityHoursPerMonth }: Props) {
     const totalRequests = allFilteredRows.length;
     const producedCount = allFilteredRows.filter(r => normalizeStatus(r.status) === "완료").length;
     const usedHours = sum(allFilteredRows.map(r => Number(r.in_work_hour) || 0)); // ★ 전체: in_work_hour 사용
-    // 디자이너 수(회사 합산) × 근무일 × 8
+
     const people = designers.length;
-    const availHours = people * periodInfo.workingDays * 8;
+    const workingDaysForCapacity = period === "month" ? 20.3 : periodInfo.workingDays; // ★ 변경: 월은 20.3 고정
+    const availHours = people * workingDaysForCapacity * 8;                            // ★ 변경: 고정식 적용
+
     const usedRatio = availHours ? Math.round((usedHours/availHours)*100) : 0;
     return {
       totalRequests, producedCount,
       usedHoursDisplay: usedHours.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}),
       availHours, usedRatio
     };
-  }, [allFilteredRows, designers, periodInfo, effectiveMode]);
+  }, [allFilteredRows, designers, periodInfo, effectiveMode, period]);
 
   // ‘전체’ 도넛: 회사별 문서 수
   const doughnutCompany = useMemo(() => {
@@ -249,26 +251,57 @@ export default function DashBoard({ capacityHoursPerMonth }: Props) {
       const ts = pickDateMillis(r);
       return ts !== null && ts >= periodInfo.start && ts <= periodInfo.end && !isWeekend(ts);
     });
-    const hp = inRange.filter(isHomeplus).length;
+    // const hp = inRange.filter(isHomeplus).length;
     const ns = inRange.filter(isNSmall).length;
-    return { labels:["Homeplus","NSmall"], data:[hp, ns] };
+    return { labels:[/*"Homeplus",*/ "NSmall"], data:[/*hp,*/ ns] };
   }, [rows, periodInfo, effectiveMode]);
+
+  // 배정 디자이너 안전 추출(미지정 제거)
+  function getAssigneesClean(r: RD): string[] {
+    const arr = Array.isArray((r as any).assigned_designers)
+      ? (r as any).assigned_designers
+      : ((r as any).assigned_designer ? [(r as any).assigned_designer] : []);
+
+    return arr
+      .map((s: any) => String(s || "").trim())
+      // ★ 핵심: '미지정', '미배정' 모두 제외
+      .filter((n: string) => n && n !== "미지정" && n !== "미배정");
+  }
 
   // ‘전체’ 하단 막대: 디자이너별(스택: 회사)
   const designerStack = useMemo(() => {
     if (effectiveMode !== "all" || !periodInfo) return { labels:[], hpData:[], nsData:[] };
     type Cnt = { hp:number; ns:number; total:number };
     const m = new Map<string, Cnt>();
+
     for (const r of rows) {
       const ts = pickDateMillis(r);
       if (ts===null || ts<periodInfo.start || ts>periodInfo.end || isWeekend(ts)) continue;
-      const name = (r.assigned_designers && String(r.assigned_designers).trim()) || "미지정";
-      const e = m.get(name) || { hp:0, ns:0, total:0 };
-      if (isHomeplus(r)) e.hp += 1; else if (isNSmall(r)) e.ns += 1;
-      e.total = e.hp + e.ns; m.set(name, e);
+
+      const names = getAssigneesClean(r);     // ★ 변경: 미지정/미배정 제거 후 이름 배열
+      if (names.length === 0) continue;       // ★ 무배정이면 스킵
+
+      const bucket: "hp" | "ns" | null = /* isHomeplus(r) ? "hp" :*/ (isNSmall(r) ? "ns" : null);
+      if (!bucket) continue;
+
+      // ★ 다중 배정이면 각 디자이너에게 1건씩 카운트
+      for (const name of names) {
+        const e = m.get(name) || { hp:0, ns:0, total:0 };
+        /* if (bucket === "hp") e.hp += 1; else */ e.ns += 1;
+        e.total = e.hp + e.ns;
+        m.set(name, e);
+      }
     }
-    const items = Array.from(m, ([name,v])=>({name,...v})).sort((a,b)=>b.total-a.total).slice(0,20);
-    return { labels: items.map(v=>v.name), hpData: items.map(v=>v.hp), nsData: items.map(v=>v.ns) };
+
+    const items = Array.from(m, ([name,v]) => ({ name, ...v }))
+      .sort((a,b) => b.total - a.total)
+      .slice(0, 20);
+
+    return {
+      labels: items.map(v => v.name),
+      hpData: items.map(v => v.hp),
+      nsData: items.map(v => v.ns),
+    };
   }, [rows, periodInfo, effectiveMode]);
 
   // ───────── 차트 렌더
@@ -337,21 +370,24 @@ export default function DashBoard({ capacityHoursPerMonth }: Props) {
     // 3) 하단 막대
     if (barBottomRef.current) {
       Chart.getChart(barBottomRef.current)?.destroy();
+
       if (isAll) {
         chart3.current = new Chart(barBottomRef.current, {
           type:"bar",
           data:{
             labels: designerStack.labels,
             datasets:[
-              { label:"Homeplus", data: designerStack.hpData, backgroundColor: "rgba(78, 121, 167,.7)", stack:"company" },
+              // { label:"Homeplus", data: designerStack.hpData, backgroundColor: "rgba(78, 121, 167,.7)", stack:"company" },
               { label:"NSmall",   data: designerStack.nsData, backgroundColor: "rgba(255,157,167,.6)", stack:"company" },
             ],
           },
           options:{
-            responsive:true, maintainAspectRatio:false, layout:{padding:{top:4}},
+            responsive:true, 
+            maintainAspectRatio:false, 
+            layout:{padding:{top:4}},
             scales:{
-              x:{ stacked:true, ticks:{ autoSkip:false, maxRotation:40, minRotation:0 } },
-              y:{ stacked:true, beginAtZero:true, ticks:{precision:0, font:{size:14}}, grace:"15%" }
+              x:{ /*stacked:true,*/ ticks:{ autoSkip:false, maxRotation:40, minRotation:0 } },
+              y:{ /*stacked:true,*/ beginAtZero:true, ticks:{precision:0, font:{size:14}}, grace:"15%" }
             },
             plugins:{
               legend:{ position:"top" },
@@ -389,7 +425,7 @@ export default function DashBoard({ capacityHoursPerMonth }: Props) {
       <DashBoardFilterWrap>
         {roleReady && !isRequester && (
           <CompanyToggleWrap>
-            <CompanyToggleButton $active={effectiveMode === "homeplus"} onClick={()=>setCompanyMode("homeplus")}>Homeplus</CompanyToggleButton>
+            {/* <CompanyToggleButton $active={effectiveMode === "homeplus"} onClick={()=>setCompanyMode("homeplus")}>Homeplus</CompanyToggleButton> */}
             <CompanyToggleButton $active={effectiveMode === "nsmall"}   onClick={()=>setCompanyMode("nsmall")}>NSmall</CompanyToggleButton>
             <CompanyToggleButton $active={effectiveMode === "all"}      onClick={()=>setCompanyMode("all")}>전체</CompanyToggleButton>
           </CompanyToggleWrap>
@@ -404,7 +440,6 @@ export default function DashBoard({ capacityHoursPerMonth }: Props) {
             <SelectBox value={ym.m} onChange={(e)=>setYM(p=>({...p, m:Number(e.target.value)}))}>
               {Array.from({length:12}).map((_,i)=><option key={i+1} value={i+1}>{i+1}월</option>)}
             </SelectBox>
-            <span className="range">{ymLabel} 범위</span>
           </DateSelectBoxWrap>
         ) : (
           <PeriodTabsWrap>
