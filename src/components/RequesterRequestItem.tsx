@@ -158,7 +158,7 @@ const RequestListTableTr = styled.tr<{ isCanceled: boolean }>`
 
   & td {
     font-family: 'Pretendard';
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 500;
   }
 `;
@@ -231,7 +231,7 @@ const RequestListTaskTypeWrap = styled.div`
 `;
 
 const RequestListTaskType = styled.span`
-  
+  white-space: nowrap;
 `;
 
 const RequestListTaskTypeDetail = styled.span`

@@ -8,6 +8,8 @@ import MainTitle from "./MainTitle";
 import RequestFilterSearchWrap from "./RequestFilterSearchWrap";
 import DashBoard from "./DashBoard";
 import { makeSearchIndex, matchesQuery } from "../utils/search.ts";
+import ExportCSV from "./ExportCSV";
+import { downloadArrayToCSV } from "../utils/firestoreToCSV";
 
 type ViewType = "dashboard" | "myrequestlist" | "allrequestlist" | "inworkhour";
 
@@ -44,6 +46,8 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
   const [keyword, setKeyword] = useState<string>("");           // 검색 버튼 클릭 시에만 적용
   // 전체 리스트에서 "타인 요청 수정/취소 잠금" 토글
   const lockOthers = view === "allrequestlist";
+  // CSV로 추출 상태
+  const [exporting, setExporting] = useState(false);
 
   // ✅ 로그인 사용자 이름 가져오기
   // ✅ 로그인 사용자 이름 + company 가져오기
@@ -283,6 +287,99 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
     }
   };
 
+  const toYmd = (v: any): string => {
+    if (!v) return "";
+    if (typeof v === "object" && typeof v.toDate === "function") v = v.toDate(); // Firestore Timestamp
+    const d = v instanceof Date ? v : new Date(v);
+    if (isNaN(+d)) return "";
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+
+  const handleExportCSV = async () => {
+    setExporting(true);
+    try {
+      // CSV 컬럼 순서(요구사항 그대로)
+      const fields = [
+        "design_request_id",   // 문서번호
+        "request_date",        // 요청일
+        "completion_date",     // 완료요청일
+        "open_date",           // 오픈일
+        "merchandiser",        // 담당MD
+        "requester",           // 요청자
+        "task_form",           // 업무부서
+        "task_type",           // 업무형태
+        "task_type_detail",    // 업무형태상세
+        "requirement",         // 작업항목
+        "url",                 // 요청서URL
+        "note",                // 메모
+        "status",              // 진행상태
+        "result_url",          // 산출물URL
+        "designer_start_date", // 디자인 시작일
+        "designer_end_date",   // 디자인 종료일
+        "assigned_designers",   // 디자이너
+      ] as const;
+
+      const headers: Record<(typeof fields)[number], string> = {
+        design_request_id: "문서번호",
+        request_date: "요청일",
+        completion_date: "완료요청일",
+        open_date: "오픈일",
+        merchandiser: "담당MD",
+        requester: "요청자",
+        task_form: "업무부서",
+        task_type: "업무형태",
+        task_type_detail: "업무형태상세",
+        requirement: "작업항목",
+        url: "요청서URL",
+        note: "메모",
+        status: "진행상태",
+        result_url: "산출물URL",
+        designer_start_date: "디자인 시작일",
+        designer_end_date: "디자인 종료일",
+        assigned_designers: "디자이너",
+      };
+
+      // viewList -> CSV용 매핑(키 맞춤 + 날짜 포맷 + 공수 단일화)
+      const rowsForCsv = (viewList as any[]).map((r) => {
+        const assigned = Array.isArray(r.assigned_designers)
+          ? r.assigned_designers.join(", ")
+          : "";
+        return {
+          design_request_id: r.design_request_id ?? "",
+          request_date: toYmd(r.request_date ?? r.requested_at ?? r.requestDate),
+          completion_date: toYmd(r.completion_date),
+          open_date: toYmd(r.open_date),
+          merchandiser: r.merchandiser ?? r.md ?? "",
+          requester: r.requester ?? "",
+          task_form: r.task_form ?? "",
+          task_type: r.task_type ?? "",
+          task_type_detail: r.task_type_detail ?? "",
+          requirement: r.requirement ?? "",
+          url: r.url ?? "",
+          note: r.note ?? "",
+          status: r.status ?? "",
+          result_url: r.result_url ?? "",
+          designer_start_date: toYmd(r.designer_start_date),
+          designer_end_date: toYmd(r.designer_end_date),
+          assigned_designers: assigned,
+          work_hour: (r.in_work_hour ?? r.out_work_hour ?? "") + "",
+        };
+      });
+
+      downloadArrayToCSV({
+        rows: rowsForCsv,
+        fields: fields as unknown as string[],
+        headers,
+        filename: "design_request_current_view.csv",
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <>
       <MainTitle userRole={userRole} />
@@ -318,6 +415,7 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
       {view === "myrequestlist" && (
         <MainContentWrap>
           <RequestFilterSearchWrap roleNumber={1} onApplyStatus={applyStatus} onApplyRange={applyRange} onSearch={applySearch} keyword={keywordInput} onKeywordChange={setKeywordInput}/>
+          <ExportCSV onClick={handleExportCSV} loading={exporting} />
           <RequesterRequestList data={viewList} disableActions={false} onReviewComplete={reviewComplete} onCancel={cancelRequest} onEditClick={editRequest} onDetailClick={openDetail} />
         </MainContentWrap>
       )}

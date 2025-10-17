@@ -51,6 +51,13 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
     }
   };
 
+  // Enter 칠시 로그인 함수
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      login();
+    }
+  };
+
   return (
     <Container>
       <LoginFrame>
@@ -59,8 +66,8 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
           <SubTitle>Pushcomz Design Management System</SubTitle>
         </LoginHeader>
         <LoginWrap>
-          <Id_input type="text" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="이메일을 입력해주세요." />
-          <Pw_input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="비밀번호를 입력해주세요." />
+          <Id_input type="text" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={handleKeyDown} placeholder="이메일을 입력해주세요." />
+          <Pw_input type="password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={handleKeyDown} placeholder="비밀번호를 입력해주세요." />
           <LoginInfo>
             <StayLoginLabel>
               <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />

@@ -608,8 +608,8 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
           </RequestFormTable>
           {!isEdit && 
             extras.map((f, idx) => {
-              const detailOptions = isNSMall(userCompany) ? getNSmallDetails(f.task_type as string) : [];
-              const showDetail = isNSMall(userCompany) && !!f.task_type;
+              // const detailOptions = isNSMall(userCompany) ? getNSmallDetails(f.task_type as string) : [];
+              // const showDetail = isNSMall(userCompany) && !!f.task_type;
               return (
                 <div key={idx} style={{ marginBottom: 24 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "8px 0 4px" }}>
@@ -653,45 +653,49 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
                         <RequestFormTableTd>
                           {isNSMall(userCompany) ? (
                             <>
-                              {/* 기존 NSmall 셀렉트 그대로 유지 */}
+                              {/* 추가 폼은 f와 updateExtra를 사용 */}
                               <RequestFormSelectBox
-                                id="task_type"
+                                id={`task_type_ex_${idx}`} /* 고유 id */
                                 $wide
-                                value={isEdit ? (requestData.task_type || (renderTypes[0] as string || "")) : (requestData.task_type ?? "")}
-                                onChange={(e) => requsetForm("task_type", e.target.value)}
+                                value={(f.task_type as string) || ""}
+                                onChange={(e) => updateExtra(idx, "task_type", e.target.value)}
                               >
-                                {!isEdit && <option value="">업무 유형을 선택해주세요</option>}
-                                {renderTypes.map((v) => (
+                                <option value="">업무 유형을 선택해주세요</option>
+                                {(companyCfg.types as string[]).map((v) => (
                                   <option key={v} value={v}>{v}</option>
                                 ))}
                               </RequestFormSelectBox>
 
-                              {!!requestData.task_type && (
+                              {/* 기준 상세 옵션 계산 */}
+                              {Boolean(f.task_type) && (
                                 <RequestFormSelectBox
-                                  id="task_type_detail"
+                                  id={`task_type_detail_ex_${idx}`} /* 고유 id */
                                   $wide
-                                  value={requestData.task_type_detail || ""}
-                                  onChange={(e) => requsetForm("task_type_detail", e.target.value)}
+                                  value={(f.task_type_detail as string) || ""}
+                                  onChange={(e) => updateExtra(idx, "task_type_detail", e.target.value)}
                                 >
                                   <option value="">상세 유형을 선택해주세요</option>
-                                  {mainDetailOptions.map((opt) => (
+                                  {getNSmallDetails(f.task_type as string).map((opt) => (
                                     <option key={opt} value={opt}>{opt}</option>
                                   ))}
                                 </RequestFormSelectBox>
                               )}
                             </>
                           ) : (
-                            // ★ Homeplus만 커스텀 SelectDown 사용 (항상 아래로 펼침)
+                            /* ★ Homeplus: f.task_form 기준으로 유형 목록 결정 + f와 updateExtra 사용 */
                             <SelectBox
                               value={
-                                requestData.task_type ||
+                                (f.task_type as string) ||
                                 getDefaultHomeplusType(
-                                  (requestData.task_form as string) || companyCfg.formDefault
+                                  (f.task_form as string) || companyCfg.formDefault
                                 )
                               }
-                              options={renderTypes as string[]}
-                              onChange={(v) => requsetForm("task_type", v)}
-                              // wide={false} // 필요 시 폭 조절 (기본 168px)
+                              options={
+                                getHomeplusTypesByForm(
+                                  (f.task_form as string) || companyCfg.formDefault
+                                ) as string[]
+                              }
+                              onChange={(v) => updateExtra(idx, "task_type", v)}
                             />
                           )}
                         </RequestFormTableTd>
