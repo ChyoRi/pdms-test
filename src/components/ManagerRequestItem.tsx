@@ -1,5 +1,6 @@
 import styled from "styled-components";
 import urlIcon from "../assets/url-icon.svg";
+import commentIcon from "../assets/comment.svg";
 import { useCallback } from "react";
 
 interface ManagerRequestItemProps {
@@ -118,9 +119,10 @@ export default function ManagerRequestItem({
         ) : null}
       </RequestListTableTd>
       <RequestListMemoTd>
-        <RequestListMemoText onClick={openDetail}>
-          {item.note || ""}
-        </RequestListMemoText>
+        <CommentCountWrap onClick={openDetail}>
+          <CommentIcon />
+          <span>{Number(item.comments_count ?? 0)}</span>
+        </CommentCountWrap>
       </RequestListMemoTd>
       <RequestListTableTd>
         <StautsBadge status={viewStatus}>
@@ -396,18 +398,22 @@ const UrlLink = styled.a<{ $disabled?: boolean }>`
   background: url(${urlIcon}) no-repeat center / contain;
 `;
 
-const RequestListMemoText = styled.span`
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-  word-break: break-word;
-  text-overflow: ellipsis;
-
+const CommentCountWrap = styled.div`
+  ${({ theme }) => theme.mixin.flex('center', 'center')};
+  gap:6px;
+  font-size:13px; 
+  color:#111;
   &:hover {
-    font-weight: 600;
-    text-decoration: underline;
+    span {
+      text-decoration: underline;
+    }
   }
+`;
+
+const CommentIcon = styled.i` 
+  width:20px; 
+  height:20px;
+  background: url(${commentIcon}) no-repeat center / contain;
 `;
 
 const StautsBadge = styled.span<{ status: string }>`

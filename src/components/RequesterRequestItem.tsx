@@ -1,5 +1,6 @@
 import styled from "styled-components";
 import urlIcon from "../assets/url-icon.svg";
+import commentIcon from "../assets/comment.svg";
 
 interface RequestItemProps {
   item: RequestData;
@@ -69,9 +70,10 @@ export default function RequesterRequestItem({ item, index, disableActions, onRe
         ) : null}
       </RequestListTableTd>
       <RequestListMemoTd>
-        <RequestListMemoText onClick={openDetail}>
-          {item.note || ""}
-        </RequestListMemoText>
+        <CommentCountWrap onClick={openDetail}>
+          <CommentIcon />
+          <span>{Number(item.comments_count ?? 0)}</span>
+        </CommentCountWrap>
       </RequestListMemoTd>
       <RequestListTableTd>
         <StautsBadge status={item.status}>
@@ -201,7 +203,7 @@ const RequestListMemoTd = styled.td`
   line-height: 15px;
   padding: 0 12px;
   text-align: left;
-  background-color: #fffff1;
+  background-color: #fff6ee;
 `;
 
 const RequestListRequestIdText = styled.span<{ $hasUpdate: boolean }>`
@@ -274,22 +276,6 @@ const UrlLink = styled.a<{ $disabled?: boolean }>`
   width: 24px;
   height: 24px;
   background: url(${urlIcon}) no-repeat center / contain;
-`;
-
-const RequestListMemoText = styled.span`
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-  text-overflow: ellipsis;
-  white-space: normal;
-
-  &:hover {
-    font-weight: 600;
-    text-decoration: underline;
-  }
 `;
 
 const StautsBadge = styled.span<{ status: string }>`
@@ -387,4 +373,21 @@ const DesignersWrap = styled.div`
 `;
 const DesignerSpan = styled.span`
   line-height: 1.2;
+`;
+const CommentCountWrap = styled.div`
+  ${({ theme }) => theme.mixin.flex('center', 'center')};
+  gap:6px;
+  font-size:13px; 
+  color:#111;
+  &:hover {
+    span {
+      text-decoration: underline;
+    }
+  }
+`;
+
+const CommentIcon = styled.i` 
+  width:20px; 
+  height:20px;
+  background: url(${commentIcon}) no-repeat center / contain;
 `;

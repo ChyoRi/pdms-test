@@ -108,7 +108,7 @@ export default function DashBoardPage() {
         />
       </DashBoardFrame>
       {/* ✅ RequestForm에 editData 전달 */}
-      <RequestDrawer isOpen={isDrawerOpen} onClose={closeDrawer}>
+      <RequestDrawer isOpen={isDrawerOpen} onClose={closeDrawer} isDetail={drawerMode === 'detail'}>
         {drawerMode === 'create' && (
           <RequestForm userName={userName} isDrawerOpen={isDrawerOpen} onClose={closeDrawer} />
         )}
@@ -118,7 +118,7 @@ export default function DashBoardPage() {
         )}
 
         {drawerMode === 'detail' && selectedData && (
-          <RequestDetail data={selectedData} onClose={closeDrawer} />
+          <RequestDetail data={selectedData} onClose={closeDrawer} currentUserName={userName} currentUserRole={userRole} />
         )}
       </RequestDrawer>
     </Container>

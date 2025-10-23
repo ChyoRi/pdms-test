@@ -18,16 +18,27 @@ export default function RequesterRequestList({ data, disableActions = false, loc
     <RequestListTableWrap>
       <RequestListTable>
         <RequestListTableCaption>요청 리스트</RequestListTableCaption>
-        <colgroup>
+        {/* <colgroup>
           <col style={{ width: '50px' }} /><col style={{ width: '85px' }}/>
           <col style={{ width: '60px' }} /><col style={{ width: '60px' }} />
           <col style={{ width: '60px' }} /><col style={{ width: '60px' }} />
           <col style={{ width: '100px' }} /><col style={{ width: '120px' }}/>
-          <col /><col style={{ width: '90px' }} />
-          <col style={{ width: '180px' }} /><col style={{ width: '100px' }} />
+          <col style={{ width: '274px' }}/><col style={{ width: '90px' }} />
+          <col style={{ width: '90px' }} /><col style={{ width: '90px' }} />
           <col style={{ width: '85px' }}/><col style={{ width: '90px' }} />
           <col style={{ width: '100px' }} /><col style={{ width: '80px' }} />
           <col style={{ width: '80px' }} />
+        </colgroup> */}
+        <colgroup>
+          <col style={{ width: '3.177%' }} /><col style={{ width: '5.401%' }} />
+          <col style={{ width: '3.812%' }} /><col style={{ width: '3.812%' }} />
+          <col style={{ width: '3.812%' }} /><col style={{ width: '3.812%' }} />
+          <col style={{ width: '6.354%' }} /><col style={{ width: '7.624%' }} />
+          <col style={{ width: '17.624%' }} /><col style={{ width: '5.718%' }} />
+          <col style={{ width: '5.718%' }} /><col style={{ width: '5.718%' }} />
+          <col style={{ width: '5.401%' }} /><col style={{ width: '5.718%' }} />
+          <col style={{ width: '6.354%' }} /><col style={{ width: '5.083%' }} />
+          <col style={{ width: '5.083%' }} />
         </colgroup>
         <thead>
           <tr>
@@ -41,7 +52,7 @@ export default function RequesterRequestList({ data, disableActions = false, loc
             <RequestListTableTh>업무유형</RequestListTableTh>
             <RequestListTableTh>작업항목</RequestListTableTh>
             <RequestListTableTh>요청서 URL</RequestListTableTh>
-            <RequestListTableTh>메모</RequestListTableTh>
+            <RequestListTableTh>메모 Talk</RequestListTableTh>
             <RequestListTableTh>진행상태</RequestListTableTh>
             <RequestListTableTh>디자이너</RequestListTableTh>
             <RequestListTableTh>산출물 URL</RequestListTableTh>
@@ -83,7 +94,7 @@ export default function RequesterRequestList({ data, disableActions = false, loc
 
 const RequestListTableWrap = styled.div`
   position: relative;
-  height: calc(100vh - 302px);
+  /* height: calc(100% - 302px); */
   border-top: 2px solid ${({ theme }) => theme.colors.black};
   overflow-y: auto;
   scrollbar-width: thin;

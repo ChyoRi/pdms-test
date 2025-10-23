@@ -424,11 +424,14 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
 }
 
 const MainContentWrap = styled.div`
-  padding: 0 48px;
+  ${({ theme }) => theme.mixin.flex()};
+  flex-direction: column;
+  height: calc(100vh - 178px);
+  padding: 0 48px 24px;
 `;
 
 const DashBoardWrap = styled.div`
   max-height: 766px;
-  padding: 0 48px;
+  padding: 0 48px 24px;
   overflow: auto;
 `;

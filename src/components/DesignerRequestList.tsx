@@ -39,8 +39,8 @@ export default function DesignerRequestList({
           <col style={{ width: '50px' }} /><col style={{ width: '50px' }} />
           <col style={{ width: '50px' }} /><col style={{ width: '50px' }} />
           <col style={{ width: '80px' }} /><col style={{ width: '120px' }}/>
-          <col /><col style={{ width: '50px' }} />
-          <col style={{ width: '140px' }} /><col style={{ width: '120px' }} />
+          <col /><col style={{ width: '80px' }} />
+          <col style={{ width: '80px' }} /><col style={{ width: '120px' }} />
           <col style={{ width: '120px' }}/><col />
           <col style={{ width: '100px' }} /><col style={{ width: '80px' }} />
         </colgroup>
@@ -58,7 +58,7 @@ export default function DesignerRequestList({
             <RequestListTableTh>업무유형</RequestListTableTh>
             <RequestListTableTh>작업항목</RequestListTableTh>
             <RequestListTableTh>요청서<br />URL</RequestListTableTh>
-            <RequestListTableTh>메모</RequestListTableTh>
+            <RequestListTableTh>메모 Talk</RequestListTableTh>
             <RequestListTableTh>디자인 시작일</RequestListTableTh>
             <RequestListTableTh>디자인 종료일</RequestListTableTh>
             <RequestListTableTh>산출물 링크</RequestListTableTh>

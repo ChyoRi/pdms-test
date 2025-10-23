@@ -42,8 +42,8 @@ export default function ManagerRequestList({
           <col style={{ width: '50px' }} /><col style={{ width: '50px' }} />
           <col style={{ width: '50px' }} /><col style={{ width: '50px' }} />
           <col style={{ width: '100px' }} /><col style={{ width: '120px' }} />
-          <col /><col style={{ width: '50px' }} />
-          <col style={{ width: '140px' }} /><col style={{ width: '85px' }} />
+          <col /><col style={{ width: '85px' }} />
+          <col style={{ width: '85px' }} /><col style={{ width: '85px' }} />
           <col style={{ width: '50px' }} /><col style={{ width: '50px' }} />
           <col style={{ width: '50px' }} /><col style={{ width: '160px' }} />
           <col style={{ width: '80px' }} /><col style={{ width: '110px' }} />
@@ -62,7 +62,7 @@ export default function ManagerRequestList({
             <RequestListTableTh>업무형태</RequestListTableTh>
             <RequestListTableTh>작업항목</RequestListTableTh>
             <RequestListTableTh>요청서<br />URL</RequestListTableTh>
-            <RequestListTableTh>메모</RequestListTableTh>
+            <RequestListTableTh>메모 Talk</RequestListTableTh>
             <RequestListTableTh>진행상태</RequestListTableTh>
             <RequestListTableTh>산출물<br />URL</RequestListTableTh>
             <RequestListTableTh>디자인<br />시작일</RequestListTableTh>

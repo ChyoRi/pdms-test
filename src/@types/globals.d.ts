@@ -32,6 +32,7 @@ declare global {
     created_date: Timestamp | null // 문서 생성일시
     updated_date: Timestamp | null; // 문서 수정일시
     delete_date: Timestamp | null; // 문서 삭제일시
+    comments_count: number;
   }
   
   type RequestLite = Pick<RequestData, "id" | "status">;
