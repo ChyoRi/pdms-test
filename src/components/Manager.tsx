@@ -511,7 +511,7 @@ export default function Manager({ view, setIsDrawerOpen, setDetailData, userRole
   };
 
   return (
-    <Container>
+    <>
       <MainTitle userRole={userRole}/>
       {view === "myrequestlist" && (
         <MainContentWrap>
@@ -558,18 +558,21 @@ export default function Manager({ view, setIsDrawerOpen, setDetailData, userRole
       {view === "inworkhour" && (
         <InWorkHour />
       )}
-    </Container>
+    </>
   );
 }
 
-const Container = styled.div``;
-
 const MainContentWrap = styled.div`
-  padding: 0 48px 22px;
+  ${({ theme }) => theme.mixin.flex()};
+  flex-direction: column;
+  height: calc(100vh - 178px);
+  padding: 0 24px 24px;
 `;
 
 const DashBoardWrap = styled.div`
-  max-height: 766px;
-  padding: 0 48px;
+  ${({ theme }) => theme.mixin.flex()};
+  flex-direction: column;
+  height: calc(100vh - 178px);
+  padding: 0 24px;
   overflow: auto;
 `;

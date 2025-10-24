@@ -138,6 +138,13 @@ export default function Comments({ designRequestId, currentUserName }: CommentsP
     setJustAdded(false);             // 1회 동작 후 해제
   }, [items, justAdded]);
 
+  useEffect(() => {
+    if (!parentDocId) return;
+    // 상세 화면을 열었다고 간주 → 읽음 처리
+    updateDoc(doc(db, "design_request", parentDocId), { comment_new_state: false })
+      .catch(console.error);
+  }, [parentDocId]);
+
    // 3) 추가
   const handleAdd = async () => {
     if (!parentDocId || !body.trim()) return;
@@ -151,13 +158,15 @@ export default function Comments({ designRequestId, currentUserName }: CommentsP
         createdAt: serverTimestamp(),
       });
 
-      // 부모 문서에 댓글 수 +1
+      // 🔔 NEW 켜기
       await updateDoc(doc(db, "design_request", parentDocId), {
         comments_count: increment(1),
+        comment_new_state: true,            // ← 추가
+        updated_date: serverTimestamp(),
       });
 
       setBody("");
-      setJustAdded(true); // ★ 추가: 다음 스냅샷 수신 시 맨 아래로 이동
+      setJustAdded(true);
     } finally {
       setSaving(false);
     }
@@ -208,6 +217,7 @@ export default function Comments({ designRequestId, currentUserName }: CommentsP
       if (cur > 0) {
         await updateDoc(parentRef, {
           comments_count: increment(-1),
+          comment_new_state: true,
           updated_date: serverTimestamp(),
         });
       }
@@ -238,6 +248,10 @@ export default function Comments({ designRequestId, currentUserName }: CommentsP
   // 이모지 선택 핸들러 (emoji-mart는 e.native or e.skins… 형태, 기본은 e.native)
   const handleEmojiSelect = (e: any) => {
     insertAtCursor(e?.native ?? "");
+    setEmojiOpen(false);
+    requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+    });
   };
 
   const formatTS = (ts: any) => {
@@ -398,7 +412,7 @@ const CommentContentWrap = styled.div`
   display: flex;
   flex-direction: column;
   gap: 14px;
-  height: calc(100vh - 720px);
+  height: calc(100vh - 670px);
   padding: 10px 10px 0 10px;
   overflow-y: auto;
   scrollbar-width: thin;

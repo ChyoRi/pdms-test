@@ -34,15 +34,15 @@ export default function DesignerRequestList({
     <RequestListTableWrap>
       <RequestListTable>
         <colgroup>
-          <col style={{ width: '40px' }} /><col style={{ width: '85px' }} />
-          <col style={{ width: '80px' }} /><col style={{ width: '50px' }} />
-          <col style={{ width: '50px' }} /><col style={{ width: '50px' }} />
-          <col style={{ width: '50px' }} /><col style={{ width: '50px' }} />
-          <col style={{ width: '80px' }} /><col style={{ width: '120px' }}/>
-          <col /><col style={{ width: '80px' }} />
-          <col style={{ width: '80px' }} /><col style={{ width: '120px' }} />
-          <col style={{ width: '120px' }}/><col />
-          <col style={{ width: '100px' }} /><col style={{ width: '80px' }} />
+          <col style={{ width: '2.542%' }} /><col style={{ width: '6.057%' }} />
+          <col style={{ width: '5.083%' }} /><col style={{ width: '3.177%' }} />
+          <col style={{ width: '3.177%' }} /><col style={{ width: '3.177%' }} />
+          <col style={{ width: '3.177%' }} /><col style={{ width: '3.177%' }} />
+          <col style={{ width: '5.083%' }} /><col style={{ width: '7.624%' }} />
+          <col style={{ width: '12.255%' }} /><col style={{ width: '5.083%' }} />
+          <col style={{ width: '5.083%' }} /><col style={{ width: '7.624%' }} />
+          <col style={{ width: '7.624%' }} /><col style={{ width: '12.255%' }} />
+          <col style={{ width: '6.354%' }} /><col style={{ width: '5.083%' }} />
         </colgroup>
         <thead>
           <tr>

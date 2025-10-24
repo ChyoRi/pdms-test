@@ -262,7 +262,7 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
   }
 
   // ✅ 메모/작업항목 클릭 → 디테일 모드
-  const openDetail = (item: RequestData) => {
+  const openDetail = async (item: RequestData) => {
     setDetailData(item);     // 상위에서 drawerMode='detail' 세팅
     setIsDrawerOpen(true);
   };
@@ -314,7 +314,6 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
         "task_type_detail",    // 업무형태상세
         "requirement",         // 작업항목
         "url",                 // 요청서URL
-        "note",                // 메모
         "status",              // 진행상태
         "result_url",          // 산출물URL
         "designer_start_date", // 디자인 시작일
@@ -334,7 +333,6 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
         task_type_detail: "업무형태상세",
         requirement: "작업항목",
         url: "요청서URL",
-        note: "메모",
         status: "진행상태",
         result_url: "산출물URL",
         designer_start_date: "디자인 시작일",
@@ -427,11 +425,12 @@ const MainContentWrap = styled.div`
   ${({ theme }) => theme.mixin.flex()};
   flex-direction: column;
   height: calc(100vh - 178px);
-  padding: 0 48px 24px;
+  padding: 0 24px 24px;
 `;
 
 const DashBoardWrap = styled.div`
-  max-height: 766px;
-  padding: 0 48px 24px;
-  overflow: auto;
+  ${({ theme }) => theme.mixin.flex()};
+  flex-direction: column;
+  height: calc(100vh - 178px);
+  padding: 0 24px 24px;
 `;

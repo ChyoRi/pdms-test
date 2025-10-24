@@ -64,7 +64,7 @@ export default function MainTitle({ userRole }: MainTitleProps) {
 }
 
 const MainTitleWrap = styled.div`
-  padding: 29px 48px;
+  padding: 29px 24px;
   background-color: ${({ theme }) => theme.colors.gray08};
 `;
 

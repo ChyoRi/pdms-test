@@ -25,7 +25,6 @@ const defaultRequestData: Partial<RequestData> = {
   task_type_detail: "",
   requirement: "",
   url: "",
-  note: "",
   emergency: false
 }
 
@@ -280,7 +279,6 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
       const data = snap.docs[0].data() as any;
       const base = typeof data.nsmall_task_work_hour === "number" ? data.nsmall_task_work_hour : null;
       const times = typeof data.nsmall_task_work_times === "number" ? data.nsmall_task_work_times : null;
-      console.log("[NSMALL preset]", { task_type, task_type_detail, base, times, docId: snap.docs[0].id });
       return { base, times };
     }
 
@@ -299,7 +297,6 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
     const data = snap.docs[0].data() as any;
     const base = typeof data.homeplus_task_work_hour === "number" ? data.homeplus_task_work_hour : null;
     const times = typeof data.homeplus_task_work_times === "number" ? data.homeplus_task_work_times : null;
-    console.log("[HOMEPLUS preset]", { task_form, task_type, base, times, docId: snap.docs[0].id });
     return { base, times };
   };
 
@@ -329,7 +326,6 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
         task_type_detail: requestData.task_type_detail ?? "",
         requirement: requestData.requirement,
         url: requestData.url,
-        note: requestData.note,
         emergency: requestData.emergency,
         requester_edit_state: false,
         updated_date: serverTimestamp()
@@ -398,7 +394,6 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
         task_type_detail: f.task_type_detail ?? "",
         requirement: f.requirement,
         url: f.url,
-        note: f.note,
         status: "대기",
         assigned_designers: [],
         requester_review_status: "검수대기",
@@ -409,6 +404,8 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
         emergency: f.emergency,
         requester_edit_state: false,
         designer_edit_state: false,
+        comments_count: 0,
+        comment_new_state: false,
         in_work_hour: computedIn,
         out_work_hour: baseHour,
         work_hour_edit_state: false,
@@ -437,7 +434,6 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
         task_type_detail: (editData as any).task_type_detail ?? "",
         requirement: editData.requirement ?? "",
         url: editData.url ?? "",
-        note: editData.note ?? "",
         emergency: editData.emergency ?? false,
       });
     }
@@ -598,12 +594,6 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
                   <RequestFormTextArea id="url" value={requestData.url} onChange={(e) => requsetForm("url", e.target.value)} placeholder="요청 기획안 URL을 입력하세요." />
                 </RequestFormTableTd>
               </tr>
-              <tr>
-                <RequestFormTableTh><RequestFormItemLabel htmlFor="note">메모</RequestFormItemLabel></RequestFormTableTh>
-                <RequestFormTableTd>
-                  <RequestFormMemoTextArea id="note" rows={2} value={requestData.note} onChange={(e) => requsetForm("note", e.target.value)} placeholder="메모를 입력하세요." />
-                </RequestFormTableTd>
-              </tr>
             </tbody>
           </RequestFormTable>
           {!isEdit && 
@@ -724,12 +714,6 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
                           <RequestFormTextArea id={`url_ex_${idx}`} value={f.url || ""} onChange={(e) => updateExtra(idx, "url", e.target.value)} placeholder="요청 기획안 URL을 입력하세요." />
                         </RequestFormTableTd>
                       </tr>
-                      <tr>
-                        <RequestFormTableTh><RequestFormItemLabel htmlFor={`note_ex_${idx}`}>메모</RequestFormItemLabel></RequestFormTableTh>
-                        <RequestFormTableTd>
-                          <RequestFormMemoTextArea id={`note_ex_${idx}`} rows={4} value={f.note || ""} onChange={(e) => updateExtra(idx, "note", e.target.value)} placeholder="메모를 입력하세요." />
-                        </RequestFormTableTd>
-                      </tr>
                     </tbody>
                   </RequestFormTable>
                 </div>
@@ -776,7 +760,6 @@ const RequestFormTable = styled.table`
 `;
 
 const RequestFormTableWrap = styled.div`
-  max-height: 690px;
   overflow: auto;
 `;
 
@@ -790,8 +773,8 @@ const RequestFormTableCaption = styled.caption`
 `;
 
 const RequestFormTableTh = styled.th`
-  padding: 16px;
-  font-size: 16px;
+  padding: 14px;
+  font-size: 14px;
   border: 1px solid ${({ theme }) => theme.colors.gray02};
   border-left: none;
   background-color: ${({ theme }) => theme.colors.gray04};
@@ -833,16 +816,6 @@ const RequestFormTextArea = styled.textarea`
   border-radius: 4px;
   font-family: 'Pretendard';
   font-size: 16px;
-`;
-
-const RequestFormMemoTextArea = styled.textarea`
-  width: 100%;
-  padding: 10px 16px;
-  border: 1px solid ${({ theme }) => theme.colors.gray02};
-  border-radius: 4px;
-  font-family: 'Pretendard';
-  font-size: 16px;
-  background-color: #fffff1;
 `;
 
 const EmergencyWrap = styled.div`

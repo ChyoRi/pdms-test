@@ -462,6 +462,7 @@ const AssignButton = styled.button`
   border-radius: 4px;
   background-color: ${({ theme }) => theme.colors.black};
   color: ${({ theme }) => theme.colors.white01};
+  white-space: nowrap;
 
   &:disabled {
     background-color: ${({ theme }) => theme.colors.gray07};

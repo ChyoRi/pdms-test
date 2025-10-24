@@ -486,19 +486,14 @@ export default function DashBoard({ capacityHoursPerMonth }: Props) {
 }
 
 /* ───────── styled ───────── */
-const Wrap = styled.div`font-family: 'Pretendard';`;
+const Wrap = styled.div`
+  width: 100%;
+  font-family: 'Pretendard';
+`;
 const DashBoardFilterWrap = styled.div`
   ${({ theme }) => theme.mixin.flex('center', 'space-between')};
   padding: 24px 0 30px;
 `;
-// const CompanyToggleWrap = styled.div`display:flex; gap:8px;`;
-// const CompanyToggleButton = styled.button<{ $active?: boolean }>`
-//   padding: 11.5px 10px; border-radius: 4px; font-family: 'Pretendard';
-//   font-size: 16px; font-weight: 400;
-//   background-color: ${({ theme, $active }) => $active ? theme.colors.black : theme.colors.white01};
-//   color: ${({ theme, $active }) => $active ? theme.colors.white01 : theme.colors.black};
-//   border: 1px solid ${({ theme }) => theme.colors.black};
-// `;
 
 const DateSelectBoxWrap = styled.div`
   display:flex; align-items:center; gap:8px; margin-left:auto;
@@ -528,7 +523,10 @@ const OperationItem = styled.li`flex:1; padding:14px; border:1px solid #e8ecf3; 
 const OperationTitle = styled.h3`color:#9aa4b2; font-size:12px; margin-bottom:8px;`;
 const OpereationValue = styled.strong`font-size:32px; font-weight:800;`;
 
-const ChartsWrap = styled.div`display:flex; gap:16px;`;
+const ChartsWrap = styled.div`
+  display:flex; 
+  gap:16px;
+`;
 const LeftChartWrap = styled.div<{ $compact?: boolean }>`
   flex: 0 0 ${({ $compact }) => ($compact ? "38%" : "50%")};
 `;
@@ -541,4 +539,8 @@ const RightCol = styled.div<{ $compact?: boolean }>`
 const ChartCommon = styled.div`background:#fff; border:1px solid #e8ecf3; border-radius:16px; padding:16px; height:100%;`;
 const LeftChart = styled(ChartCommon)``; const RightChart = styled(ChartCommon)``;
 const ChartTitle = styled.h3`margin:0 0 10px; font-size:15px; color:#666;`;
-const CanvasBox = styled.div<{ $h:number }>`position:relative; width:100%; height:${({$h}) => `${$h}px`};`;
+const CanvasBox = styled.div<{ $h:number }>`
+  position:relative; 
+  width:100%; 
+  height:${({$h}) => `${$h}px`};
+`;

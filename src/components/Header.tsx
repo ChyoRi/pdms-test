@@ -100,7 +100,7 @@ export default function Header() {
 const HeaderElement = styled.header`
   ${({ theme }) => theme.mixin.flex('center', 'space-between')};
   height: 64px;
-  padding: 0 48px;
+  padding: 0 24px;
   font-family: 'Pretendard';
   background-color: ${({ theme }) => theme.colors.black};
 `;

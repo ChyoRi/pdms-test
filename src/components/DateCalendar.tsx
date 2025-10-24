@@ -208,7 +208,8 @@ export default function DateCalendar({
 /* ===== styled ===== */
 const Field = styled.div`
   position: relative;
-  width: 215px;
+  width: 200px;
+  height: 48px;
   margin-right: 8px;
   font-family: 'Pretendard';
 `;
@@ -219,7 +220,7 @@ const InputLike = styled.input`
   border: 1px solid ${({ theme }) => theme?.colors?.gray02 || "#d0d5dd"};
   border-radius: 4px;
   font-family: 'Pretendard';
-  font-size: 16px;
+  font-size: 15px;
   cursor: pointer;
 
   &::placeholder {
@@ -234,7 +235,7 @@ const InputLike = styled.input`
 
 const CalendarContainer = styled.div`
   overflow-y: auto;
-  max-height: 385px;
+  max-height: 320px;
 
   /* ===== Firefox ===== */
   scrollbar-width: thin;
@@ -267,8 +268,8 @@ const CalendarWrap = styled.div`
   border: 1px solid #ddd;
   border-radius: 10px;
   z-index: 100;
-  width: 380px;
-  max-height: 480px;
+  width: 330px;
+  max-height: 444px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 `;
 
@@ -296,7 +297,7 @@ const ArrowNext = styled(ArrowBase)`
 
 const WeekdaysRow = styled.div`
   ${({ theme }) => theme.mixin.flex('center', 'space-between')};
-  height: 46px;
+  height: 40px;
   font-size: 12px;
   padding: 0 11px;
   border-bottom: 1px solid ${({ theme }) => theme?.colors?.gray03};
@@ -351,7 +352,7 @@ const MonthBox = styled.div`
 
     & button {
       width: 100%;
-      padding: 8px 0;
+      padding: 6px 0;
       font-family: 'Pretendard';
     }
   }
@@ -374,7 +375,7 @@ const MonthBox = styled.div`
     color: inherit !important;
   }
 
-  /* ❷ 우리가 지정한 커스텀 클래스만 색칠 */
+  /* ❷ 클래스만 색칠 */
   .sel-start,
   .sel-end,
   .sel-mid {

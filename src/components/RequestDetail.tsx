@@ -162,7 +162,7 @@ const RequestDetailTable = styled.table`
   color: ${({ theme }) => theme.colors.black};
   font-family: 'Pretendard';
   th, td {
-    height: 50px;
+    height: 45px;
   }
   td {
     padding-left: 24px;
@@ -179,7 +179,7 @@ const RequestDetailTableCaption = styled.caption`
 `;
 
 const RequestDetailTableTh = styled.th`
-  font-size: 16px;
+  font-size: 15px;
   border: 1px solid ${({ theme }) => theme.colors.gray02};
   border-left: none;
   background-color: ${({ theme }) => theme.colors.gray04};
@@ -198,7 +198,7 @@ const RequestListcompletionTd = styled.td`
   border-right: none;
   color: ${({ theme }) => theme.colors.red};
   font-family: 'Pretendard';
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 500;
 `;
 
@@ -206,7 +206,7 @@ const RequestListOpenDtTd = styled.td`
   border-right: none;
   color: ${({ theme }) => theme.colors.blue02};
   font-family: 'Pretendard';
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 500;
 `;
 

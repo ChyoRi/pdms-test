@@ -15,7 +15,6 @@ declare global {
     task_type_detail: string; // 상세 업무 타입
     requirement: string; // 작성 항목
     url: string; // 기획안 URL
-    note: string; // 메모
     status: string; // 진행 상태
     assigned_designers: string[]; // 담당 디자이너
     result_url: string; // 산출물 URL

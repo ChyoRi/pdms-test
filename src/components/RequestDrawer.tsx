@@ -41,6 +41,7 @@ const DrawerContainer = styled.div<{ isVisible: boolean; $isDetail?: boolean }>`
   padding: 24px;
   transform: ${({ isVisible }) => (isVisible ? "translateX(0)" : "translateX(100%)")};
   transition: transform 0.3s ease;
+  overflow: auto;
 
   /* ✅ detail일 때만 세로 플렉스 + 필요시 스크롤 */
   /* ✅ detail일 때만 상단 고정 + 아래 스크롤 등의 컬럼 레이아웃 */

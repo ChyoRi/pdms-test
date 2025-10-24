@@ -333,7 +333,7 @@ export default function Designer({ view, userRole, setIsDrawerOpen, setDetailDat
   };
 
   return (
-    <Container>
+    <>
       <MainTitle userRole={userRole} />
       {view === "allrequestlist" && (
         <MainContentWrap>
@@ -352,18 +352,21 @@ export default function Designer({ view, userRole, setIsDrawerOpen, setDetailDat
           <DashBoard capacityHoursPerMonth={704} />
         </DashBoardWrap>
       )}
-    </Container>
+    </>
   )
 }
 
-const Container = styled.div``;
-
 const MainContentWrap = styled.div`
-  padding: 0 48px;
+  ${({ theme }) => theme.mixin.flex()};
+  flex-direction: column;
+  height: calc(100vh - 178px);
+  padding: 0 24px 24px;
 `;
 
 const DashBoardWrap = styled.div`
-  max-height: 766px;
-  padding: 0 48px;
-  overflow: auto;
+  width: 100%;
+  ${({ theme }) => theme.mixin.flex()};
+  flex-direction: column;
+  height: calc(100vh - 178px);
+  padding: 0 24px 24px;
 `;

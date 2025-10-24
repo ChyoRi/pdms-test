@@ -37,16 +37,16 @@ export default function ManagerRequestList({
       <RequestListTable>
         <RequestListTableCaption>매니저 요청 리스트</RequestListTableCaption>
         <colgroup>
-          <col style={{ width: '40px' }} /><col style={{ width: '85px' }}/>
-          <col style={{ width: '80px' }}/><col style={{ width: '50px' }} />
-          <col style={{ width: '50px' }} /><col style={{ width: '50px' }} />
-          <col style={{ width: '50px' }} /><col style={{ width: '50px' }} />
-          <col style={{ width: '100px' }} /><col style={{ width: '120px' }} />
-          <col /><col style={{ width: '85px' }} />
-          <col style={{ width: '85px' }} /><col style={{ width: '85px' }} />
-          <col style={{ width: '50px' }} /><col style={{ width: '50px' }} />
-          <col style={{ width: '50px' }} /><col style={{ width: '160px' }} />
-          <col style={{ width: '80px' }} /><col style={{ width: '110px' }} />
+          <col style={{ width: '2.542%' }} /><col style={{ width: '6.057%' }} />
+          <col style={{ width: '5.083%' }} /><col style={{ width: '3.177%' }} />
+          <col style={{ width: '3.177%' }} /><col style={{ width: '3.177%' }} />
+          <col style={{ width: '3.177%' }} /><col style={{ width: '3.177%' }} />
+          <col style={{ width: '6.354%' }} /><col style={{ width: '7.624%' }} />
+          <col style={{ width: '8.514%' }} /><col style={{ width: '3.177%' }} />
+          <col style={{ width: '5.401%' }} /><col style={{ width: '5.401%' }} />
+          <col style={{ width: '3.177%' }} /><col style={{ width: '3.177%' }} />
+          <col style={{ width: '3.177%' }} /><col style={{ width: '10.166%' }} />
+          <col style={{ width: '5.083%' }} /><col style={{ width: '6.982%' }} />
         </colgroup>
         <thead>
           <tr>

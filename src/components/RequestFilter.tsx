@@ -170,14 +170,14 @@ const SelectBox = styled.select`
   -webkit-appearance: none;
   -moz-appearance: none;
 
-  width: 150px;
+  width: 125px;
   height: 48px;
   margin-right: 8px;
   padding: 0 12px;
   border: 1px solid ${({ theme }) => theme.colors.gray02};
   border-radius: 4px;
   font-family: 'Pretendard';
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 400;
   color: ${({ theme }) => theme.colors.black};
   background-color: ${({ theme }) => theme.colors.white01};

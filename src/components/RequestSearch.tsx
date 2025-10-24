@@ -51,7 +51,7 @@ const Container = styled.div`
 `;
 
 const SearchInput = styled.input`
-  width: 458px;
+  width: 350px;
   margin-right: 12px;
   font-family: 'Pretendard';
   font-size: 16px;
