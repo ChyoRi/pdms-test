@@ -34,6 +34,18 @@ const companyVariants = (raw: string) => {
   return Array.from(new Set([t, lower, upper, cap]));
 };
 
+// 월 범위 헬퍼(이번 달, 직전 달)
+const monthRange = (base: Date) => {
+  const s = new Date(base.getFullYear(), base.getMonth(), 1);
+  const e = new Date(base.getFullYear(), base.getMonth() + 1, 0, 23, 59, 59, 999);
+  return { start: s, end: e };
+};
+const prevMonthRange = (base: Date) => {
+  const s = new Date(base.getFullYear(), base.getMonth() - 1, 1);
+  const e = new Date(base.getFullYear(), base.getMonth(), 0, 23, 59, 59, 999);
+  return { start: s, end: e };
+};
+
 export default function Requester({ view, userRole, setIsDrawerOpen, setEditData, setDetailData }: RequesterProps) {
   const [userName, setUserName] = useState("");
   const [userCompany, setUserCompany] = useState<string>("");
@@ -190,6 +202,12 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
     });
   }, [requests]);
 
+  // “이번 달 생성 + (직전 달 생성 & 이번 달 완료 이월)” 전역 게이트용 기준일/범위
+  const today = useMemo(() => new Date(), []);
+  // const today = useMemo(() => new Date(new Date().getFullYear(), 10, 15), []);
+  const { start: curS, end: curE } = useMemo(() => monthRange(today), [today]);
+  const { start: prevS, end: prevE } = useMemo(() => prevMonthRange(today), [today]);
+
   // ⭐ 화면에 보여줄 리스트
   // ② 뷰 리스트(기간 + 상태 + 실시간 검색)
   type Action = "review" | "edit" | "cancel" | "revision";
@@ -197,13 +215,36 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
   const viewList = useMemo(() => {
     const s = dateRange.start ? toMidnight(dateRange.start) : null;
     const e = dateRange.end ? toMidnight(dateRange.end) : null;
-    const q = keyword.trim(); // matchesQuery 내부에서 소문자/초성 처리는 끝남
+    const q = keyword.trim();
 
     return prepared.filter((r: any) => {
-      // 상태 필터(표시 상태 기준)
+      // ── 0) ★ 추가: 월 게이트
+      // created: created_date > request_date > requested_at > requestDate 순으로 완화 파싱
+      const created =
+        parseLoose((r as any).created_date) ||
+        parseLoose(r.request_date) ||
+        parseLoose(r.requested_at) ||
+        parseLoose(r.requestDate);
+
+      const completed = parseLoose(r.completion_date);
+
+      const inCurrentByCreated = !!created && created >= curS && created <= curE;
+
+      // 직전 달 생성 + 이번 달 완료(이월건 유지)
+      const carryOverPrevToCurrent =
+        !!created &&
+        !!completed &&
+        created >= prevS &&
+        created <= prevE &&
+        completed >= curS &&
+        completed <= curE;
+
+      if (!(inCurrentByCreated || carryOverPrevToCurrent)) return false;
+
+      // ── 1) 상태 필터(표시 상태 기준)
       if (statusFilter !== DEFAULT_STATUS && r.displayStatus !== statusFilter) return false;
 
-      // 날짜 필터(inclusive)
+      // ── 2) 날짜 범위(사용자가 선택한 경우만 추가로 좁힘, inclusive)
       if (s && e) {
         const reqDate =
           parseLoose(r.request_date) ||
@@ -212,12 +253,12 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
         if (!reqDate || reqDate < s || reqDate > e) return false;
       }
 
-      // 키워드(초성/영문/숫자 즉시 매칭)
+      // ── 3) 키워드
       if (!matchesQuery(r, q)) return false;
 
       return true;
     });
-  }, [prepared, statusFilter, dateRange, keyword]);
+  }, [prepared, statusFilter, dateRange, keyword, curS, curE, prevS, prevE]);
 
   const canMutate = (id: string, action: Action) => {
     const row = requests.find(r => r.id === id);
