@@ -331,7 +331,7 @@ export default function InWorkHour({
 
 /** ───────── styled ───────── */
 const InWorkHourFrame = styled.div`
-  padding: 22px 48px;
+  padding: 22px 24px;
   height: calc(100vh - 178px);
   overflow: hidden;
 `;

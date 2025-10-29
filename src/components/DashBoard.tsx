@@ -90,14 +90,14 @@ export default function DashBoard({ capacityHoursPerMonth }: Props) {
   // 사용자
   const [userRole, setUserRole] = useState<number | null>(null);
   const [userCompany, setUserCompany] = useState<string>("");
-  // const [roleReady, setRoleReady] = useState(false);
+  const [roleReady, setRoleReady] = useState(false);
 
   // 회사 탭
   const [companyMode, setCompanyMode] = useState<"homeplus" | "nsmall" | "all">("homeplus");
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
-      if (!user) { setUserRole(null); setUserCompany(""); /*setRoleReady(true);*/ return; }
+      if (!user) { setUserRole(null); setUserCompany(""); setRoleReady(true); return; }
       const us = await getDoc(doc(db, "users", user.uid));
       if (us.exists()) {
         const u = us.data() as any;
@@ -108,7 +108,7 @@ export default function DashBoard({ capacityHoursPerMonth }: Props) {
           setCompanyMode(ck.startsWith("n") ? "nsmall" : "homeplus");
         }
       }
-      /*setRoleReady(true);*/
+      setRoleReady(true);
     });
     return () => unsub();
   }, []);
@@ -414,22 +414,24 @@ export default function DashBoard({ capacityHoursPerMonth }: Props) {
     return () => { chart1.current?.destroy(); chart2.current?.destroy(); chart3.current?.destroy(); };
   }, [effectiveMode, taskTypeArr, doughnutCompany, statusForChart, formArr, designerStack]);
 
-  // const isRequester = userRole === 1;
+  const isRequester = userRole === 1;
 
   // ───────── UI
   const KPI = effectiveMode === "all" ? kpiAll : kpiMonth;
+
+  const isAll = effectiveMode === "all";
 
   return (
     <Wrap>
       {/* 회사 탭 */}
       <DashBoardFilterWrap>
-        {/* {roleReady && !isRequester && (
+        {roleReady && !isRequester && (
           <CompanyToggleWrap>
             <CompanyToggleButton $active={effectiveMode === "homeplus"} onClick={()=>setCompanyMode("homeplus")}>Homeplus</CompanyToggleButton>
             <CompanyToggleButton $active={effectiveMode === "nsmall"}   onClick={()=>setCompanyMode("nsmall")}>NSmall</CompanyToggleButton>
             <CompanyToggleButton $active={effectiveMode === "all"}      onClick={()=>setCompanyMode("all")}>전체</CompanyToggleButton>
           </CompanyToggleWrap>
-        )} */}
+        )}
 
         {/* HP/NS: 기존 년/월 셀렉트 유지 / 전체: 일·주·월 탭 */}
         {effectiveMode !== "all" ? (
@@ -461,22 +463,22 @@ export default function DashBoard({ capacityHoursPerMonth }: Props) {
       </OperationList>
 
       {/* 차트 */}
-      <ChartsWrap>
-        <LeftChartWrap $compact={effectiveMode === "all"}>
+      <ChartsWrap $isAll={isAll}>
+        <LeftChartWrap $isAll={isAll}>
           <LeftChart>
             <ChartTitle>{effectiveMode==="all" ? "회사별 분포 (일/주/월 기준, 평일)" : "업무유형별 분포현황"}</ChartTitle>
-            <CanvasBox $h={400}><canvas ref={doughnutRef} /></CanvasBox>
+            <CanvasBox $size="lg"><canvas ref={doughnutRef} /></CanvasBox>
           </LeftChart>
         </LeftChartWrap>
 
-        <RightCol $compact={effectiveMode === "all"}>
-          <RightChart>
+        <RightCol $isAll={isAll}>
+          <RightChart $isAll={isAll}>
             <ChartTitle>{effectiveMode==="all" ? "디자이너별 배정 건수 (회사 스택)" : "업무형태현황 (task_form)"}</ChartTitle>
-            <CanvasBox $h={180}><canvas ref={barBottomRef} /></CanvasBox>
+            <CanvasBox $size="md"><canvas ref={barBottomRef} /></CanvasBox>
           </RightChart>
-          <RightChart>
+          <RightChart $isAll={isAll}>
             <ChartTitle>진행현황 (status)</ChartTitle>
-            <CanvasBox $h={180}><canvas ref={barStatusRef} /></CanvasBox>
+            <CanvasBox $size="md"><canvas ref={barStatusRef} /></CanvasBox>
           </RightChart>
 
         </RightCol>
@@ -487,19 +489,54 @@ export default function DashBoard({ capacityHoursPerMonth }: Props) {
 
 /* ───────── styled ───────── */
 const Wrap = styled.div`
+  ${({ theme }) => theme.mixin.flex()};
+  flex-direction: column;
   width: 100%;
+  height: 100%;
   font-family: 'Pretendard';
 `;
 const DashBoardFilterWrap = styled.div`
   ${({ theme }) => theme.mixin.flex('center', 'space-between')};
+  width: 100%;
   padding: 24px 0 30px;
 `;
 
-const DateSelectBoxWrap = styled.div`
-  display:flex; align-items:center; gap:8px; margin-left:auto;
+const CompanyToggleWrap = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 `;
+
+const CompanyToggleButton = styled.button<{ $active?: boolean }>`
+  min-width: 98px;
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid ${({ $active }) => ($active ? "#111" : "#D0D5DD")};
+  background: ${({ $active }) => ($active ? "#111" : "#fff")};
+  color: ${({ $active }) => ($active ? "#fff" : "#111")};
+  font-family: 'Pretendard';
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  transition: all .15s ease;
+  box-shadow: ${({ $active }) => ($active ? "0 1px 3px rgba(0,0,0,0.08)" : "none")};
+
+  &:hover {
+    border-color: #111;
+  }
+  &:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(17,17,17,0.12);
+  }
+`;
+
+const DateSelectBoxWrap = styled.div`
+  margin-left:auto;
+`;
+
 const SelectBox = styled.select`
-  appearance:none; width:150px; height: 48px; margin-right:8px; padding:0 12px;
+  appearance:none; width:150px; height: 44px; margin-right:8px; padding:0 12px;
   border:1px solid ${({ theme }) => theme.colors.gray02}; border-radius:4px;
   font-family:'Pretendard'; font-size:16px; font-weight:400; color:${({ theme }) => theme.colors.black};
   background:${({ theme }) => theme.colors.white01} url(${selectBoxArrow}) no-repeat right 12px center / 16px 16px;
@@ -508,7 +545,9 @@ const SelectBox = styled.select`
 
 /* ★ 전체 탭 전용: 기간 탭 */
 const PeriodTabsWrap = styled.div`
-  display:flex; align-items:center; gap:8px; margin-left:auto;
+  ${({ theme }) => theme.mixin.flex('center')};
+  gap:8px; 
+  margin-left:auto;
   .range { margin-left:12px; color:#667085; font-size:14px; }
 `;
 const PeriodTab = styled.button<{ $active?: boolean }>`
@@ -518,29 +557,68 @@ const PeriodTab = styled.button<{ $active?: boolean }>`
   border:1px solid #111; transition:all .15s ease;
 `;
 
-const OperationList = styled.ul`display:flex; gap:14px; margin-bottom:16px;`;
+const OperationList = styled.ul`
+  ${({ theme }) => theme.mixin.flex('center')};
+  width: 100%;
+  gap:14px; 
+  margin-bottom:16px;
+`;
+
 const OperationItem = styled.li`flex:1; padding:14px; border:1px solid #e8ecf3; border-radius:14px; background:#f7f9fc;`;
 const OperationTitle = styled.h3`color:#9aa4b2; font-size:12px; margin-bottom:8px;`;
 const OpereationValue = styled.strong`font-size:32px; font-weight:800;`;
 
-const ChartsWrap = styled.div`
-  display:flex; 
-  gap:16px;
+const ChartsWrap = styled.div<{ $isAll?: boolean }>`
+  ${({ theme }) => theme.mixin.flex('center')};
+  align-items: stretch;
+  gap: 16px;
+  width: 100%;
+  flex: 1;                     // ★ 핵심: 남은 공간 전부
+  height: 100%;                // ★ 보조: 부모 높이 꽉 채움
 `;
-const LeftChartWrap = styled.div<{ $compact?: boolean }>`
-  flex: 0 0 ${({ $compact }) => ($compact ? "38%" : "50%")};
+const LeftChartWrap = styled.div<{ $isAll?: boolean }>`
+  flex: 1 1 0;               // ★ 좌/우 50%
+  display: flex;
+  flex-direction: column;
+  /* 전체: 도넛 크게(58%) / 개별: 50% */
+  flex: 0 0 ${({ $isAll }) => ($isAll ? "42%" : "50%")};
 `;
-const RightCol = styled.div<{ $compact?: boolean }>`
+/* 우측: 50% 고정분할 + 내부 카드 세로 반반 */
+const RightCol = styled.div<{ $isAll?: boolean }>`
+  flex: 1 1 0;               // ★ 좌/우 50%
   display: flex;
   flex-direction: column;
   gap: 16px;
-  flex: 1 1 ${({ $compact }) => ($compact ? "62%" : "50%")};
+  /* 전체: 42% / 개별: 50% */
+  flex: 0 0 ${({ $isAll }) => ($isAll ? "58%" : "50%")};
 `;
-const ChartCommon = styled.div`background:#fff; border:1px solid #e8ecf3; border-radius:16px; padding:16px; height:100%;`;
-const LeftChart = styled(ChartCommon)``; const RightChart = styled(ChartCommon)``;
+
+const ChartCommon = styled.div`
+  ${({ theme }) => theme.mixin.flex()};
+  flex-direction: column;
+  background:#fff; 
+  border:1px solid #e8ecf3; 
+  border-radius:16px; 
+  padding:16px; 
+  height:100%;
+  flex: 1; 
+`;
+const LeftChart = styled(ChartCommon)``; 
+const RightChart = styled(ChartCommon)<{ $isAll?: boolean }>`
+  /* 전체: 상·하 반반로 정확히 채우기 (gap 16px 고려) */
+  ${({ $isAll }) => $isAll && "height: calc((100% - 16px) / 2);"}
+`;
 const ChartTitle = styled.h3`margin:0 0 10px; font-size:15px; color:#666;`;
-const CanvasBox = styled.div<{ $h:number }>`
-  position:relative; 
-  width:100%; 
-  height:${({$h}) => `${$h}px`};
+const CanvasBox = styled.div<{ $size?: 'lg' | 'md' }>`
+  position: relative;
+  width: 100%;
+  height: 100%;                 // ★ 캔버스 영역이 카드 높이 채움
+  flex: 1;    
+
+   canvas {
+    position: absolute;
+    inset: 0;
+    width: 100% !important;
+    height: 100% !important;
+  }
 `;

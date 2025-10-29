@@ -26,6 +26,8 @@ const getBgColor = (status: string, theme: any) => {
     case "검수요청":
     case "검수중":
       return theme.colors.pink03;       // 연한 핑크
+    case "수정":                         // ★ 추가
+      return "#efe9fb";                 // 배경 (Requester 리스트 배지 톤과 통일)
     case "완료":
       return theme.colors.gray04;       // 연한 회색
     case "취소":
@@ -44,6 +46,8 @@ const getBarColor = (status: string, theme: any) => {
     case "검수요청":
     case "검수중":
       return theme.colors.red;
+    case "수정":                         // ★ 추가
+      return "#6f42c1";
     case "완료":
       return theme.colors.gray02;
     case "취소":

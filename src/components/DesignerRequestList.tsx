@@ -12,18 +12,22 @@ type RowForm = {
 interface DesignerRequestListProps {
   requests: any[];
   formData: Record<string, RowForm>;
+  currentUid?: string;
   onChange: (requestId: string, field: string, value: string) => void;
   onSave: (requestId: string) => void;
   onDetailClick: (item: RequestData) => void;
   disableActions: boolean;   
   lockOthers?: boolean;
-  currentDesignerName?: string;  
+  currentDesignerName?: string; 
+  readLocal: { [id: string]: number };
 }
 
 export default function DesignerRequestList({
   requests,
   onChange,
   formData,
+  currentUid,
+  readLocal,
   onSave,
   onDetailClick,
   disableActions,
@@ -80,6 +84,8 @@ export default function DesignerRequestList({
                   index={index + 1}
                   item={item}
                   row={formData[item.id] ?? {}}
+                  currentUid={currentUid}
+                  localReadMs={readLocal[item.id]}
                   onChange={onChange}
                   onSave={onSave}
                   onDetailClick={onDetailClick}

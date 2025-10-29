@@ -23,6 +23,7 @@ const RAW = {
   PROG: "진행중",
   REQ:  "검수요청",
   REV:  "검수중",
+  REVISION: "수정",
   DONE: "완료",
   CAN:  "취소",
 } as const;
@@ -41,6 +42,7 @@ const makeStatusBuckets = (
         { status: "대기",     count: getCount([RAW.WAIT]) },
         { status: "진행중",   count: getCount([RAW.PROG, RAW.REQ]) },
         { status: "검수중",   count: getCount([RAW.REV]) },
+        { status: "수정",     count: getCount([RAW.REVISION]) },
         { status: "완료",     count: getCount([RAW.DONE]) },
         { status: "취소",     count: getCount([RAW.CAN]) },
       ];
@@ -51,6 +53,7 @@ const makeStatusBuckets = (
         { status: "대기",     count: getCount([RAW.WAIT]) },
         { status: "진행중",   count: getCount([RAW.PROG]) },
         { status: "검수요청", count: getCount([RAW.REQ, RAW.REV]) },
+        { status: "수정",     count: getCount([RAW.REVISION]) },
         { status: "완료",     count: getCount([RAW.DONE]) },
         { status: "취소",     count: getCount([RAW.CAN]) },
       ];
@@ -62,6 +65,7 @@ const makeStatusBuckets = (
         { status: "진행중",   count: getCount([RAW.PROG]) },
         { status: "검수중",   count: getCount([RAW.REQ]) }, // flip
         { status: "검수요청", count: getCount([RAW.REV]) }, // flip
+        { status: "수정",     count: getCount([RAW.REVISION]) },
         { status: "완료",     count: getCount([RAW.DONE]) },
         { status: "취소",     count: getCount([RAW.CAN]) },
       ];
@@ -73,6 +77,7 @@ const makeStatusBuckets = (
         { status: "진행중",   count: getCount([RAW.PROG]) },
         { status: "검수요청", count: getCount([RAW.REQ]) },
         { status: "검수중",   count: getCount([RAW.REV]) },
+        { status: "수정",     count: getCount([RAW.REVISION]) },
         { status: "완료",     count: getCount([RAW.DONE]) },
         { status: "취소",     count: getCount([RAW.CAN]) },
       ];
@@ -94,6 +99,7 @@ const getRoleTitle = (role: number | null, name: string): string => {
 
 export default function Aside({ requests, role, userName, onRequestButtonClick }: AsideProps) {
   const statusList = makeStatusBuckets(role, requests);
+  console.log('ROLE', role, 'UNIQUE_STATUSES', Array.from(new Set(requests.map(r => (r.status ?? 'undefined')))));
 
   return (
     <AsideFrame>

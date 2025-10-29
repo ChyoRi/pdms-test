@@ -70,14 +70,22 @@ export default function Comments({ designRequestId, currentUserName }: CommentsP
   const [emojiOpen, setEmojiOpen] = useState(false);
   const popoverRef = useRef<HTMLDivElement | null>(null);
 
-  // 1) 부모 문서 id 역조회
-   useEffect(() => {
+  // 공용 스크롤 헬퍼(맨 아래로 이동)
+  const scrollToBottom = (smooth = false) => {
+    const c = listRef.current;
+    if (!c) return;
+    // 두 가지 모두 시도 (브라우저/레이아웃 상황별 안전)
+    c.scrollTop = c.scrollHeight;
+    endRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "auto" });
+  };
+
+  // 1) 부모 문서 id 역조회 + 댓글 구독
+  useEffect(() => {
     let unsub: (() => void) | undefined;
 
     (async () => {
       setLoading(true);
       try {
-        // design_request_id == X 인 문서를 찾는다 (단일이라는 전제)
         const qReq = query(
           collection(db, "design_request"),
           where("design_request_id", "==", designRequestId)
@@ -89,10 +97,9 @@ export default function Comments({ designRequestId, currentUserName }: CommentsP
           setLoading(false);
           return;
         }
-        const parentId = snap.docs[0].id; // 첫 문서 사용
+        const parentId = snap.docs[0].id;
         setParentDocId(parentId);
 
-        // 서브컬렉션 구독 (작성일시 오름차순)
         const commentsCol = collection(doc(db, "design_request", parentId), "comments");
         const q = query(commentsCol, orderBy("createdAt", "asc"));
         unsub = onSnapshot(q, (ss) => {
@@ -110,9 +117,15 @@ export default function Comments({ designRequestId, currentUserName }: CommentsP
           setItems(rows);
           setLoading(false);
 
-          // ★ 추가: 최초 로딩 시에는 스크롤 금지 (플래그만 세팅)
           if (!mountedRef.current) {
             mountedRef.current = true;
+
+            // 상세 처음 열렸을 때 1회만 '즉시' 바닥으로 스크롤
+            // Drawer의 0.3s transform 애니메이션을 고려해 raf + micro-delay 2회 호출
+            requestAnimationFrame(() => {
+              scrollToBottom(false);              // 즉시
+              setTimeout(() => scrollToBottom(false), 0); // 레이아웃 반영 직후
+            });
           }
         });
       } catch (e) {
@@ -123,46 +136,49 @@ export default function Comments({ designRequestId, currentUserName }: CommentsP
 
     return () => {
       if (unsub) unsub();
-      // 새 designRequestId로 바뀔 때 다음 마운트도 초기화
-      mountedRef.current = false; // ★ 추가
+      mountedRef.current = false;
+      setJustAdded(false);          // 문서 전환 시 플래그 초기화
     };
   }, [designRequestId]);
 
-   // 목록이 갱신될 때, 오직 내가 방금 등록한 경우에만 아래로 스크롤
+  // 2) 내가 방금 등록했을 때만 자동 스크롤
   useEffect(() => {
-    if (!mountedRef.current) return; // 초기 로딩 중에는 금지
-    if (!justAdded) return;          // 내가 방금 등록한 경우가 아니면 스킵
-    if (endRef.current) {
-      endRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-    setJustAdded(false);             // 1회 동작 후 해제
+    if (!mountedRef.current) return;
+    if (!justAdded) return;
+    // ★ 변경: 헬퍼 사용 + 부드러운 스크롤
+    scrollToBottom(true);
+    setJustAdded(false);
   }, [items, justAdded]);
 
+  // 3) 상세를 열면 "내 읽음 시각"만 갱신 (전역 false 제거)
   useEffect(() => {
     if (!parentDocId) return;
-    // 상세 화면을 열었다고 간주 → 읽음 처리
-    updateDoc(doc(db, "design_request", parentDocId), { comment_new_state: false })
-      .catch(console.error);
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    updateDoc(doc(db, "design_request", parentDocId), {
+      [`comment_read_by.${uid}`]: serverTimestamp(), // ★ 추가
+    }).catch(console.error);
   }, [parentDocId]);
 
-   // 3) 추가
+  // 3) 추가
   const handleAdd = async () => {
     if (!parentDocId || !body.trim()) return;
     setSaving(true);
     try {
+      const uid = auth.currentUser?.uid || "";
       const colRef = collection(doc(db, "design_request", parentDocId), "comments");
       await addDoc(colRef, {
         author_name: currentUserName || "(익명)",
-        author_uid: currentUid,
+        author_uid: uid,
         body: body.trim(),
         createdAt: serverTimestamp(),
       });
 
-      // 🔔 NEW 켜기
+      // ★ 마지막 댓글 메타 갱신
       await updateDoc(doc(db, "design_request", parentDocId), {
         comments_count: increment(1),
-        comment_new_state: true,            // ← 추가
-        updated_date: serverTimestamp(),
+        comments_last_date: serverTimestamp(),       // ★ 추가
+        comments_last_author_uid: uid,             // ★ 추가
       });
 
       setBody("");
@@ -207,18 +223,16 @@ export default function Comments({ designRequestId, currentUserName }: CommentsP
       const parentRef  = doc(db, "design_request", parentDocId);
       const commentRef = doc(db, "design_request", parentDocId, "comments", id);
 
-      // 1) 댓글 문서 삭제
       await deleteDoc(commentRef);
 
-      // 2) 현재 comments_count 확인 후 0보다 클 때만 감소
       const parentSnap = await getDoc(parentRef);
       const cur = Number(parentSnap.get("comments_count") ?? 0);
 
       if (cur > 0) {
         await updateDoc(parentRef, {
           comments_count: increment(-1),
-          comment_new_state: true,
           updated_date: serverTimestamp(),
+          // 필요 시 마지막 댓글 재계산 로직 추가 가능
         });
       }
     } catch (e) {
@@ -319,7 +333,7 @@ export default function Comments({ designRequestId, currentUserName }: CommentsP
             );
           })
         )}
-        <div ref={endRef} />
+        <div ref={endRef} id="comments-end-anchor" />
         {/* 작성 영역 */}
       </CommentContentWrap>
       <Editor>

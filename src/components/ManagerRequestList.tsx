@@ -3,6 +3,7 @@ import ManagerRequestItem from "./ManagerRequestItem";
 
 interface ManagerRequestListProps {
   data: RequestData[];
+  currentUid?: string;
   designerList: any[];
   selectedDesigners: { [key: string]: string[] };
   designerSelect: (requestId: string, designerNames: string[]) => void;
@@ -15,10 +16,12 @@ interface ManagerRequestListProps {
   onSaveWorkHour: (requestId: string) => void;
   onStartEditWorkHour: (requestId: string) => void;
   onCancelEditWorkHour: (requestId: string) => void;
+  readLocal: { [id: string]: number };
 }
 
 export default function ManagerRequestList({
   data,
+  currentUid,
   designerList,
   selectedDesigners,
   designerSelect,
@@ -30,7 +33,8 @@ export default function ManagerRequestList({
   onChangeWorkHour,
   onSaveWorkHour,
   onStartEditWorkHour,
-  onCancelEditWorkHour
+  onCancelEditWorkHour,
+  readLocal
 }: ManagerRequestListProps) {
   return (
     <RequestListTableWrap>
@@ -41,11 +45,11 @@ export default function ManagerRequestList({
           <col style={{ width: '5.083%' }} /><col style={{ width: '3.177%' }} />
           <col style={{ width: '3.177%' }} /><col style={{ width: '3.177%' }} />
           <col style={{ width: '3.177%' }} /><col style={{ width: '3.177%' }} />
-          <col style={{ width: '6.354%' }} /><col style={{ width: '7.624%' }} />
-          <col style={{ width: '8.514%' }} /><col style={{ width: '3.177%' }} />
+          <col style={{ width: '5.354%' }} /><col style={{ width: '6.624%' }} />
+          <col style={{ width: '11.514%' }} /><col style={{ width: '3.177%' }} />
           <col style={{ width: '5.401%' }} /><col style={{ width: '5.401%' }} />
           <col style={{ width: '3.177%' }} /><col style={{ width: '3.177%' }} />
-          <col style={{ width: '3.177%' }} /><col style={{ width: '10.166%' }} />
+          <col style={{ width: '3.177%' }} /><col style={{ width: '11.386%' }} />
           <col style={{ width: '5.083%' }} /><col style={{ width: '6.982%' }} />
         </colgroup>
         <thead>
@@ -78,6 +82,7 @@ export default function ManagerRequestList({
               <ManagerRequestItem key={item.id} 
                                   index={index + 1} 
                                   item={item}
+                                  currentUid={currentUid}
                                   designerList={designerList}
                                   selectedDesigners={selectedDesigners[item.id] || []}
                                   onDesignerSelect={(names) => designerSelect(item.id, names)}
@@ -90,6 +95,7 @@ export default function ManagerRequestList({
                                   onSaveWorkHour={() => onSaveWorkHour(item.id)}
                                   onStartEditWorkHour={() => onStartEditWorkHour(item.id)}
                                   onCancelEditWorkHour={() => onCancelEditWorkHour(item.id)}
+                                  localReadMs={readLocal[item.id]}
               />
             ))
           ) : (

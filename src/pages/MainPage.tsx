@@ -49,7 +49,7 @@ export default function DashBoardPage() {
             // 디자이너
             q = query(
               collection(db, "design_request"),
-              where("assigned_designer", "==", displayName)
+              where("assigned_designers", "array-contains-any", [user.uid, displayName])
             );
           } else {
             // 매니저

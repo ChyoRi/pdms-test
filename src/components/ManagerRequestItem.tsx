@@ -6,6 +6,7 @@ import { useCallback } from "react";
 interface ManagerRequestItemProps {
   index: number;
   item: RequestData;
+  currentUid?: string;
   designerList: any[];
   selectedDesigners: string[];
   onDesignerSelect: (designerNames: string[]) => void;
@@ -18,11 +19,13 @@ interface ManagerRequestItemProps {
   onSaveWorkHour: () => void;
   onStartEditWorkHour: () => void;
   onCancelEditWorkHour: () => void;
+  localReadMs?: number;
 }
 
 export default function ManagerRequestItem({
   index,
   item,
+  currentUid,
   designerList,
   selectedDesigners,
   onDesignerSelect,
@@ -34,7 +37,8 @@ export default function ManagerRequestItem({
   onChangeWorkHour,
   onSaveWorkHour,
   onStartEditWorkHour,
-  onCancelEditWorkHour
+  onCancelEditWorkHour,
+  localReadMs
 }: ManagerRequestItemProps) {
   // 🔁 매니저 화면 표시 전용 매핑
   const displayStatusForManager = (s: string) =>
@@ -84,13 +88,49 @@ export default function ManagerRequestItem({
     onDesignerSelect(v ? [v] : []); // 선택 해제 시 빈 배열
   };
 
+  // ★ 안전 변환: Timestamp → ms, 보류중은 now
+  const toMillisSafe = (v: any): number | undefined => {
+    if (typeof v?.toMillis === "function") return v.toMillis();
+    return v ? Date.now() : undefined;
+  };
+
   const hasUrl = !!item.url && item.url.trim().length > 0;
+
+  const lastAt   = toMillisSafe((item as any)?.comments_last_date);
+  const readRaw  = (item as any)?.comment_read_by?.[currentUid ?? ""];
+  // ★ 추가: 서버 확정 안되기 전에 서버-독립적으로 쓰는 클라이언트 보조 필드
+  const readClient = (item as any)?.comment_read_by_client?.[currentUid ?? ""];
+
+  // ★ 변경: 내 읽음 시각 계산 우선순위
+  // 1) localReadMs(낙관적) → 2) comment_read_by_client(숫자) → 3) serverTimestamp 확정값(또는 보류중 now)
+  const myReadAt =
+    (typeof localReadMs === "number" ? localReadMs : undefined) ??
+    (typeof readClient === "number" ? readClient : undefined) ??
+    toMillisSafe(readRaw);
+
+  const lastAuthorUid = (item as any)?.comments_last_author_uid ?? "";
+
+  const hasNew =
+    Number(item.comments_count ?? 0) > 0 &&
+    typeof lastAt === "number" &&
+    (myReadAt == null || lastAt > myReadAt) &&
+    (currentUid ? lastAuthorUid !== currentUid : true);
+
+  const docEdited = !!(item as any)?.requester_edit_state;              // 문서 수정 → 빨간점
+  const designEdited = !!(item as any)?.requester_design_edit_state;    // 디자인 수정 → 파란점
   
   return(
     <RequestListTableTr isCanceled={item.status === "취소"}>
       <RequestListTableTd>{index}</RequestListTableTd>
       <RequestListTableTd>
-        <RequestListRequestIdText onClick={openDetail} $hasUpdate={!!item.updated_date}>{item.design_request_id}</RequestListRequestIdText>
+        <RequestListRequestIdText onClick={openDetail}>
+          {item.design_request_id}
+          <UpdateDotWrap>
+            {/* ★ 추가: 점 그룹 (둘 다 true면 나란히 표시) */}
+            {designEdited && <DotBlue title="디자인 수정 요청됨" />}
+            {docEdited && <DotRed title="문서 수정됨" />}
+          </UpdateDotWrap>
+        </RequestListRequestIdText>
       </RequestListTableTd>
       <RequestListTableTd>{item.company}</RequestListTableTd>
       <RequestListTableTd>{formatDate(item.request_date)}</RequestListTableTd>
@@ -121,7 +161,9 @@ export default function ManagerRequestItem({
       <RequestListMemoTd>
         <CommentCountWrap onClick={openDetail}>
           <CommentIcon />
-          <span>{Number(item.comments_count ?? 0)}</span>
+          <CommentCount $hasNew={hasNew}>
+            {Number(item.comments_count ?? 0)}
+          </CommentCount>
         </CommentCountWrap>
       </RequestListMemoTd>
       <RequestListTableTd>
@@ -328,25 +370,39 @@ const RequestListMemoTd = styled.td`
   background-color: #fffff1;
 `;
 
-const RequestListRequestIdText = styled.span<{ $hasUpdate: boolean }>`
+const RequestListRequestIdText = styled.span`
   position: relative;
-
-  &::after {
-    content: '';
-    position: absolute;
-    top: -5px;
-    right: -2px;
-    display: ${({ $hasUpdate }) => ($hasUpdate ? 'block' : 'none')};
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background-color: ${({ theme }) => theme.colors.red};
-  }
 
   &:hover {
     font-weight: 600;
     text-decoration: underline;
   }
+`;
+
+const UpdateDotWrap = styled.div`
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+`;
+
+const DotCommon = styled.span`
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+`;
+
+/* 빨간점 = 문서 수정(requester_edit_state) */
+const DotRed = styled(DotCommon)`
+  background-color: ${({ theme }) => theme.colors.red};
+`;
+
+/* 파란점 = 디자인 수정(requester_design_edit_state) */
+const DotBlue = styled(DotCommon)`
+  background-color: ${({ theme }) => theme.colors.blue02};
 `;
 
 const RequestListTaskTypeWrap = styled.div`
@@ -358,7 +414,9 @@ const RequestListTaskType = styled.span`
   white-space: nowrap;
 `;
 
-const RequestListTaskTypeDetail = styled.span``;
+const RequestListTaskTypeDetail = styled.span`
+  white-space: nowrap;
+`;
 
 const RequestListEmergencyWrap = styled.div`
   ${({ theme }) => theme.mixin.flex('center')};
@@ -398,24 +456,6 @@ const UrlLink = styled.a<{ $disabled?: boolean }>`
   background: url(${urlIcon}) no-repeat center / contain;
 `;
 
-const CommentCountWrap = styled.div`
-  ${({ theme }) => theme.mixin.flex('center', 'center')};
-  gap:6px;
-  font-size:13px; 
-  color:#111;
-  &:hover {
-    span {
-      text-decoration: underline;
-    }
-  }
-`;
-
-const CommentIcon = styled.i` 
-  width:20px; 
-  height:20px;
-  background: url(${commentIcon}) no-repeat center / contain;
-`;
-
 const StautsBadge = styled.span<{ status: string }>`
   border-radius: 14px;
   padding: 5.5px 12px;
@@ -432,6 +472,8 @@ const StautsBadge = styled.span<{ status: string }>`
         return theme.colors.red;
       case "검수중":
         return theme.colors.red; // 빨간색
+      case "수정": 
+        return "#6f42c1";
       case "완료":
         return theme.colors.gray06; // 회색
       default:
@@ -448,6 +490,8 @@ const StautsBadge = styled.span<{ status: string }>`
         return theme.colors.pink03;
       case "검수중":
         return theme.colors.pink03; // 빨간색
+      case "수정": 
+        return "#efe9fb";
       case "완료":
         return theme.colors.white02; // 회색
       default:
@@ -544,3 +588,38 @@ const RemoveBtn = styled.button`
 `;
 
 const AssignRow = styled.div` display: flex; align-items: center; justify-content: center; `;
+
+const CommentCountWrap = styled.div`
+  position: relative;
+  ${({ theme }) => theme.mixin.flex('center', 'center')};
+  gap:6px;
+  font-size:13px; 
+  color:#111;
+  &:hover {
+    span {
+      text-decoration: underline;
+    }
+  }
+`;
+
+const CommentIcon = styled.i` 
+  width:20px; 
+  height:20px;
+  background: url(${commentIcon}) no-repeat center / contain;
+`;
+
+const CommentCount = styled.span<{ $hasNew: boolean }>`
+  position: relative;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background-color: ${({ theme }) => theme.colors.red};
+    display: ${({ $hasNew }) => ($hasNew ? 'block' : 'none')};
+  }
+`;

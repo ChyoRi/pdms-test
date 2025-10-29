@@ -2,7 +2,7 @@ import styled from "styled-components";
 import { useEffect, useState, useMemo } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "../firebaseconfig";
-import { query, where, collection, onSnapshot, doc, updateDoc, Timestamp, orderBy } from "firebase/firestore";
+import { query, where, collection, onSnapshot, doc, updateDoc, Timestamp, orderBy, serverTimestamp } from "firebase/firestore";
 import DesignerRequestList from "./DesignerRequestList";
 import MainTitle from "./MainTitle";
 import RequestFilterSearchWrap from "./RequestFilterSearchWrap";
@@ -56,6 +56,7 @@ const SPECIAL_SOLO_NAME = "홈돌이";
 export default function Designer({ view, userRole, setIsDrawerOpen, setDetailData }: RequesterProps) {
   const [assignedRequests, setAssignedRequests] = useState<DesignRequest[]>([]);
   const [designerName, setDesignerName] = useState(""); // ✅ 로그인 디자이너 이름
+  const [userUid, setUserUid]   = useState("");
   const [formData, setFormData] = useState<{ [key: string]: RowForm  }>({});
   const [statusFilter, setStatusFilter] = useState<string>("진행 상태 선택");
   const [dateRange, setDateRange] = useState<{ start: Date | null; end: Date | null }>({ start: null, end: null });
@@ -66,12 +67,21 @@ export default function Designer({ view, userRole, setIsDrawerOpen, setDetailDat
   const [keywordInput, setKeywordInput] = useState<string>(""); // 인풋 바인딩(타이핑용)
   const [keyword, setKeyword] = useState<string>("");           // 검색 버튼 클릭 시에만 적용
 
+  // 항목별 내가 마지막으로 읽은 시간(ms) 로컬 캐시
+  const [readLocal, setReadLocal] = useState<{ [id: string]: number }>({});
+
   const lockOthers = view === "allrequestlist";
 
   // ✅ 로그인 디자이너 이름 가져오기
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user?.displayName) setDesignerName(user.displayName);
+      if (!user) {
+        setDesignerName("");
+        setUserUid("");
+        return;
+      }
+      setDesignerName(user.displayName ?? "");
+      setUserUid(user.uid);
     });
     return () => unsubscribe();
   }, []);
@@ -327,10 +337,27 @@ export default function Designer({ view, userRole, setIsDrawerOpen, setDetailDat
   };
 
   // ✅ 메모/작업항목 클릭 → 디테일 모드
-  const openDetail = (item: RequestData) => {
-    setDetailData(item);     // 상위에서 drawerMode='detail' 세팅
-    setIsDrawerOpen(true);
-  };
+    const openDetail = async (item: RequestData) => {
+      // ★ 추가: 낙관적 읽음 처리 (로컬 캐시 즉시 갱신)
+      if (userUid) {
+        const now = Date.now();
+        setReadLocal(prev => ({ ...prev, [item.id]: now }));
+  
+        // ★ 추가: 서버에도 동시 반영 (센티넬 + 클라이언트 타임스탬프)
+        try {
+          await updateDoc(doc(db, "design_request", item.id), {
+            [`comment_read_by.${userUid}`]: serverTimestamp(),
+            [`comment_read_by_client.${userUid}`]: now,
+          });
+        } catch (e) {
+          // 실패해도 UI 깜빡임은 막힘. 필요하면 콘솔 로깅 정도만.
+          // console.error(e);
+        }
+      }
+  
+      setDetailData(item);
+      setIsDrawerOpen(true);
+    };
 
   return (
     <>
@@ -338,13 +365,13 @@ export default function Designer({ view, userRole, setIsDrawerOpen, setDetailDat
       {view === "allrequestlist" && (
         <MainContentWrap>
           <RequestFilterSearchWrap roleNumber={2} onApplyStatus={applyStatus} onApplyRange={applyRange} onSearch={applySearch} keyword={keywordInput} onKeywordChange={setKeywordInput} companyOptions={companyOptions} onApplyCompany={applyCompany} />
-          <DesignerRequestList requests={viewList} formData={formData} onChange={handleChange} onSave={saveResponse} onDetailClick={openDetail} disableActions={false} lockOthers={lockOthers} currentDesignerName={designerName} />
+          <DesignerRequestList requests={viewList} formData={formData} currentUid={userUid} readLocal={readLocal} onChange={handleChange} onSave={saveResponse} onDetailClick={openDetail} disableActions={false} lockOthers={lockOthers} currentDesignerName={designerName} />
         </MainContentWrap>
       )}
       {view === "myrequestlist" && (
         <MainContentWrap>
           <RequestFilterSearchWrap roleNumber={2} onApplyStatus={applyStatus} onApplyRange={applyRange} onSearch={applySearch} keyword={keywordInput} onKeywordChange={setKeywordInput} companyOptions={companyOptions} onApplyCompany={applyCompany} />
-          <DesignerRequestList requests={viewList} formData={formData} onChange={handleChange} onSave={saveResponse} onDetailClick={openDetail} disableActions={false}/>
+          <DesignerRequestList requests={viewList} formData={formData} currentUid={userUid} readLocal={readLocal} onChange={handleChange} onSave={saveResponse} onDetailClick={openDetail} disableActions={false}/>
         </MainContentWrap>
       )}
       {view === "dashboard" && (

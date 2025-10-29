@@ -1,7 +1,8 @@
 import styled from "styled-components";
 import { useEffect, useState, useMemo } from "react";
-import { db } from "../firebaseconfig";
-import { doc, updateDoc, collection, getDocs, onSnapshot, query, where, orderBy, arrayUnion, arrayRemove } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth, db } from "../firebaseconfig";
+import { doc, updateDoc, collection, getDocs, onSnapshot, query, where, orderBy, arrayUnion, arrayRemove, serverTimestamp } from "firebase/firestore";
 import ManagerRequestList from "./ManagerRequestList";
 import MainTitle from "./MainTitle";
 import RequestFilterSearchWrap from "./RequestFilterSearchWrap";
@@ -81,6 +82,7 @@ async function getWorkTimesForRequest(req: RequestData): Promise<number> {
 export default function Manager({ view, setIsDrawerOpen, setDetailData, userRole }: RequesterProps) {
   const [requests, setRequests] = useState<RequestData[]>([]);
   const [designerList, setDesignerList] = useState<any[]>([]);
+  const [userUid, setUserUid]   = useState("");
   const [selectedDesigners, setSelectedDesigners] = useState<{ [id: string]: string[] }>({});
   // 공수 입력칸(행별) 컨트롤드 상태
   const [workHours, setWorkHours] = useState<{ [id: string]: string }>({});
@@ -101,6 +103,17 @@ export default function Manager({ view, setIsDrawerOpen, setDetailData, userRole
   const [companyFilter, setCompanyFilter] = useState<string>(DEFAULT_COMPANY);
   // CSV로 추출 상태
   const [exporting, setExporting] = useState(false);
+
+  // 항목별 내가 마지막으로 읽은 시간(ms) 로컬 캐시
+  const [readLocal, setReadLocal] = useState<{ [id: string]: number }>({});
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (user) => {
+      if (!user) { setUserUid(""); return; }
+      setUserUid(user.uid);
+    });
+    return () => unsub();
+  }, []);
 
   // ✅ Firestore에서 요청 리스트 가져오기
   useEffect(() => {
@@ -236,8 +249,25 @@ export default function Manager({ view, setIsDrawerOpen, setDetailData, userRole
   }, []);
 
   // ✅ 메모/작업항목 클릭 → 디테일 모드
-  const openDetail = (item: RequestData) => {
-    setDetailData(item);     // 상위에서 drawerMode='detail' 세팅
+  const openDetail = async (item: RequestData) => {
+    // ★ 추가: 낙관적 읽음 처리 (로컬 캐시 즉시 갱신)
+    if (userUid) {
+      const now = Date.now();
+      setReadLocal(prev => ({ ...prev, [item.id]: now }));
+
+      // ★ 추가: 서버에도 동시 반영 (센티넬 + 클라이언트 타임스탬프)
+      try {
+        await updateDoc(doc(db, "design_request", item.id), {
+          [`comment_read_by.${userUid}`]: serverTimestamp(),
+          [`comment_read_by_client.${userUid}`]: now,
+        });
+      } catch (e) {
+        // 실패해도 UI 깜빡임은 막힘. 필요하면 콘솔 로깅 정도만.
+        // console.error(e);
+      }
+    }
+
+    setDetailData(item);
     setIsDrawerOpen(true);
   };
 
@@ -534,6 +564,7 @@ export default function Manager({ view, setIsDrawerOpen, setDetailData, userRole
           <ExportCSV onClick={handleExportCSV} loading={exporting} />
           <ManagerRequestList 
             data={viewList}
+            currentUid={userUid}
             designerList={designerList}
             selectedDesigners={selectedDesigners}
             designerSelect={designerSelect}
@@ -547,6 +578,7 @@ export default function Manager({ view, setIsDrawerOpen, setDetailData, userRole
             onSaveWorkHour={saveWorkHour}
             onStartEditWorkHour={startEditWorkHour}
             onCancelEditWorkHour={cancelEditWorkHour}
+            readLocal={readLocal}
           />
         </MainContentWrap>
       )}
@@ -573,6 +605,6 @@ const DashBoardWrap = styled.div`
   ${({ theme }) => theme.mixin.flex()};
   flex-direction: column;
   height: calc(100vh - 178px);
-  padding: 0 24px;
+  padding: 0 24px 24px;
   overflow: auto;
 `;

@@ -2,7 +2,7 @@ import styled from "styled-components";
 import { useState, useEffect, useMemo } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "../firebaseconfig";
-import { collection, onSnapshot, query, where, updateDoc, doc, orderBy, getDoc } from "firebase/firestore";
+import { collection, onSnapshot, query, where, updateDoc, doc, orderBy, getDoc , serverTimestamp } from "firebase/firestore";
 import RequesterRequestList from "./RequesterRequestList";
 import MainTitle from "./MainTitle";
 import RequestFilterSearchWrap from "./RequestFilterSearchWrap";
@@ -37,6 +37,7 @@ const companyVariants = (raw: string) => {
 export default function Requester({ view, userRole, setIsDrawerOpen, setEditData, setDetailData }: RequesterProps) {
   const [userName, setUserName] = useState("");
   const [userCompany, setUserCompany] = useState<string>("");
+  const [userUid, setUserUid]   = useState("");
   const [requests, setRequests] = useState<RequestData[]>([]); // request DB 배열
   const [statusFilter, setStatusFilter] = useState<string>("진행 상태 선택");
   const [dateRange, setDateRange] = useState<{ start: Date | null; end: Date | null }>({ start: null, end: null });
@@ -49,12 +50,15 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
   // CSV로 추출 상태
   const [exporting, setExporting] = useState(false);
 
+  const [readLocal, setReadLocal] = useState<{ [id: string]: number }>({});
+
   // ✅ 로그인 사용자 이름 가져오기
   // ✅ 로그인 사용자 이름 + company 가져오기
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) return;
       if (user.displayName) setUserName(user.displayName);
+       setUserUid(user.uid);
 
       const uref = doc(db, "users", user.uid);
       const usnap = await getDoc(uref);
@@ -188,7 +192,7 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
 
   // ⭐ 화면에 보여줄 리스트
   // ② 뷰 리스트(기간 + 상태 + 실시간 검색)
-  type Action = "review" | "edit" | "cancel";
+  type Action = "review" | "edit" | "cancel" | "revision";
 
   const viewList = useMemo(() => {
     const s = dateRange.start ? toMidnight(dateRange.start) : null;
@@ -226,7 +230,9 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
     if (row.status === "완료" || row.status === "취소") return false;
 
     // 매니저 검수완료 이후 잠금: 단, 'review'(요청자 검수확정)만 예외 허용
-    if (row.manager_review_status === "검수완료" && action !== "review") return false;
+    if (row.manager_review_status === "검수완료" && !(action === "review" || action === "revision")) {
+      return false;
+    }
 
     return true;
   };
@@ -261,9 +267,47 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
     }
   }
 
+  // 수정요청 처리 (status: "수정")
+  const requestRevision = async (id: string) => {
+    if (!canMutate(id, "revision")) return;
+
+    try {
+      await updateDoc(doc(db, "design_request", id), {
+        status: "수정",
+        requester_revision_state: true,             // 선택 필드(있으면 사용)
+        requester_revision_at: serverTimestamp(),   // 타임스탬프 로그
+        requester_design_edit_state: true           // 요청자가 ‘디자인 수정’ 권한 토글
+      });
+      setRequests(prev => prev.map(req =>
+        req.id === id ? { ...req, status: "수정", requester_revision_state: true, requester_design_edit_state: true } : req
+      ));
+      alert("디자인 수정 요청이 등록되었습니다.");
+    } catch (e) {
+      console.error(e);
+      alert("수정 요청 처리 중 오류가 발생했습니다. 다시 시도해 주세요.");
+    }
+  };
+
   // ✅ 메모/작업항목 클릭 → 디테일 모드
   const openDetail = async (item: RequestData) => {
-    setDetailData(item);     // 상위에서 drawerMode='detail' 세팅
+    // ★ 추가: 낙관적 읽음 처리 (로컬 캐시 즉시 갱신)
+    if (userUid) {
+      const now = Date.now();
+      setReadLocal(prev => ({ ...prev, [item.id]: now }));
+
+      // ★ 추가: 서버에도 동시 반영 (센티넬 + 클라이언트 타임스탬프)
+      try {
+        await updateDoc(doc(db, "design_request", item.id), {
+          [`comment_read_by.${userUid}`]: serverTimestamp(),
+          [`comment_read_by_client.${userUid}`]: now,
+        });
+      } catch (e) {
+        // 실패해도 UI 깜빡임은 막힘. 필요하면 콘솔 로깅 정도만.
+        // console.error(e);
+      }
+    }
+
+    setDetailData(item);
     setIsDrawerOpen(true);
   };
 
@@ -402,10 +446,13 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
             disableActions={false}
             lockOthers={lockOthers}
             currentUserName={userName}
+            currentUid={userUid}
             onReviewComplete={reviewComplete}
             onCancel={cancelRequest}
             onEditClick={editRequest}
+            onRequestRevision={requestRevision}
             onDetailClick={openDetail}
+            readLocal={readLocal}
           />
         </MainContentWrap>
       )}
@@ -414,7 +461,7 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
         <MainContentWrap>
           <RequestFilterSearchWrap roleNumber={1} onApplyStatus={applyStatus} onApplyRange={applyRange} onSearch={applySearch} keyword={keywordInput} onKeywordChange={setKeywordInput}/>
           <ExportCSV onClick={handleExportCSV} loading={exporting} />
-          <RequesterRequestList data={viewList} disableActions={false} onReviewComplete={reviewComplete} onCancel={cancelRequest} onEditClick={editRequest} onDetailClick={openDetail} />
+          <RequesterRequestList data={viewList} disableActions={false} currentUid={userUid} onReviewComplete={reviewComplete} onCancel={cancelRequest} onEditClick={editRequest} onRequestRevision={requestRevision} onDetailClick={openDetail} readLocal={readLocal} />
         </MainContentWrap>
       )}
     </>

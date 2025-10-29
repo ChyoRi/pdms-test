@@ -6,14 +6,18 @@ interface RequestListProps {
   disableActions: boolean;
   lockOthers?: boolean;
   currentUserName?: string;
+  currentUid?: string; // ★ 추가
   onReviewComplete: (id: string) => void;
   onCancel: (id: string) => void;
   onEditClick: (id: string) => void;
   // ✅ 디테일 열기 콜백 추가: 메모/작업항목 클릭 시 사용
   onDetailClick: (item: RequestData) => void;
+  readLocal: { [id: string]: number };
+  // 수정요청
+  onRequestRevision?: (id: string) => void;
 }
 
-export default function RequesterRequestList({ data, disableActions = false, lockOthers = false, currentUserName = "", onReviewComplete, onCancel, onEditClick, onDetailClick }: RequestListProps) {
+export default function RequesterRequestList({ data, disableActions = false, lockOthers = false, currentUserName = "", currentUid, readLocal, onReviewComplete, onCancel, onEditClick, onRequestRevision, onDetailClick }: RequestListProps) {
   return (
     <RequestListTableWrap>
       <RequestListTable>
@@ -61,10 +65,13 @@ export default function RequesterRequestList({ data, disableActions = false, loc
                   index={index + 1}
                   item={item}
                   disableActions={rowDisabled}
+                  currentUid={currentUid}
                   onReviewComplete={onReviewComplete}
                   onCancel={onCancel}
                   onEditClick={onEditClick}
+                  onRequestRevision={onRequestRevision}
                   onDetailClick={onDetailClick}
+                  localReadMs={readLocal[item.id]}
                 />
               );
             })

@@ -82,7 +82,7 @@ export default function Nav({ userRole }: NavProps) {
         </MainMenuItem>
 
         {/* 4) 매니저 전용: 내부 공수 */}
-        {/* {isManager && (
+        {isManager && (
           <MainMenuItem>
             <MainMenuItemButton
               type="button"
@@ -92,7 +92,7 @@ export default function Nav({ userRole }: NavProps) {
               내부 공수
             </MainMenuItemButton>
           </MainMenuItem>
-        )} */}
+        )}
       </MainMenuList>
     </NavFrame>
   );
