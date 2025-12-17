@@ -3,7 +3,7 @@ import ManagerRequestItem from "./ManagerRequestItem";
 
 interface ManagerRequestListProps {
   data: RequestData[];
-  currentUid?: string;
+  userUid?: string;
   designerList: any[];
   selectedDesigners: { [key: string]: string[] };
   designerSelect: (requestId: string, designerNames: string[]) => void;
@@ -21,7 +21,7 @@ interface ManagerRequestListProps {
 
 export default function ManagerRequestList({
   data,
-  currentUid,
+  userUid,
   designerList,
   selectedDesigners,
   designerSelect,
@@ -42,10 +42,10 @@ export default function ManagerRequestList({
         <RequestListTableCaption>매니저 요청 리스트</RequestListTableCaption>
         <colgroup>
           <col style={{ width: '2.542%' }} /><col style={{ width: '6.057%' }} />
-          <col style={{ width: '5.083%' }} /><col style={{ width: '3.177%' }} />
+          <col style={{ width: '4.583%' }} /><col style={{ width: '3.177%' }} />
           <col style={{ width: '3.177%' }} /><col style={{ width: '3.177%' }} />
           <col style={{ width: '3.177%' }} /><col style={{ width: '3.177%' }} />
-          <col style={{ width: '5.354%' }} /><col style={{ width: '6.624%' }} />
+          <col style={{ width: '5.354%' }} /><col style={{ width: '7.124%' }} />
           <col style={{ width: '11.514%' }} /><col style={{ width: '3.177%' }} />
           <col style={{ width: '5.401%' }} /><col style={{ width: '5.401%' }} />
           <col style={{ width: '3.177%' }} /><col style={{ width: '3.177%' }} />
@@ -60,7 +60,7 @@ export default function ManagerRequestList({
             <RequestListTableTh>요청일</RequestListTableTh>
             <RequestListTableTh>완료<br/>요청일</RequestListTableTh>
             <RequestListTableTh>오픈일</RequestListTableTh>
-            <RequestListTableTh>담당 MD</RequestListTableTh>
+            <RequestListTableTh>담당<br />MD</RequestListTableTh>
             <RequestListTableTh>요청자</RequestListTableTh>
             <RequestListTableTh>업무부서</RequestListTableTh>
             <RequestListTableTh>업무형태</RequestListTableTh>
@@ -82,7 +82,7 @@ export default function ManagerRequestList({
               <ManagerRequestItem key={item.id} 
                                   index={index + 1} 
                                   item={item}
-                                  currentUid={currentUid}
+                                  userUid={userUid}
                                   designerList={designerList}
                                   selectedDesigners={selectedDesigners[item.id] || []}
                                   onDesignerSelect={(names) => designerSelect(item.id, names)}
@@ -122,7 +122,9 @@ const RequestListTableWrap = styled.div`
 const RequestListTable = styled.table`
   table-layout: fixed;
   width: 100%;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.gray02};
   text-align: center;
+  transform: translateY(-2px);
 `;
 
 const RequestListTableCaption = styled.caption`
@@ -136,10 +138,10 @@ const RequestListTableCaption = styled.caption`
 
 const RequestListTableTh = styled.th`
   position: sticky;
-  top: -2px;
+  top: 1px;
   line-height: 16px;
   padding: 13px 0;
-  border-bottom: none;
+  border-right: none;
   font-family: 'Pretendard';
   font-size: 14px;
   font-weight: 700;
@@ -159,7 +161,7 @@ const RequestListTableTh = styled.th`
   }
 
   &:nth-of-type(15), &:nth-of-type(16), &:nth-of-type(17), &:nth-of-type(18), &:nth-of-type(19) {
-    border-right: 1px solid ${({ theme }) => theme.colors.pink02}
+    /* border-right: 1px solid ${({ theme }) => theme.colors.pink02}; */
   }
 
   &:nth-of-type(15), &:nth-of-type(16), &:nth-of-type(17), &:nth-of-type(18), &:nth-of-type(19), &:nth-of-type(20) {

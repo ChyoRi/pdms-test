@@ -34,7 +34,7 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const moveFindPassword = () => navigate('/find-password');
 
   const login = async () => {
-    // ★ 변경: 정규화 제거, 입력값 그대로 사용
+    // 정규화 제거, 입력값 그대로 사용
     const emailInput = email;
 
     // 입력 검증(형식까지만 세분화)

@@ -10,6 +10,7 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
+import { addHistoryComment } from "../utils/commentHistory";
 
 interface Props {
   designRequestId: string;
@@ -122,10 +123,16 @@ export default function RequestDeliver({ designRequestId, currentRequester, comp
       }
       const ref = doc(db, "design_request", snap.docs[0].id);
 
-      // ★ 오직 requester 필드만 교체
+      // ★ 1단계: requester 필드만 교체
       await updateDoc(ref, {
         requester: selected,
       });
+
+      // ★ 2단계: 히스토리 댓글 기록
+      // 현재 로직상 문서전달은 "기존 요청자(currentRequester)"가 실행하므로,
+      // 그 사람이 문서를 다른 사람에게 넘겼다는 느낌으로 문장 구성
+      const msg = `${currentRequester} 님이 요청 문서를 '${selected}' 님에게 전달했습니다.`;
+      await addHistoryComment(designRequestId, msg);
 
       onDone?.();
     } catch (e: any) {
@@ -175,6 +182,7 @@ const Select = styled.select`
 
 const TransferBtn = styled.button`
   height: 34px;
+  margin-left: 10px;
   padding: 0 14px;
   border-radius: 8px;
   border: 1px solid #111;
@@ -182,6 +190,7 @@ const TransferBtn = styled.button`
   color: #fff;
   font-size: 14px;
   font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
   &:disabled {
     opacity: .5;

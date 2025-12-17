@@ -159,13 +159,16 @@ const RequestExitButton = styled.button`
 const RequestDetailTable = styled.table`
   width: 100%;
   border-top: 1px solid ${({ theme }) => theme.colors.black};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.gray02};
   color: ${({ theme }) => theme.colors.black};
   font-family: 'Pretendard';
   th, td {
     height: 45px;
+    border-bottom: none;
   }
   td {
     padding-left: 24px;
+    border-left: none;
   }
 `;
 

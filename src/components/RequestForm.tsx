@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { auth, db } from "../firebaseconfig";
 import { onAuthStateChanged } from "firebase/auth";
-import { collection, addDoc, updateDoc, doc, getDoc, serverTimestamp, Timestamp, query, where, getDocs } from "firebase/firestore";
+import { collection, addDoc, updateDoc, doc, getDoc, serverTimestamp, Timestamp, query, where, getDocs, writeBatch, increment } from "firebase/firestore";
 import requestFormExitButton from "../assets/requestformexit-button.svg";
 import checkBoxChecked from "../assets/checkbox-checked.svg";
 import selectBoxArrow from "../assets/selectbox-arrow.svg";
@@ -63,16 +63,18 @@ const HOMEPLUS_TYPES_BY_FORM: Record<string, readonly string[]> = {
 };
 const NSMALL_FORMS = [
   "M영업기획팀","디지털마케팅팀","M상품1팀","M상품2팀","M상품3팀",
-  "TV영업기획팀","TC영업기획팀","미디어컨텐츠팀","전략기획팀","MC서비스기획팀"
+  "TV영업기획팀","TC영업기획팀","미디어컨텐츠팀","전략기획팀", "마케팅본부직할", "MC서비스기획팀"
 ] as const;
 const NSMALL_TYPES = [
-  "프로모션","배너(프로모션,연관)","배너(마케팅)","배너(상품)","배너(etv/etcom)","배너(엔라방)","썸네일(그룹)"
+  "프로모션","배너(프로모션,연관)","배너(마케팅)","배너(식품)","배너(리빙)","배너(패션)","배너(etv/etcom)","배너(엔라방)","썸네일(그룹)"
 ] as readonly string[];
 const NSMALL_DETAIL_MAP: Record<string, string[]> = {
   프로모션: ["마케팅","마케팅-FULL","마케팅-템플릿","마케팅-모션적용","상품(식품/공산품)","상품(식품/공산품)-브랜드템플릿","etv/etcom","프로모션 수정"],
-  "배너(프로모션,연관)": ["템플릿","템플릿-모션","템플릿-썸네일형","공통","기타"],
-  "배너(마케팅)": ["템플릿","템플릿-썸네일형","공통","광고성","홈전단지컨셉"],
-  "배너(상품)": ["템플릿","공통"],
+  "배너(프로모션,연관)": ["템플릿","템플릿-모션","템플릿-썸네일형","공통","기타-QT배너_BG", "기타-쿠폰팩"],
+  "배너(마케팅)": ["템플릿","템플릿-썸네일형","공통","광고성-푸시배너","광고성-푸시팝업","광고성-카카오캐러셀","기타-QT배너_BG","기타-쿠폰팩","기타-홈전단지컨셉"],
+  "배너(식품)": ["템플릿","공통"],
+  "배너(리빙)": ["템플릿","공통"],
+  "배너(패션)": ["템플릿","공통"],
   "배너(etv/etcom)": ["템플릿","공통"],
   "배너(엔라방)": ["템플릿","공통"],
   "썸네일(그룹)": ["마케팅","그룹코드_프로모션","1팀","2팀","3팀","etv/etcom","엔라방"],
@@ -116,11 +118,15 @@ const getCompanyConfig = (company?: string) => {
 };
 
 export default function RequestForm({ userName, editData, isDrawerOpen, onClose }: RequestFormProps) {
-  const isEdit = editData?.requester_edit_state === true;
+  const isEdit = !!editData;
 
   const [requestData, setRequestData] = useState<Partial<RequestData>>(defaultRequestData);
   const [extras, setExtras] = useState<Partial<RequestData>[]>([]);
   const [userCompany, setUserCompany] = useState<string>("");
+  const [userUid, setUserUid] = useState<string>(""); // ★ 현재 로그인한 uid 보관
+
+  // 필드별 에러 상태
+  const [errorFields, setErrorFields] = useState<Record<string, boolean>>({});
 
   const companyCfg = useMemo(() => getCompanyConfig(userCompany), [userCompany]);
 
@@ -181,7 +187,7 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
       }));
       return;
     }
-    // ★ 추가: Homeplus 부서 변경 시 유형 자동 보정
+    // Homeplus 부서 변경 시 유형 자동 보정
     if (field === "task_form" && !isNSMall(userCompany)) {
       const newForm = value as string;
       const allowed = getHomeplusTypesByForm(newForm);
@@ -197,15 +203,91 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
 
   // 공통 유효성 검사 헬퍼
   const isEmpty = (v?: any) => (typeof v !== "string" || v.trim() === "");
-  const validateDesignForm = (f: Partial<RequestData>, ns: boolean): string | null => {
-    if (isEmpty(f.completion_date)) return "완료 요청일을 선택하세요.";
-    if (isEmpty(f.open_date)) return "오픈일을 선택하세요.";
-    if (isEmpty(f.task_form)) return "업무 부서를 선택하세요.";
-    if (isEmpty(f.task_type)) return "업무 유형을 선택하세요.";
-    if (ns && isEmpty(f.task_type_detail)) return "업무 유형 상세를 선택하세요.";
-    if (isEmpty(f.requirement)) return "작업 항목을 입력하세요.";
+
+  // 오늘 날짜(YYYY-MM-DD) 문자열 생성
+  const getTodayStr = () => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+
+  // dateStr 가 오늘 이전인지 여부 체크
+  const isPastDate = (dateStr?: string) => {
+    if (!dateStr) return false;
+    const today = getTodayStr();
+    // input[type="date"]는 YYYY-MM-DD 포맷이므로 문자열 비교로도 안전하게 사용 가능
+    return dateStr < today;
+  };
+
+  type ValidationFieldKey =
+  | "completion_date"
+  | "open_date"
+  | "task_form"
+  | "task_type"
+  | "task_type_detail"
+  | "requirement";
+
+  const validateDesignForm = (
+    f: Partial<RequestData>,
+    ns: boolean
+  ): { message: string; fieldId: ValidationFieldKey } | null => {
+    if (isEmpty(f.completion_date))
+      return { message: "완료 요청일을 선택하세요.", fieldId: "completion_date" };
+    if (isPastDate(f.completion_date as string))
+      return {
+        message: "완료 요청일은 오늘 이후 날짜로만 선택 가능합니다.",
+        fieldId: "completion_date",
+      };
+    if (isEmpty(f.open_date))
+      return { message: "오픈일을 선택하세요.", fieldId: "open_date" };
+    if (isPastDate(f.open_date as string))
+      return {
+        message: "오픈일은 오늘 이후 날짜로만 선택 가능합니다.",
+        fieldId: "open_date",
+      };
+    if (isEmpty(f.task_form))
+      return { message: "업무 부서를 선택하세요.", fieldId: "task_form" };
+    if (isEmpty(f.task_type))
+      return { message: "업무 유형을 선택하세요.", fieldId: "task_type" };
+    if (ns && isEmpty(f.task_type_detail))
+      return {
+        message: "업무 유형 상세를 선택하세요.",
+        fieldId: "task_type_detail",
+      };
+    if (isEmpty(f.requirement))
+      return { message: "작업 항목을 입력하세요.", fieldId: "requirement" };
     return null;
   };
+
+  // 에러 여부 인자 추가 + error 클래스 제어
+  const focusById = (id: string) => {
+    const el = document.getElementById(id) as HTMLElement | null;
+    if (!el) return;
+    el.focus();
+  };
+
+  // 에러 마킹/해제 헬퍼
+  const markError = (id: string) => {
+    setErrorFields({ [id]: true });
+  };
+
+  const clearError = (id: string) => {
+    setErrorFields((prev) => {
+      if (!prev[id]) return prev;
+      const { [id]: _, ...rest } = prev;
+      return rest;
+    });
+  };
+
+  // 드로어 닫힐 때 에러 전체 리셋
+  useEffect(() => {
+    if (!isDrawerOpen) {
+      setErrorFields({});
+    }
+  }, [isDrawerOpen]);
+
 
   // 추가 폼 세트
   const addExtra = () => setExtras(prev => [
@@ -231,20 +313,147 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
 
   const toTimestamp = (dateStr: string | undefined) => dateStr ? Timestamp.fromDate(new Date(dateStr)) : null;
 
+  // ─────────────────────────────────────────────────────────────
+  // ★ 추가: “수정 로그 댓글” 생성 유틸
+  // - editData(기존) vs patch(저장될 값) 비교
+  // - 바뀐 필드만 "- 라벨: old → new" 형태로 만든 뒤 댓글 body 생성
+  // ─────────────────────────────────────────────────────────────
+  const _toYMD = (v: any) => {
+    if (!v) return "";
+    if (typeof v === "string") return v.slice(0, 10);
+    if (v?.toDate) {
+      const d = v.toDate() as Date;
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
+    }
+    if (v instanceof Date) {
+      const y = v.getFullYear();
+      const m = String(v.getMonth() + 1).padStart(2, "0");
+      const day = String(v.getDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
+    }
+    return "";
+  };
+
+  const _asTrim = (v: any) => (typeof v === "string" ? v.trim() : (v ?? ""));
+
+  // ★ 추가: 목적격 조사(을/를) 자동 선택
+  const _objJosa = (word: string) => {
+    const w = (word ?? "").trim();
+    if (!w) return "을";
+    const ch = w.charCodeAt(w.length - 1);
+    // 한글 음절 범위가 아니면 기본 "을"
+    if (ch < 0xac00 || ch > 0xd7a3) return "을";
+    const jong = (ch - 0xac00) % 28;
+    return jong === 0 ? "를" : "을";
+  };
+
+  const buildEditLogBody = (prev: any, next: any) => { // ★ 추가
+    // next는 patch(저장될 값)
+    const fields: Array<{ key: string; label: string; type: "date" | "text" | "bool" }> = [
+      { key: "completion_date", label: "완료 요청일", type: "date" },
+      { key: "open_date", label: "오픈일", type: "date" },
+      { key: "merchandiser", label: "담당 MD", type: "text" },
+      { key: "task_form", label: "업무 부서", type: "text" },
+      { key: "task_type", label: "업무 유형", type: "text" },
+      { key: "task_type_detail", label: "업무 유형 상세", type: "text" },
+      { key: "requirement", label: "작업 항목", type: "text" },
+      { key: "url", label: "요청서 URL", type: "text" },
+      { key: "emergency", label: "긴급 일정", type: "bool" },
+    ];
+
+    const diffs: Array<{ label: string; from: string; to: string }> = [];
+
+    for (const f of fields) {
+      const prevVal = prev?.[f.key];
+      const nextVal = next?.[f.key];
+
+      if (f.type === "date") {
+        const a = _toYMD(prevVal);
+        const b = _toYMD(nextVal);
+        if ((a || "") !== (b || "")) {
+          diffs.push({ label: f.label, from: a || "-", to: b || "-" });
+        }
+        continue;
+      }
+
+      if (f.type === "bool") {
+        const a = !!prevVal;
+        const b = !!nextVal;
+        if (a !== b) {
+          diffs.push({
+            label: f.label,
+            from: a ? "긴급" : "일반",
+            to: b ? "긴급" : "일반",
+          });
+        }
+        continue;
+      }
+
+      const a = _asTrim(prevVal);
+      const b = _asTrim(nextVal);
+      if ((a || "") !== (b || "")) {
+        diffs.push({ label: f.label, from: a || "-", to: b || "-" });
+      }
+    }
+
+    const actor = userName || "(익명)";
+
+    // 1개만 바뀌면: 딱 한 문장
+    if (diffs.length === 1) {
+      const d = diffs[0];
+      const josa = _objJosa(d.label);
+      return `${actor}님이 ${d.label}${josa} '${d.from}'에서 '${d.to}'으로 수정했습니다.`; // ★ 변경
+    }
+
+    // 여러 개면: 문장 여러 줄 (원하면 첫줄 헤더도 붙일 수 있음)
+    return diffs
+      .map((d) => {
+        const josa = _objJosa(d.label);
+        return `${actor}님이 ${d.label}${josa} '${d.from}'에서 '${d.to}'으로 수정했습니다.`;
+      })
+      .join("\n");
+  };
+
   // ==== 월별 베이스/연속번호 유틸
   const getMonthSeqBase = async () => {
     const now = new Date();
     const year = now.getFullYear().toString().slice(2);
     const month = (now.getMonth() + 1).toString().padStart(2, "0");
 
+    const prefix = `H${year}${month}`;
+
     const q = query(
       collection(db, "design_request"),
-      // 3자리에서 4자리 시퀀스로 경계값 확장
-      where("design_request_id", ">=", `H${year}${month}0000`), // ★ 변경
-      where("design_request_id", "<",  `H${year}${month}9999`)  // ★ 변경
+      // ★ 변경: 개수(snapshot.size)가 아니라, 같은 prefix를 가진 문서들을 전부 가져온 뒤
+      // 그 안에서 "가장 큰 번호"를 찾기 위해 쿼리만 범위 지정
+      where("design_request_id", ">=", `${prefix}0000`),
+      where("design_request_id", "<",  `${prefix}9999`)
     );
+
     const snapshot = await getDocs(q);
-    return { year, month, base: snapshot.size };
+
+    // ★ 변경: 최대 시퀀스 계산
+    let maxSeq = 0;
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data() as any;
+      const id = String(data.design_request_id ?? "");
+
+      if (!id.startsWith(prefix)) return;
+
+      // prefix 뒤 숫자 부분만 잘라서 파싱 (예: "H25120031" -> "31", "0031" 등 모두 숫자로)
+      const tail = id.slice(prefix.length); 
+      const num = parseInt(tail, 10);
+
+      if (!Number.isNaN(num) && num > maxSeq) {
+        maxSeq = num;
+      }
+    });
+
+    // base를 "현재 존재하는 문서 중 가장 큰 번호"로 리턴
+    return { year, month, base: maxSeq };  // ★ 변경
   };
   const buildDocNumber = (y: string, m: string, seq: number) =>
     `H${y}${m}${seq.toString().padStart(4, "0")}`; // padStart(4, "0")
@@ -305,10 +514,17 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
     e.preventDefault();
 
     if (isEdit) {
-      const msg = validateDesignForm(requestData, isNSMall(userCompany));
-      if (msg) { alert(msg); return; }
+      const err = validateDesignForm(requestData, isNSMall(userCompany));   // ★ 변경
+      if (err) {
+        alert(err.message);
+        markError(err.fieldId);
+        focusById(err.fieldId);
+        return;
+      }
     }
-
+    
+    const uid = auth.currentUser?.uid || userUid || ""; // 문서 수정자 uid
+    
     if (isEdit && editData?.id) {
       // 부서/유형 변경 시 공수 재계산
       const formChanged = (requestData.task_form || "") !== (editData.task_form || "");
@@ -327,8 +543,15 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
         requirement: requestData.requirement,
         url: requestData.url,
         emergency: requestData.emergency,
-        requester_edit_state: false,
-        updated_date: serverTimestamp()
+        // ★ 변경: 저장이 완료되었으니 '문서 수정됨' 표시를 true로
+       requester_edit_state: true, // ★ 문서 수정됨
+        requester_edit_last_uid: uid || null, // ★ 추가
+        requester_edit_last_at: serverTimestamp(), // ★ 추가
+        [`requester_edit_read_by.${uid}`]:
+          serverTimestamp(), // ★ 본인은 읽음 처리
+        [`requester_edit_read_by_client.${uid}`]:
+          Date.now(),
+        updated_date: serverTimestamp(),
       };
 
       if (formChanged || typeChanged || detailChanged) {
@@ -342,7 +565,37 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
         patch.work_hour_edit_state = false;
       }
 
-      await updateDoc(doc(db, "design_request", editData.id), patch);
+
+      // ★ 추가: 수정 로그 생성 (바뀐 값만)
+      const logBody = buildEditLogBody(editData, patch);
+
+      // ★ 변경: updateDoc 단독 호출 대신 writeBatch로 “문서 업데이트 + 로그 댓글”을 한 번에 처리
+      const docRef = doc(db, "design_request", editData.id);
+      const batch = writeBatch(db);
+
+      batch.update(docRef, patch);
+
+      if (logBody) {
+        const commentsCol = collection(docRef, "comments");
+        const newCommentRef = doc(commentsCol); // auto id
+
+        batch.set(newCommentRef, {
+          author_name: userName || "(익명)",   // ★ 추가
+          author_uid: uid || "",              // ★ 추가
+          body: logBody,                      // ★ 추가
+          kind: "edit_log",                   // ★ 추가: UI에서 구분하고 싶으면 사용
+          createdAt: serverTimestamp(),
+        });
+
+        batch.update(docRef, {
+          comments_count: increment(1),           // ★ 추가
+          comments_last_date: serverTimestamp(),  // ★ 추가
+          comments_last_author_uid: uid,          // ★ 추가
+        });
+      }
+
+      await batch.commit();
+
       alert("요청이 수정되었습니다!");
       onClose();
       return;
@@ -351,12 +604,18 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
     // 등록 모드 — 상단 + 추가 폼 일괄 등록
     const forms = [requestData, ...extras];
 
-    // 모든 필수값 종합 검사 (폼별 메시지)
-     for (let i = 0; i < forms.length; i++) {
+    // 등록 모드 유효성 검사 (메인 + 추가폼)
+    for (let i = 0; i < forms.length; i++) {
       const f = forms[i];
-      const msg = validateDesignForm(f, isNSMall(userCompany));
-      if (msg) {
-        alert(`${i === 0 ? "메인 폼" : `추가 요청 ${i}`} ${msg}`);
+      const err = validateDesignForm(f, isNSMall(userCompany));
+      if (err) {
+        const prefix = i === 0 ? "메인 폼" : `추가 요청 ${i}`;
+        alert(`${prefix} ${err.message}`);
+
+        const fieldId = i === 0 ? err.fieldId : `${err.fieldId}_ex_${i - 1}`;
+
+        markError(fieldId);
+        focusById(fieldId);
         return;
       }
     }
@@ -402,7 +661,12 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
         designer_start_date: null,
         designer_end_date: null,
         emergency: f.emergency,
+        // ★ 문서수정 관련 필드 초기값
         requester_edit_state: false,
+        requester_edit_last_date: null,
+        requester_edit_last_uid: null,
+        requester_edit_read_by: {},
+        requester_edit_read_by_client: {},
         designer_edit_state: false,
         requester_design_edit_state: false,
         comments_count: 0,
@@ -460,10 +724,12 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (!u) {
         setUserCompany("");
+        setUserUid("");
         return;
       }
       const snap = await getDoc(doc(db, "users", u.uid));
       setUserCompany((snap.data() as any)?.company ?? "");
+      setUserUid(u.uid);
     });
     return () => unsub();
   }, []);
@@ -503,25 +769,40 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
               <tr>
                 <RequestFormTableTh><RequestFormItemLabel htmlFor="completion_date">완료 요청일</RequestFormItemLabel></RequestFormTableTh>
                 <RequestFormTableTd>
-                  <RequestFormDateInput type="date" id="completion_date" value={requestData.completion_date} onChange={(e) => requsetForm("completion_date", e.target.value)} />
+                  <RequestFormDateInput type="date" id="completion_date" value={requestData.completion_date} $error={!!errorFields["completion_date"]} 
+                    onChange={(e) => {
+                      clearError("completion_date");
+                      requsetForm("completion_date", e.target.value);
+                    }}
+                  />
                 </RequestFormTableTd>
               </tr>
               <tr>
                 <RequestFormTableTh><RequestFormItemLabel htmlFor="open_date">오픈일</RequestFormItemLabel></RequestFormTableTh>
                 <RequestFormTableTd>
-                  <RequestFormDateInput type="date" id="open_date" value={requestData.open_date} onChange={(e) => requsetForm("open_date", e.target.value)} />
+                  <RequestFormDateInput type="date" id="open_date" value={requestData.open_date}  $error={!!errorFields["open_date"]} 
+                    onChange={(e) => { 
+                      clearError("open_date");
+                      requsetForm("open_date", e.target.value)
+                    }} 
+                  />
                 </RequestFormTableTd>
               </tr>
               <tr>
                 <RequestFormTableTh><RequestFormItemLabel htmlFor="merchandiser">담당 MD</RequestFormItemLabel></RequestFormTableTh>
                 <RequestFormTableTd>
-                  <RequestFormTextInput type="text" id="merchandiser" value={requestData.merchandiser || ""} onChange={(e) => requsetForm("merchandiser", e.target.value)} placeholder="담당 MD 이름을 입력하세요." />
+                  <RequestFormTextInput type="text" id="merchandiser" value={requestData.merchandiser || ""} placeholder="담당 MD 이름을 입력하세요." onChange={(e) => requsetForm("merchandiser", e.target.value)} />  
                 </RequestFormTableTd>
               </tr>
               <tr>
                 <RequestFormTableTh><RequestFormItemLabel htmlFor="task_form">업무 부서</RequestFormItemLabel></RequestFormTableTh>
                 <RequestFormTableTd>
-                  <RequestFormSelectBox id="task_form" $wide={isNSMall(userCompany)} value={requestData.task_form || companyCfg.formDefault} onChange={(e) => requsetForm("task_form", e.target.value)}>
+                  <RequestFormSelectBox id="task_form" $wide={isNSMall(userCompany)} value={requestData.task_form || companyCfg.formDefault} $error={!!errorFields["task_form"]} 
+                    onChange={(e) => {
+                      clearError("task_form");
+                      requsetForm("task_form", e.target.value)
+                    }}
+                  >
                     {renderForms.map(v => <option key={v} value={v}>{v}</option>)}
                   </RequestFormSelectBox>
                 </RequestFormTableTd>
@@ -536,7 +817,11 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
                         id="task_type"
                         $wide
                         value={isEdit ? (requestData.task_type || (renderTypes[0] as string || "")) : (requestData.task_type ?? "")}
-                        onChange={(e) => requsetForm("task_type", e.target.value)}
+                        $error={!!errorFields["task_type"]}
+                        onChange={(e) => {
+                          clearError("task_type");
+                          requsetForm("task_type", e.target.value);
+                        }}
                       >
                         {!isEdit && <option value="">업무 유형을 선택해주세요</option>}
                         {renderTypes.map((v) => (
@@ -549,7 +834,14 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
                           id="task_type_detail"
                           $wide
                           value={requestData.task_type_detail || ""}
-                          onChange={(e) => requsetForm("task_type_detail", e.target.value)}
+                          $error={!!errorFields["task_type_detail"]}
+                          onChange={(e) => {
+                            clearError("task_type_detail");
+                            requsetForm(
+                              "task_type_detail",
+                              e.target.value
+                            );
+                          }}
                         >
                           <option value="">상세 유형을 선택해주세요</option>
                           {mainDetailOptions.map((opt) => (
@@ -577,7 +869,12 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
               <tr>
                 <RequestFormTableTh><RequestFormItemLabel htmlFor="requirement">작업 항목</RequestFormItemLabel></RequestFormTableTh>
                 <RequestFormTableTd>
-                  <RequestFormTextInput type="text" id="requirement" value={requestData.requirement} onChange={(e) => requsetForm("requirement", e.target.value)} placeholder="작업 항목을 입력하세요." />
+                  <RequestFormTextInput type="text" id="requirement" value={requestData.requirement} placeholder="작업 항목을 입력하세요." $error={!!errorFields["requirement"]} 
+                    onChange={(e) => {
+                      clearError("requirement");
+                      requsetForm("requirement", e.target.value);
+                    }}
+                  />
                 </RequestFormTableTd>
               </tr>
               <tr>
@@ -619,13 +916,40 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
                       <tr>
                         <RequestFormTableTh><RequestFormItemLabel htmlFor={`completion_date_ex_${idx}`}>완료 요청일</RequestFormItemLabel></RequestFormTableTh>
                         <RequestFormTableTd>
-                          <RequestFormDateInput id={`completion_date_ex_${idx}`} type="date" value={(f.completion_date as string) || ""} onChange={(e) => updateExtra(idx, "completion_date", e.target.value)} />
+                          <RequestFormDateInput id={`completion_date_ex_${idx}`} type="date" value={(f.completion_date as string) || ""} 
+                            $error={
+                              !!errorFields[
+                                `completion_date_ex_${idx}`
+                              ]
+                            }
+                            onChange={(e) => {
+                              clearError(
+                                `completion_date_ex_${idx}`
+                              );
+                              updateExtra(
+                                idx,
+                                "completion_date",
+                                e.target.value
+                              );
+                            }} />
                         </RequestFormTableTd>
                       </tr>
                       <tr>
                         <RequestFormTableTh><RequestFormItemLabel htmlFor={`open_date_ex_${idx}`}>오픈일</RequestFormItemLabel></RequestFormTableTh>
                         <RequestFormTableTd>
-                          <RequestFormDateInput id={`open_date_ex_${idx}`} type="date" value={(f.open_date as string) || ""} onChange={(e) => updateExtra(idx, "open_date", e.target.value)} />
+                          <RequestFormDateInput id={`open_date_ex_${idx}`} type="date" value={(f.open_date as string) || ""}  
+                            $error={
+                              !!errorFields[`open_date_ex_${idx}`]
+                            }
+                            onChange={(e) => {
+                              clearError(`open_date_ex_${idx}`);
+                              updateExtra(
+                                idx,
+                                "open_date",
+                                e.target.value
+                              );
+                            }} 
+                          />
                         </RequestFormTableTd>
                       </tr>
                       <tr>
@@ -637,7 +961,19 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
                       <tr>
                         <RequestFormTableTh><RequestFormItemLabel htmlFor={`task_form_ex_${idx}`}>업무 부서</RequestFormItemLabel></RequestFormTableTh>
                         <RequestFormTableTd>
-                          <RequestFormSelectBox id={`task_form_ex_${idx}`} $wide={isNSMall(userCompany)} value={f.task_form || companyCfg.formDefault} onChange={(e) => updateExtra(idx, "task_form", e.target.value)}>
+                          <RequestFormSelectBox id={`task_form_ex_${idx}`} $wide={isNSMall(userCompany)} value={f.task_form || companyCfg.formDefault} 
+                            $error={
+                              !!errorFields[`task_form_ex_${idx}`]
+                            }
+                            onChange={(e) => {
+                              clearError(`task_form_ex_${idx}`); // ★ 추가
+                              updateExtra(
+                                idx,
+                                "task_form",
+                                e.target.value
+                              );
+                            }}
+                          >
                             {companyCfg.forms.map((v) => <option key={v} value={v}>{v}</option>)}
                           </RequestFormSelectBox>
                         </RequestFormTableTd>
@@ -652,7 +988,21 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
                                 id={`task_type_ex_${idx}`} /* 고유 id */
                                 $wide
                                 value={(f.task_type as string) || ""}
-                                onChange={(e) => updateExtra(idx, "task_type", e.target.value)}
+                                $error={
+                                  !!errorFields[
+                                    `task_type_ex_${idx}`
+                                  ]
+                                }
+                                onChange={(e) => {
+                                  clearError(
+                                    `task_type_ex_${idx}`
+                                  ); // ★ 추가
+                                  updateExtra(
+                                    idx,
+                                    "task_type",
+                                    e.target.value
+                                  );
+                                }}
                               >
                                 <option value="">업무 유형을 선택해주세요</option>
                                 {(companyCfg.types as string[]).map((v) => (
@@ -666,7 +1016,21 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
                                   id={`task_type_detail_ex_${idx}`} /* 고유 id */
                                   $wide
                                   value={(f.task_type_detail as string) || ""}
-                                  onChange={(e) => updateExtra(idx, "task_type_detail", e.target.value)}
+                                  $error={
+                                    !!errorFields[
+                                      `task_type_detail_ex_${idx}`
+                                    ]
+                                  }
+                                  onChange={(e) => {
+                                    clearError(
+                                      `task_type_detail_ex_${idx}`
+                                    );
+                                    updateExtra(
+                                      idx,
+                                      "task_type_detail",
+                                      e.target.value
+                                    );
+                                  }}
                                 >
                                   <option value="">상세 유형을 선택해주세요</option>
                                   {getNSmallDetails(f.task_type as string).map((opt) => (
@@ -697,7 +1061,12 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
                       <tr>
                         <RequestFormTableTh><RequestFormItemLabel htmlFor={`requirement_ex_${idx}`}>작업 항목</RequestFormItemLabel></RequestFormTableTh>
                         <RequestFormTableTd>
-                          <RequestFormTextInput id={`requirement_ex_${idx}`} type="text" value={f.requirement || ""} onChange={(e) => updateExtra(idx, "requirement", e.target.value)} placeholder="작업 항목을 입력하세요." />
+                          <RequestFormTextInput id={`requirement_ex_${idx}`} type="text" value={f.requirement || ""} placeholder="작업 항목을 입력하세요." $error={!!errorFields[`requirement_ex_${idx}`]} 
+                            onChange={(e) => {
+                              clearError(`requirement_ex_${idx}`);
+                              updateExtra(idx, "requirement", e.target.value);
+                            }} 
+                          />
                         </RequestFormTableTd>
                       </tr>
                       <tr>
@@ -761,6 +1130,7 @@ const RequestFormTable = styled.table`
   width: 100%;
   color: ${({ theme }) => theme.colors.black};
   border-top: 1px solid ${({ theme }) => theme.colors.black};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.gray02};
 `;
 
 const RequestFormTableWrap = styled.div`
@@ -781,12 +1151,15 @@ const RequestFormTableTh = styled.th`
   font-size: 14px;
   border: 1px solid ${({ theme }) => theme.colors.gray02};
   border-left: none;
+  border-bottom: none;
+  border-right: none;
   background-color: ${({ theme }) => theme.colors.gray04};
 `;
 
 const RequestFormTableTd = styled.td`
   padding: 10px 24px;
   border-right: none;
+  border-bottom: none;
 `;
 
 const RequestFormItemLabel = styled.label`
@@ -795,31 +1168,55 @@ const RequestFormItemLabel = styled.label`
   font-weight: 700;
 `;
 
-const RequestFormDateInput = styled.input`
+const RequestFormDateInput = styled.input<{ $error?: boolean }>`
   width: 168px;
   padding: 6px 12px;
-  border: 1px solid ${({ theme }) => theme.colors.gray02};
+  border: 1px solid
+    ${({ theme, $error }) =>
+      $error ? theme.colors.red : theme.colors.gray02};
   border-radius: 4px;
   font-family: 'Pretendard';
   font-size: 16px;
+
+  &:focus {
+    outline: none;
+    border-color: ${({ theme, $error }) =>
+      $error ? theme.colors.red : theme.colors.black};
+  }
 `;
 
-const RequestFormTextInput = styled.input`
+const RequestFormTextInput = styled.input<{ $error?: boolean }>`
   width: 100%;
   padding: 8.5px 16px;
-  border: 1px solid ${({ theme }) => theme.colors.gray02};
+  border: 1px solid
+    ${({ theme, $error }) =>
+      $error ? theme.colors.red : theme.colors.gray02};
   border-radius: 4px;
-  font-family: 'Pretendard';
+  font-family: "Pretendard";
   font-size: 16px;
+
+  &:focus {
+    outline: none;
+    border-color: ${({ theme, $error }) =>
+      $error ? theme.colors.red : theme.colors.black};
+  }
 `;
 
-const RequestFormTextArea = styled.textarea`
+const RequestFormTextArea = styled.textarea<{ $error?: boolean }>`
   width: 100%;
   padding: 10px 16px;
-  border: 1px solid ${({ theme }) => theme.colors.gray02};
+  border: 1px solid
+    ${({ theme, $error }) =>
+      $error ? theme.colors.red : theme.colors.gray02};
   border-radius: 4px;
-  font-family: 'Pretendard';
+  font-family: "Pretendard";
   font-size: 16px;
+
+  &:focus {
+    outline: none;
+    border-color: ${({ theme, $error }) =>
+      $error ? theme.colors.red : theme.colors.black};
+  }
 `;
 
 const EmergencyWrap = styled.div`
@@ -853,7 +1250,7 @@ const RequestFormChackBox = styled.span`
   border-radius: 2px;
 `;
 
-const RequestFormSelectBox = styled.select<{ $wide?: boolean }>`
+const RequestFormSelectBox = styled.select<{ $wide?: boolean; $error?: boolean }>`
   appearance: none;
   -webkit-appearance: none;
   -moz-appearance: none;
@@ -861,9 +1258,11 @@ const RequestFormSelectBox = styled.select<{ $wide?: boolean }>`
   width: ${({ $wide }) => ($wide ? "215px" : "168px")};
   height: 36px;
   padding: 0 32px 0 16px;
-  border: 1px solid ${({ theme }) => theme.colors.gray02};
+  border: 1px solid
+    ${({ theme, $error }) =>
+      $error ? theme.colors.red : theme.colors.gray02};   // ★ 변경
   border-radius: 4px;
-  font-family: 'Pretendard';
+  font-family: "Pretendard";
   font-size: 16px;
   background-color: ${({ theme }) => theme.colors.white01};
   background-image: url(${selectBoxArrow});
@@ -874,7 +1273,8 @@ const RequestFormSelectBox = styled.select<{ $wide?: boolean }>`
 
   &:focus {
     outline: none;
-    border-color: ${({ theme }) => theme.colors.black};
+    border-color: ${({ theme, $error }) =>
+      $error ? theme.colors.red : theme.colors.black};   // ★ 변경
   }
 
   &:first-of-type {

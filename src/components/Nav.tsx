@@ -6,13 +6,18 @@ type ViewType = "dashboard" | "myrequestlist" | "allrequestlist" | "inworkhour";
 
 interface NavProps {
   userRole: number | null; // 1: 요청자, 2: 디자이너, 3: 담당자(매니저)
+  onResetFilters?: () => void;
 }
 
-export default function Nav({ userRole }: NavProps) {
+export default function Nav({ userRole, onResetFilters }: NavProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const view = (searchParams.get("view") || "dashboard") as ViewType;
 
   const go = (v: ViewType) => {
+    if (v === "myrequestlist") { // 나의 요청 리스트 클릭 시 필터 리셋
+      onResetFilters?.();
+    }
+
     setSearchParams(prev => {
       const sp = new URLSearchParams(prev);
       sp.set("view", v);
@@ -27,9 +32,9 @@ export default function Nav({ userRole }: NavProps) {
   const labels = useMemo(() => {
     switch (role) {
       case 1: // 요청자
-        return { my: "요청 리스트", all: "전체 요청 리스트" };
+        return { my: "나의 요청 리스트", all: "전체 요청 리스트" };
       case 2: // 디자이너
-        return { my: "작업 리스트", all: "전체 작업 리스트" };
+        return { my: "나의 작업 리스트", all: "전체 작업 리스트" };
       case 3: // 매니저
         return { my: "요청 리스트", all: "" }; // 매니저는 단일 메뉴
       default:
@@ -82,7 +87,7 @@ export default function Nav({ userRole }: NavProps) {
         </MainMenuItem>
 
         {/* 4) 매니저 전용: 내부 공수 */}
-        {isManager && (
+        {/* {isManager && (
           <MainMenuItem>
             <MainMenuItemButton
               type="button"
@@ -92,7 +97,7 @@ export default function Nav({ userRole }: NavProps) {
               내부 공수
             </MainMenuItemButton>
           </MainMenuItem>
-        )}
+        )} */}
       </MainMenuList>
     </NavFrame>
   );

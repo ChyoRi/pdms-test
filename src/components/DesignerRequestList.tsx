@@ -38,15 +38,16 @@ export default function DesignerRequestList({
     <RequestListTableWrap>
       <RequestListTable>
         <colgroup>
-          <col style={{ width: '2.542%' }} /><col style={{ width: '6.057%' }} />
-          <col style={{ width: '5.083%' }} /><col style={{ width: '3.177%' }} />
-          <col style={{ width: '3.177%' }} /><col style={{ width: '3.177%' }} />
-          <col style={{ width: '3.177%' }} /><col style={{ width: '3.177%' }} />
-          <col style={{ width: '5.083%' }} /><col style={{ width: '7.624%' }} />
-          <col style={{ width: '12.255%' }} /><col style={{ width: '5.083%' }} />
-          <col style={{ width: '5.083%' }} /><col style={{ width: '7.624%' }} />
-          <col style={{ width: '7.624%' }} /><col style={{ width: '12.255%' }} />
-          <col style={{ width: '6.354%' }} /><col style={{ width: '5.083%' }} />
+          <col style={{ width: '2.34%' }} /><col style={{ width: '5.57%' }} />
+          <col style={{ width: '4.68%' }} /><col style={{ width: '2.92%' }} />
+          <col style={{ width: '2.92%' }} /><col style={{ width: '2.92%' }} />
+          <col style={{ width: '2.92%' }} /><col style={{ width: '2.92%' }} />
+          <col style={{ width: '4.68%' }} /><col style={{ width: '7.01%' }} />
+          <col style={{ width: '11.27%' }} /><col style={{ width: '4.68%' }} />
+          <col style={{ width: '4.68%' }} /><col style={{ width: '4.68%' }} />
+          <col style={{ width: '7.01%' }} /><col style={{ width: '7.01%' }} />
+          <col style={{ width: '11.27%' }} /><col style={{ width: '5.84%' }} />
+          <col style={{ width: '4.68%' }} />
         </colgroup>
         <thead>
           <tr>
@@ -63,6 +64,7 @@ export default function DesignerRequestList({
             <RequestListTableTh>작업항목</RequestListTableTh>
             <RequestListTableTh>요청서<br />URL</RequestListTableTh>
             <RequestListTableTh>메모 Talk</RequestListTableTh>
+            <RequestListTableTh>디자이너</RequestListTableTh>
             <RequestListTableTh>디자인 시작일</RequestListTableTh>
             <RequestListTableTh>디자인 종료일</RequestListTableTh>
             <RequestListTableTh>산출물 링크</RequestListTableTh>
@@ -95,7 +97,7 @@ export default function DesignerRequestList({
             })
           ) : (
             <tr>
-              <td colSpan={18} style={{ textAlign: "center" }}>
+              <td colSpan={19} style={{ textAlign: "center" }}>
                 배정된 요청이 없습니다.
               </td>
             </tr>
@@ -117,15 +119,17 @@ const RequestListTableWrap = styled.div`
 const RequestListTable = styled.table`
   table-layout: fixed;
   width: 100%;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.gray02};
   text-align: center;
+  transform: translateY(-2px);
 `;
 
 const RequestListTableTh = styled.th`
   position: sticky;
-  top: -2px;
+  top: 1px;
   line-height: 16px;
   padding: 13px 0;
-  border-bottom: none;
+  border-right: none;
   font-family: 'Pretendard';
   font-size: 14px;
   font-weight: 700;
@@ -145,10 +149,10 @@ const RequestListTableTh = styled.th`
   }
 
   &:nth-of-type(14), &:nth-of-type(15), &:nth-of-type(16), &:nth-of-type(17) {
-    border-right: 1px solid ${({ theme }) => theme.colors.pink02}
+    /* border-right: 1px solid ${({ theme }) => theme.colors.pink02} */
   }
 
-  &:nth-of-type(14), &:nth-of-type(15), &:nth-of-type(16), &:nth-of-type(17), &:nth-of-type(18) {
+  &:nth-of-type(14), &:nth-of-type(15), &:nth-of-type(16), &:nth-of-type(17), &:nth-of-type(18), &:nth-of-type(19) {
     background-color: ${({ theme }) => theme.colors.pink01};
   }
 `;

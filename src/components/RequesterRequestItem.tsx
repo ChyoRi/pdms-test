@@ -1,6 +1,8 @@
 import styled from "styled-components";
 import urlIcon from "../assets/url-icon.svg";
+import urlIconGray from "../assets/url-icon-gray.svg"
 import commentIcon from "../assets/comment.svg";
+import commentIconGray from "../assets/comment_gray.svg"
 
 interface RequestItemProps {
   item: RequestData;
@@ -10,13 +12,13 @@ interface RequestItemProps {
   onCancel: (id: string) => void;
   onEditClick: (id: string) => void;
   onDetailClick: (item: RequestData) => void;
-  currentUid?: string;
+  userUid?: string;
   localReadMs?: number;
   // 디자인 수정요청 버튼 콜백(부모에서 status를 "수정"으로 바꾸는 처리)
   onRequestRevision?: (id: string) => void;
 }
 
-export default function RequesterRequestItem({ item, index, disableActions, currentUid, localReadMs, onReviewComplete, onCancel, onEditClick, onRequestRevision, onDetailClick }: RequestItemProps) {
+export default function RequesterRequestItem({ item, index, disableActions, userUid, localReadMs, onReviewComplete, onCancel, onEditClick, onRequestRevision, onDetailClick }: RequestItemProps) {
   const lockedByManager = item.manager_review_status === "검수완료";
 
   // 날짜 포맷 함수
@@ -48,9 +50,9 @@ export default function RequesterRequestItem({ item, index, disableActions, curr
   const hasUrl = !!item.url && item.url.trim().length > 0;
 
   const lastAt   = toMillisSafe((item as any)?.comments_last_date);
-  const readRaw  = (item as any)?.comment_read_by?.[currentUid ?? ""];
+  const readRaw  = (item as any)?.comment_read_by?.[userUid ?? ""];
   // ★ 추가: 서버 확정 안되기 전에 서버-독립적으로 쓰는 클라이언트 보조 필드
-  const readClient = (item as any)?.comment_read_by_client?.[currentUid ?? ""];
+  const readClient = (item as any)?.comment_read_by_client?.[userUid ?? ""];
 
   // ★ 변경: 내 읽음 시각 계산 우선순위
   // 1) localReadMs(낙관적) → 2) comment_read_by_client(숫자) → 3) serverTimestamp 확정값(또는 보류중 now)
@@ -65,13 +67,49 @@ export default function RequesterRequestItem({ item, index, disableActions, curr
     Number(item.comments_count ?? 0) > 0 &&
     typeof lastAt === "number" &&
     (myReadAt == null || lastAt > myReadAt) &&
-    (currentUid ? lastAuthorUid !== currentUid : true);
+    (userUid ? lastAuthorUid !== userUid : true);
 
-  const docEdited = !!(item as any)?.requester_edit_state;              // 문서 수정 → 빨간점
-  const designEdited = !!(item as any)?.requester_design_edit_state;    // 디자인 수정 → 파란점
+  // ===== 문서/디자인 수정 점 로직 =====
+  const docEdited   = !!(item as any)?.requester_edit_state;           // 문서 수정 → 빨간점
+  const designEdited = !!(item as any)?.requester_design_edit_state;   // 디자인 수정 → 파란점
+
+  // ★ 추가: 문서 수정 "내가 읽었는지" 체크
+  const editReadBy =
+    (((item as any)?.requester_edit_read_by ?? {}) as Record<string, any>); // 서버 Timestamp 맵
+  const editReadClient =
+    (((item as any)?.requester_edit_read_by_client ?? {}) as Record<string, number>); // 클라이언트 ms 맵
+
+  const uid = userUid ?? ""; // 요청자 화면에서는 prop만 사용
+
+  const editReadRaw = editReadBy[uid];
+
+  const myDocEditReadAt =
+    (typeof editReadClient[uid] === "number"
+      ? editReadClient[uid]
+      : undefined) ?? toMillisSafe(editReadRaw);
+
+  const lastEditAuthorUid = (item as any)?.requester_edit_last_uid ?? "";
+
+  // ★ 핵심: 나 자신이 수정했거나 / 내가 이미 읽었으면 빨간점 숨김
+  const showDocEditDot =
+    docEdited &&
+    !!uid &&
+    myDocEditReadAt == null && // 아직 내가 읽은 기록이 없고
+    (lastEditAuthorUid ? lastEditAuthorUid !== uid : true); // 내가 수정한 문서가 아니면 표시
+
+  const handleRevisionClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!onRequestRevision) return;
+    const ok = window.confirm("이 요청에 대해 ‘디자인 수정요청’을 보내시겠습니까?");
+    if (!ok) return;
+    onRequestRevision(item.id);
+  };
+
+  // 완료 또는 취소 공통 플래그
+  const isEnded = item.status === "완료" || item.status === "취소";
 
   return (
-    <RequestListTableTr isCanceled={item.status === "취소"}>
+    <RequestListTableTr isCanceled={item.status === "취소" || item.status === "완료"}>
       <RequestListTableTd>{index}</RequestListTableTd>
       <RequestListTableTd>
         <RequestListRequestIdText onClick={openDetail}>
@@ -79,14 +117,16 @@ export default function RequesterRequestItem({ item, index, disableActions, curr
           <UpdateDotWrap>
             {/* ★ 추가: 점 그룹 (둘 다 true면 나란히 표시) */}
             {designEdited && <DotBlue title="디자인 수정 요청됨" />}
-            {docEdited && <DotRed title="문서 수정됨" />}
+            {showDocEditDot && <DotRed title="문서 수정됨" />}
           </UpdateDotWrap>
         </RequestListRequestIdText>
       </RequestListTableTd>
       <RequestListTableTd>{formatDate(item.request_date)}</RequestListTableTd>
       <RequestListCompletionTd>{formatDate(item.completion_date)}</RequestListCompletionTd>
       <RequestListOpenDtTd>{formatDate(item.open_date)}</RequestListOpenDtTd>
-      <RequestListTableTd>{item.merchandiser}</RequestListTableTd>
+      <RequestListTableTd>
+        <RequestListMerchandiser>{item.merchandiser}</RequestListMerchandiser>
+      </RequestListTableTd>
       <RequestListTableTd>{item.task_form}</RequestListTableTd>
       <RequestListTaskTypeTd>
         <RequestListTaskTypeWrap>
@@ -104,12 +144,12 @@ export default function RequesterRequestItem({ item, index, disableActions, curr
       </RequestListRequirementTd>
       <RequestListTableTd>
         {hasUrl ? (
-          <UrlLink href={item.url} target="_blank" />
+          <UrlLink href={item.url} target="_blank" $isCompleted={isEnded} />
         ) : null}
       </RequestListTableTd>
       <RequestListMemoTd>
-        <CommentCountWrap onClick={openDetail}>
-          <CommentIcon />
+        <CommentCountWrap status={item.status} onClick={openDetail}>
+          <CommentIcon $isCompleted={isEnded} />
           <CommentCount $hasNew={hasNew}>
             {Number(item.comments_count ?? 0)}
           </CommentCount>
@@ -139,13 +179,14 @@ export default function RequesterRequestItem({ item, index, disableActions, curr
           <UrlLink
             href={item.result_url}
             target="_blank"
+            $isCompleted={isEnded}
           />
         ) : (
           ""
         )}
 
         {item.manager_review_status === "검수완료" && (
-          <RevisionBtn onClick={(e) => { e.stopPropagation(); onRequestRevision?.(item.id); }}>
+          <RevisionBtn onClick={handleRevisionClick}>
             수정요청
           </RevisionBtn>
         )}
@@ -187,13 +228,23 @@ const RequestListTableTr = styled.tr<{ isCanceled: boolean }>`
       cursor: default; pointer-events: none;
     }
   `}
-  &:hover { td { background-color: ${({ theme }) => theme.colors.gray04} }
+  &:hover { 
+    td { 
+      background-color: ${({ theme }) => theme.colors.gray04} 
+    };
   }
-  & td { font-family: 'Pretendard'; font-size: 13px; font-weight: 500; }
+
+  & td { 
+    font-family: 'Pretendard';
+    font-size: 13px;
+    font-weight: 500;
+    border-right: none;
+    border-bottom: none;
+  }
 `;
 
 const RequestListTableTd = styled.td`
-  padding: 15px 0;
+  padding: 11px 5px;
 
   &:first-of-type {
     border-left: none;
@@ -300,6 +351,11 @@ const RequestListRequirementText = styled.span`
   }
 `;
 
+const RequestListMerchandiser = styled.span`
+  white-space: normal;
+  overflow-wrap: break-word;
+`;
+
 const EmergencyBadge = styled.span`
   margin-right: 8px;
   padding: 3px 5px;
@@ -311,12 +367,15 @@ const EmergencyBadge = styled.span`
   white-space: nowrap;
 `;
 
-const UrlLink = styled.a<{ $disabled?: boolean }>`
+const UrlLink = styled.a<{ $disabled?: boolean; $isCompleted?: boolean }>`
   display: inline-block;
   vertical-align: middle;
   width: 24px;
   height: 24px;
-  background: url(${urlIcon}) no-repeat center / contain;
+  background: ${({ $isCompleted }) =>
+    $isCompleted
+      ? `url(${urlIconGray}) no-repeat center / contain`
+      : `url(${urlIcon}) no-repeat center / contain`};
 `;
 
 const StautsBadge = styled.span<{ status: string }>`
@@ -378,7 +437,7 @@ const ReviewButton = styled.button`
 `;
 
 const CompletedText = styled.span`
-  color: green;
+  color: ${({ theme }) => theme.colors.gray05};
   font-weight: bold;
 `;
 
@@ -419,12 +478,13 @@ const DesignersWrap = styled.div`
 const DesignerSpan = styled.span`
   line-height: 1.2;
 `;
-const CommentCountWrap = styled.div`
+const CommentCountWrap = styled.div<{ status: string }>`  // ★ 타입 추가
   position: relative;
   ${({ theme }) => theme.mixin.flex('center', 'center')};
-  gap:6px;
-  font-size:13px;
-  color:#111;
+  gap: 6px;
+  font-size: 13px;
+  color: ${({ status, theme }) =>
+    status === "완료" || status === "취소" ? theme.colors.gray05 : "#111"};  // ★ 완료일 때만 gray05
 
   &:hover {
     span {
@@ -433,10 +493,13 @@ const CommentCountWrap = styled.div`
   }
 `;
 
-const CommentIcon = styled.i` 
-  width:20px; 
-  height:20px;
-  background: url(${commentIcon}) no-repeat center / contain;
+const CommentIcon = styled.i<{ $isCompleted?: boolean }>`
+  width: 20px;
+  height: 20px;
+  background: ${({ $isCompleted }) =>
+    $isCompleted
+      ? `url(${commentIconGray}) no-repeat center / contain`
+      : `url(${commentIcon}) no-repeat center / contain`};
 `;
 
 const CommentCount = styled.span<{ $hasNew: boolean }>`

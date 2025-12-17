@@ -7,12 +7,16 @@ import { auth, db } from "../firebaseconfig";
 import { doc, getDoc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import Nav from "./Nav";
-import { logoutAll } from "../utils/authClient"; // ★ 추가
+import { logoutAll } from "../utils/authClient";
 
 const COMPANY = { HOMEPLUS: "homeplus", NSMALL: "nsmall" } as const;
 type CompanyKind = "homeplus" | "nsmall" | null;
 
-export default function Header() {
+interface HeaderProps {
+  onResetFilters?: () => void;
+}
+
+export default function Header({ onResetFilters }: HeaderProps) {
   const [userName, setUserName] = useState("");
   const [userCompany, setUserCompany] = useState("");
   const [userRole, setUserRole] = useState<number | null>(null); // ✅ role 상태
@@ -86,7 +90,7 @@ export default function Header() {
             <Logo src={logoSrc!} alt="company logo" />
           </LogoWrap>
         )}
-        <Nav userRole={userRole} />
+        <Nav userRole={userRole} onResetFilters={onResetFilters} />
       </LogoFrame>
       <UtilWrap>
         <UserNameWrap><UserName>{userName}</UserName>님({getRoleName(userRole)}) {userCompany}환영합니다.</UserNameWrap>

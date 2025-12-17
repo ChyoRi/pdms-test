@@ -1,4 +1,3 @@
-// ★ 추가: Comments.tsx
 import { useEffect, useRef, useState } from "react";
 import styled from "styled-components";
 import { auth, db } from "../firebaseconfig";
@@ -52,10 +51,16 @@ export default function Comments({ designRequestId, currentUserName }: CommentsP
   const [body, setBody] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // 입력 조합 상태(IME) — 한글/일본어 입력 조합 중 Enter 등록 방지
+  const [isComposing, setIsComposing] = useState(false);
+
   // 편집 상태
   const [editingId, setEditingId] = useState<string>("");
   const [editingBody, setEditingBody] = useState<string>("");
   const [updating, setUpdating] = useState<boolean>(false);
+
+  // 편집 영역 IME 조합 상태
+  const [isEditingComposing, setIsEditingComposing] = useState(false);
 
   const currentUid = auth.currentUser?.uid || "";
 
@@ -279,6 +284,28 @@ export default function Comments({ designRequestId, currentUserName }: CommentsP
     return `${mm}/${dd} ${hh}:${mi}`;
   };
 
+  // 입력 textarea 키다운 — Enter=등록, Shift+Enter=줄바꿈, IME 조합 중 무시
+  const handleAddKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key !== "Enter") return;
+    if (e.shiftKey) return;                 // 줄바꿈 허용
+    if (isComposing) return;                // 한글 조합 중이면 무시
+    if (!body.trim() || saving || !parentDocId) return;
+
+    e.preventDefault();
+    handleAdd();
+  };
+
+  // 편집 textarea 키다운 — Enter=저장, Shift+Enter=줄바꿈, IME 조합 중 무시
+  const handleEditKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>, id: string) => {
+    if (e.key !== "Enter") return;
+    if (e.shiftKey) return;
+    if (isEditingComposing) return;
+    if (!editingBody.trim() || updating) return;
+
+    e.preventDefault();
+    handleUpdate(id);
+  };
+
   return (
     <Wrap>
       <CommentTitleWrap>
@@ -316,6 +343,10 @@ export default function Comments({ designRequestId, currentUserName }: CommentsP
                       value={editingBody}
                       onChange={(e) => setEditingBody(e.target.value)}
                       rows={1}
+                      // 편집 Enter 저장/Shift+Enter 줄바꿈 & IME 처리
+                      onKeyDown={(e) => handleEditKeyDown(e, row.id)}
+                      onCompositionStart={() => setIsEditingComposing(true)}
+                      onCompositionEnd={() => setIsEditingComposing(false)}
                     />
                     <BtnRow>
                       <SmallBtn onClick={() => handleUpdate(row.id)} disabled={!editingBody.trim() || updating}>
@@ -344,6 +375,9 @@ export default function Comments({ designRequestId, currentUserName }: CommentsP
             value={body}
             onChange={(e) => setBody(e.target.value)}
             rows={1}
+            onKeyDown={handleAddKeyDown}
+            onCompositionStart={() => setIsComposing(true)}
+            onCompositionEnd={() => setIsComposing(false)}
           />
           <EmojiBtn
             type="button"
@@ -510,14 +544,13 @@ const CommentWrite = styled.textarea`
   padding-right: 44px;   /* 이모지 버튼 폭만큼 */
   font-size: 14px;
   line-height: 1.4;
-  resize: vertical;
   max-height: 200px;
 `;
 
 const EmojiBtn = styled.button`
   position: absolute;
-  top: 47%;
-  right: 8px;
+  top: 45%;
+  right: 18px;
   width: 28px;
   height: 28px;
   border-radius: 8px;

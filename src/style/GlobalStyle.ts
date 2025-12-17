@@ -33,7 +33,8 @@ const GlobalStyle = createGlobalStyle`
   }
 
   table {
-    border-collapse: collapse;
+    border-collapse: seperate;
+    border-spacing: 0;
 
     th, td {
       border: 1px solid #ccc;

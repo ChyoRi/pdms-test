@@ -13,7 +13,14 @@ import { doc, getDoc, collection, query, where, onSnapshot } from "firebase/fire
 // ✅ Drawer 콘텐츠 모드 타입
 type DrawerMode = 'create' | 'edit' | 'detail' | null;
 
-export default function DashBoardPage() {
+// 사이드바에서 쓰는 경량 타입(완료일 추가)
+interface RequestLite {
+  id: string;
+  status?: RequestData["status"];
+  completion_date?: any; // Firestore Timestamp | string | Date | undefined
+}
+
+export default function MainPage() {
   const [userRole, setUserRole] = useState<number>(0);
   const [requests, setRequests] = useState<RequestLite[]>([]);
   const [userName, setUserName] = useState<string>("");
@@ -24,6 +31,12 @@ export default function DashBoardPage() {
   // ✅ Drawer 표시 모드 (기본 detail)
   const [drawerMode, setDrawerMode] = useState<DrawerMode>(null);
 
+  // 사이드바에서 클릭한 상태값을 보관
+  const [statusFromAside, setStatusFromAside] = useState<string | null>(null);
+
+  // 필터 리셋 트리거
+  const [filterResetKey, setFilterResetKey] = useState(0);
+  
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
@@ -62,6 +75,12 @@ export default function DashBoardPage() {
               return {
                 id: docSnap.id,
                 status: (d.status as RequestData["status"]) ?? "대기중", // any → 좁히기
+                completion_date:
+                  d.completion_date ??
+                  d.complete_date ??
+                  d.completion_dt ??
+                  d.completed_at ??
+                  null,
               };
             });
             setRequests(list);
@@ -89,22 +108,42 @@ export default function DashBoardPage() {
     setSelectedData(undefined);
   };
 
+  // 사이드바 status 클릭 → Main에게 전달할 값 세팅
+  const handleClickStatusFromAside = (status: string) => {
+    setStatusFromAside(status);
+  };
+
+  // Aside 연동 상태 리셋용
+  const clearStatusFromAside = () => {
+    setStatusFromAside(null);
+  };
+
+  // 상단 Nav에서 "나의 요청 리스트" 눌렀을 때 전역 필터 초기화
+  const handleResetAllFilters = () => {
+    setStatusFromAside(null);              // Aside 연동 상태 초기화
+    setFilterResetKey(prev => prev + 1);   // 필터 리셋 신호 증가
+  };
 
   return(
     <Container>
-      <Aside requests={requests} userName={userName} role={userRole} onRequestButtonClick={handleOpenCreate} />
+      <Aside requests={requests} userName={userName} role={userRole} onRequestButtonClick={handleOpenCreate} onClickStatus={handleClickStatusFromAside} />
       <DashBoardFrame>
-        <Header />
+        <Header onResetFilters={handleResetAllFilters} />
         {/* ✅ Main에 setEditData 전달 */}
-        <Main userRole={userRole} setIsDrawerOpen={setIsDrawerOpen} 
-        setEditData={(data: RequestData) => {   // 수정 버튼 → edit
+        <Main 
+          userRole={userRole} 
+          setIsDrawerOpen={setIsDrawerOpen} 
+          setEditData={(data: RequestData) => {   // 수정 버튼 → edit
             setSelectedData(data);
             setDrawerMode('edit');
-        }}
-        setDetailData={(data: RequestData) => { // 메모/작업항목 → detail
+          }}
+          setDetailData={(data: RequestData) => { // 메모/작업항목 → detail
             setSelectedData(data);
             setDrawerMode('detail');
           }}
+          statusFromAside={statusFromAside}
+          clearStatusFromAside={clearStatusFromAside}
+          filterResetKey={filterResetKey}
         />
       </DashBoardFrame>
       {/* ✅ RequestForm에 editData 전달 */}

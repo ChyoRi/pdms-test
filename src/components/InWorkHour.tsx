@@ -1,18 +1,21 @@
-// src/components/InWorkHour.tsx
 import { useEffect, useMemo, useState } from "react";
 import styled from "styled-components";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "../firebaseconfig";
+import InWorkHourFilter from "./InWorkHourFilter";
 
 /** ───────── Types ───────── */
-type MonthlyStat = { rate: number; count: number };
+type DailyStat = { rate: number; count: number };
+
 type DesignerRow = {
   name: string;
   wait: number;
   progress: number;
   done: number;
   usedHours: number;
-  monthly: MonthlyStat[]; // 12개
+  daily: DailyStat[];   // 1~31일
+  monthRate: number;    // 선택 월 공수달성율
+  monthCount: number;   // 선택 월 총 건수
 };
 
 type RequestDoc = {
@@ -28,13 +31,8 @@ type RequestDoc = {
   created_date?: any;
 };
 
-const SPECIAL_SOLO = "손미나";
-const DISPLAY_BLACKLIST = new Set<string>(["미배정"]);
-
-/** ───────── Utilities ───────── */
-const months = [
-  "1월","2월","3월","4월","5월","6월","7월","8월","9월","10월","11월","12월",
-];
+const SPECIAL_SOLO = "손미나.";
+const DISPLAY_BLACKLIST = new Set<string>(["미배정", SPECIAL_SOLO]);
 
 const toMidnight = (d: Date) =>
   new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -73,14 +71,22 @@ const anchorDate = (r: RequestDoc): Date | null =>
   parseLoose((r as any).open_date) ??
   parseLoose((r as any).created_date);
 
+// 해당 연/월의 실제 일수 구하기 (윤년 자동 반영)
+const getDaysInMonth = (year: number, monthIndex: number) =>
+  new Date(year, monthIndex + 1, 0).getDate();
+
 // 상태 버킷
 const isWait = (s?: string) => s === "대기" || s === "대기중";
 const isDone = (s?: string) => s === "완료";
 const isProgress = (s?: string) =>
-  s === "진행중" || s === "검수중" || s === "검수요청";
+  s === "진행중" ||
+  s === "검수중" ||
+  s === "검수요청" ||
+  s === "수정"; 
 
-// 월 목표 공수(고정 160h)
-const MONTHLY_TARGET_HOURS = 162.3;
+// 디자이너 1명 월 목표 공수(고정 160h) 20.3 * 하루 8시간
+const MONTHLY_TARGET_HOURS = 162;
+// const WEEKLY_TARGET_HOURS = 40;
 
 // 소수점 n자리 "버림(끊기)" 유틸 (부동소수 보정 포함)
 const floorTo = (n: number, digits = 2) => {
@@ -103,24 +109,6 @@ const normCompany = (c?: string): "nsmall" | "homeplus" | "other" => {
   return "other";
 };
 
-
-// 🔧 문서에서 “실제 배정된 디자이너 배열”을 안전하게 꺼내기
-// const getAssignees = (r: RequestDoc): string[] => {
-//   if (Array.isArray(r.assigned_designers) && r.assigned_designers.length)
-//     return r.assigned_designers.filter(Boolean).map(s => s.trim());
-//   if (r.assigned_designer) return [String(r.assigned_designer).trim()];
-//   return [];
-// };
-
-// 🔧 이 문서가 특정 디자이너에게 차지하는 내부공수(= in_work_hour ÷ 배정인원)
-// const shareHourFor = (r: RequestDoc, who: string): number => {
-//   const list = getAssignees(r);
-//   if (!list.includes(who)) return 0;
-//   const n = Math.max(1, list.length);
-//   const base = Number(r.in_work_hour) || 0; // (예: 0.5 외부 × times 0.5 = 0.25 가 DB의 in_work_hour)
-//   return base / n; // ← 인원만큼 나눔
-// };
-
 /** ───────── Component ───────── */
 export default function InWorkHour({
   dailyHours = 8,
@@ -133,14 +121,52 @@ export default function InWorkHour({
 }) {
   const [docs, setDocs] = useState<RequestDoc[]>([]);
   const [designerNames, setDesignerNames] = useState<string[]>([]);
+
+  // 기준일(오늘 또는 외부에서 넘긴 날짜)
   const day = toMidnight(targetDate ?? new Date());
-  const year = day.getFullYear();
+
+  // 오늘(실제 오늘) 기준 – today 하이라이트용
+  const todayMidnight = useMemo(() => toMidnight(new Date()), []);
+
+  // 선택 연/월 상태
+  const [selectedYear, setSelectedYear] = useState(day.getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(day.getMonth()); // 0~11
+
+  // 선택된 연/월의 실제 일수 (28, 29, 30, 31)
+  const daysInSelectedMonth = useMemo(
+    () => getDaysInMonth(selectedYear, selectedMonth),
+    [selectedYear, selectedMonth]
+  );
+
+  // 선택 연/월의 각 날짜가 주말인지 여부 배열
+  const weekendFlags = useMemo(
+    () =>
+      Array.from({ length: daysInSelectedMonth }, (_, i) => {
+        const d = new Date(selectedYear, selectedMonth, i + 1);
+        const dow = d.getDay(); // 0: 일요일, 6: 토요일
+        return dow === 0 || dow === 6;
+      }),
+    [selectedYear, selectedMonth, daysInSelectedMonth]
+  );
+
+  // 선택 연/월의 각 날짜가 "오늘"인지 여부 배열
+  const todayFlags = useMemo(() => {
+    if (
+      todayMidnight.getFullYear() !== selectedYear ||
+      todayMidnight.getMonth() !== selectedMonth
+    ) {
+      return Array(daysInSelectedMonth).fill(false);
+    }
+
+    const todayIdx = todayMidnight.getDate() - 1; // 1일 → 0
+    return Array.from({ length: daysInSelectedMonth }, (_, i) => i === todayIdx);
+  }, [todayMidnight, selectedYear, selectedMonth, daysInSelectedMonth]);
 
   useEffect(() => {
     const qUsers = query(collection(db, "users"), where("role", "==", 2));
     const unSub = onSnapshot(qUsers, (snap) => {
       const names = snap.docs
-        .map(d => String((d.data() as any).name || "").trim())
+        .map((d) => String((d.data() as any).name || "").trim())
         .filter(Boolean);
       setDesignerNames(names);
     });
@@ -160,40 +186,33 @@ export default function InWorkHour({
   // 원본 배정 배열
   const getAssignees = (r: RequestDoc): string[] => {
     if (Array.isArray(r.assigned_designers) && r.assigned_designers.length)
-      return r.assigned_designers.filter(Boolean).map(s => s.trim());
+      return r.assigned_designers.filter(Boolean).map((s) => s.trim());
     if (r.assigned_designer) return [String(r.assigned_designer).trim()];
     return [];
   };
 
-  // ★ 변경: company별 "실제 집계 대상" 계산
-  // - NSmall/기타: 기존 규칙 유지
-  //   · 단독 홈돌이 → 포함
-  //   · 동배정에 홈돌이 포함 → 홈돌이 제외
-  // - HomePlus: 동배정이면 **균등 분배** → 홈돌이 포함하여 인원 나눔
+  // company별 "실제 집계 대상" 계산
   const getEffectiveAssignees = (r: RequestDoc): string[] => {
-    const raw = getAssignees(r).map(s => s.trim()).filter(Boolean);
-    const cleaned = raw.filter(n => n !== "미배정"); // 항상 제외
+    const raw = getAssignees(r).map((s) => s.trim()).filter(Boolean);
+
+    // ★ 변경: 전역 제외자(미배정, SPECIAL_SOLO)를 선제적으로 제거
+    const cleaned = raw.filter((n) => n !== "미배정" && n !== SPECIAL_SOLO); // ★ 변경
 
     const comp = normCompany(r.company);
 
-    // 단일 배정이면 그대로(두 회사 공통 규칙)
+    // 단일 배정이면 그대로
     if (cleaned.length <= 1) return cleaned;
 
     if (comp === "homeplus") {
-      // ★ HomePlus: 동배정 → 모두 포함(홈돌이 포함)하여 균등 분배
+      // HomePlus 동배정: 남은 사람들 균등 분배
       return cleaned;
     }
 
-    // ★ NSmall/기타: 동배정에 홈돌이가 있으면 홈돌이만 제외
-    if (cleaned.includes(SPECIAL_SOLO)) {
-      return cleaned.filter(n => n !== SPECIAL_SOLO);
-    }
+    // NSmall/기타: 이제 SPECIAL_SOLO는 이미 빠져 있으므로 그대로 반환
     return cleaned;
   };
 
-  // ✅ 문서가 특정 디자이너에게 차지하는 내부공수 = in_work_hour ÷ (제외자 뺀 배정 인원)
-  //  - 본인이 효과 배정 대상이 아닐 때 0
-  //  - 전원이 제외일 땐 0 (공수 미배정 취급)
+  // 문서가 특정 디자이너에게 차지하는 내부공수 = in_work_hour ÷ (제외자 뺀 배정 인원)
   const shareHourFor = (r: RequestDoc, who: string): number => {
     const eff = getEffectiveAssignees(r);
     if (!eff.includes(who)) return 0;
@@ -203,58 +222,95 @@ export default function InWorkHour({
   };
 
   // 디자이너별 집계 (배정 배열 기반)
-  const rows: DesignerRow[] = useMemo(() => {
-    const fromDocs = Array.from(new Set(docs.flatMap(d => getAssignees(d))));
+   const rows: DesignerRow[] = useMemo(() => {
+    const fromDocs = Array.from(new Set(docs.flatMap((d) => getAssignees(d))));
     const designers = Array.from(new Set([...designerNames, ...fromDocs]))
-      .filter(n => n && !DISPLAY_BLACKLIST.has(n))
+      .filter((n) => n && !DISPLAY_BLACKLIST.has(n))
       .sort((a, b) => a.localeCompare(b, "ko"));
 
+    const targetYear = selectedYear;
+    const targetMonth = selectedMonth;
+    const daysInMonth = daysInSelectedMonth;
+
     return designers.map((name) => {
-      const mine = docs.filter(d => getEffectiveAssignees(d).includes(name));
-      const dayDocs = mine.filter(d => sameDay(anchorDate(d), day));
+      const mine = docs.filter((d) => getEffectiveAssignees(d).includes(name));
 
-      const wait = dayDocs.filter(d => isWait(d.status)).length;
-      const progress = dayDocs.filter(d => isProgress(d.status)).length;
-      const done = dayDocs.filter(d => isDone(d.status)).length;
-
-      const usedHoursRaw = dayDocs.reduce((s, d) => s + shareHourFor(d, name), 0);
-      const usedHours = floorTo(usedHoursRaw, 2);
-
-      const monthly: MonthlyStat[] = Array.from({ length: 12 }, (_, m) => {
-        const monthHours = mine
-          .filter(d => {
-            const dt = anchorDate(d);
-            return dt && dt.getFullYear() === year && dt.getMonth() === m;
-          })
-          .reduce((s, d) => s + shareHourFor(d, name), 0);
-        const rate = Math.round((monthHours / MONTHLY_TARGET_HOURS) * 100);
-        const count = mine.filter(d => {
-          const dt = anchorDate(d);
-          return dt && dt.getFullYear() === year && dt.getMonth() === m;
-        }).length;
-        return { rate, count };
+      // 선택 연/월에 속하는 문서만 뽑아서 "월집계"에 사용
+      const monthDocs = mine.filter((d) => {
+        const dt = anchorDate(d);
+        return (
+          dt &&
+          dt.getFullYear() === targetYear &&
+          dt.getMonth() === targetMonth
+        );
       });
 
-      return { name, wait, progress, done, usedHours, monthly };
+      // ✅ 기준일(당일)에 속하는 문서만 뽑아서 "현재 공수(h)"에 사용
+      const dayDocs = mine.filter((d) => {
+        const dt = anchorDate(d);
+        return sameDay(dt, day);
+      });
+
+      // ✅ 대기 / 진행중은 전체 요청 기준
+      const wait = mine.filter((d) => isWait(d.status)).length;
+      const progress = mine.filter((d) => isProgress(d.status)).length;
+
+      // ✅ 완료만 선택 월 기준
+      const done = monthDocs.filter((d) => isDone(d.status)).length;
+
+      // 공수(h)는 "기준일(당일)" 기준
+      const usedHoursRaw = dayDocs.reduce(
+        (s, d) => s + shareHourFor(d, name),
+        0
+      );
+      const usedHours = floorTo(usedHoursRaw, 2);
+
+      // 일별 / 월평균은 그대로 "선택 월" 기준
+      const dailyHoursArr = Array(daysInMonth).fill(0);
+      const dailyCountsArr = Array(daysInMonth).fill(0);
+
+      monthDocs.forEach((d) => {
+        const dt = anchorDate(d);
+        if (!dt) return;
+        const idx = dt.getDate() - 1;
+        if (idx < 0 || idx >= daysInMonth) return;
+
+        dailyHoursArr[idx] += shareHourFor(d, name);
+        dailyCountsArr[idx] += 1;
+      });
+
+      const daily: DailyStat[] = dailyHoursArr.map((h, idx) => ({
+        rate: Math.round((h / dailyHours) * 100),
+        count: dailyCountsArr[idx],
+      }));
+
+      const monthHours = dailyHoursArr.reduce((s, h) => s + h, 0);
+      const monthCount = dailyCountsArr.reduce((s, c) => s + c, 0);
+      const monthRate =
+        monthHours > 0
+          ? Math.round((monthHours / MONTHLY_TARGET_HOURS) * 100)
+          : 0;
+
+      return {
+        name,
+        wait,
+        progress,
+        done,
+        usedHours,
+        daily,
+        monthRate,
+        monthCount,
+      };
     });
-  }, [docs, day, year, designerNames]);
-
-
-  // 연평균/연총건수 계산
-  const computed = useMemo(() => {
-    return rows.map((r, i) => {
-      // 건수 있는 달만 활성 월로 간주
-      const activeMonths = r.monthly.filter(m => m.count > 0);
-      const avgRate = activeMonths.length
-        ? activeMonths.reduce((s, m) => s + m.rate, 0) / activeMonths.length
-        : 0;
-
-      const totalCount = r.monthly.reduce((s, m) => s + m.count, 0);
-
-      // 필요하면 activeMonths.length를 화면에 보여줄 수도 있음
-      return { index: i + 1, avgRate, totalCount /*, denom: activeMonths.length*/ };
-    });
-  }, [rows]);
+  }, [
+    docs,
+    designerNames,
+    selectedYear,
+    selectedMonth,
+    dailyHours,
+    daysInSelectedMonth,
+    day,                                // ★ 추가
+  ]);
 
   if (rows.length === 0) {
     return <Empty>표시할 데이터가 없습니다.</Empty>;
@@ -262,66 +318,87 @@ export default function InWorkHour({
 
   return (
     <InWorkHourFrame>
+      <InWorkHourFilter
+        year={selectedYear}
+        month={selectedMonth}
+        onChangeYear={setSelectedYear}
+        onChangeMonth={setSelectedMonth}
+      />
+
       <InWorkHourWrap>
         <InWorkHourTable>
+          {/* colgroup: 앞부분 폭만 고정, 일자는 해당 월 일수만큼 자동 분배 */}
           <colgroup>
-            <col style={{ width: '50px' }} /><col style={{ width: '140px' }} />
-            <col style={{ width: '70px' }} /><col style={{ width: '70px' }} />
-            <col style={{ width: '70px' }} /><col style={{ width: '70px' }} />
-            <col style={{ width: '80px' }} /><col style={{ width: '80px' }} />
-            <col style={{ width: '80px' }} /><col style={{ width: '80px' }} />
-            <col style={{ width: '80px' }} /><col style={{ width: '80px' }} />
-            <col style={{ width: '80px' }} /><col style={{ width: '80px' }} />
-            <col style={{ width: '80px' }} /><col style={{ width: '80px' }} />
-            <col style={{ width: '80px' }} /><col style={{ width: '80px' }} />
-            <col style={{ width: '110px' }} />
+            <col style={{ width: "3%" }} />   {/* 번호 */}
+            <col style={{ width: "5%" }} />   {/* 디자이너명 */}
+            <col style={{ width: "4%" }} />
+            <col style={{ width: "4%" }} />
+            <col style={{ width: "4%" }} />
+            <col style={{ width: "4%" }} />
+            {Array.from({ length: daysInSelectedMonth }).map((_, i) => (
+              <col key={i} />
+            ))}
+            <col style={{ width: "5%" }} />   {/* 월 평균 */}
           </colgroup>
+
           <thead>
             <tr>
               <InWorkHourTableTh rowSpan={2}>번호</InWorkHourTableTh>
               <InWorkHourTableTh rowSpan={2}>디자이너명</InWorkHourTableTh>
-              <InWorkHourTableTh colSpan={4}>현재현황(일공수 : {dailyHours}h)</InWorkHourTableTh>
-              <InWorkHourTableTh colSpan={12}>월별 진행현황(공수달성율 / 제작건수)</InWorkHourTableTh>
-              <InWorkHourTableTh rowSpan={2}>연평균</InWorkHourTableTh>
+              <InWorkHourTableTh colSpan={4}>
+                현재현황(일공수 : {dailyHours}h)
+              </InWorkHourTableTh>
+              <InWorkHourTableTh colSpan={daysInSelectedMonth}>
+                일별 진행현황(공수달성율 / 제작건수)
+              </InWorkHourTableTh>
+              <InWorkHourTableTh rowSpan={2}>월 평균</InWorkHourTableTh>
             </tr>
             <tr>
               <InWorkHourTableTh>대기</InWorkHourTableTh>
               <InWorkHourTableTh>진행중</InWorkHourTableTh>
               <InWorkHourTableTh>완료</InWorkHourTableTh>
-              <InWorkHourTableTh>사용공수(h)</InWorkHourTableTh>
-              {months.map((m) => (
-                <InWorkHourTableTh key={m}>{m}</InWorkHourTableTh>
+              <InWorkHourTableTh>일공수(h)</InWorkHourTableTh>
+              {Array.from({ length: daysInSelectedMonth }).map((_, idx) => (
+                <InWorkHourTableTh
+                  key={idx}
+                  $isPeriod
+                  $isWeekend={weekendFlags[idx]}
+                  $isToday={todayFlags[idx]}
+                >
+                  {idx + 1}
+                </InWorkHourTableTh>
               ))}
             </tr>
           </thead>
-  
+
           <tbody>
-            {rows.map((r, idx) => {
-              const { index, avgRate, totalCount } = computed[idx];
-              return (
-                <tr key={r.name + idx}>
-                  <InWorkHourTableTd>{index}</InWorkHourTableTd>
-                  <InWorkHourTableTd>{r.name}</InWorkHourTableTd>
-  
-                  <InWorkHourTableTd>{r.wait}</InWorkHourTableTd>
-                  <InWorkHourTableTd>{r.progress}</InWorkHourTableTd>
-                  <InWorkHourTableTd>{r.done}</InWorkHourTableTd>
-                  <InWorkHourTableTd>{formatMax2(r.usedHours)}</InWorkHourTableTd>
-  
-                  {r.monthly.map((m, i) => (
-                    <InWorkHourTableTd key={i}>
-                      <div>{m.rate}%</div>
-                      <div>{m.count}</div>
-                    </InWorkHourTableTd>
-                  ))}
-  
-                  <InWorkHourTableTd>
-                    <div>{avgRate.toFixed(0)}%</div>
-                    <div>{totalCount}</div>
+            {rows.map((r, idx) => (
+              <tr key={r.name + idx}>
+                <InWorkHourTableTd>{idx + 1}</InWorkHourTableTd>
+                <InWorkHourTableTd>{r.name}</InWorkHourTableTd>
+
+                <InWorkHourTableTd>{r.wait}</InWorkHourTableTd>
+                <InWorkHourTableTd>{r.progress}</InWorkHourTableTd>
+                <InWorkHourTableTd>{r.done}</InWorkHourTableTd>
+                <InWorkHourTableTd>{formatMax2(r.usedHours)}</InWorkHourTableTd>
+
+                {r.daily.map((d, i) => (
+                  <InWorkHourTableTd
+                    key={i}
+                    $isWeekend={weekendFlags[i]}
+                    $isToday={todayFlags[i]}
+                  >
+                    <div>{d.rate}%</div>
+                    <div>{d.count}</div>
                   </InWorkHourTableTd>
-                </tr>
-              );
-            })}
+                ))}
+
+                <InWorkHourTableTd>
+                  <div>{r.monthRate.toFixed(0)}%</div>
+                  <div>{r.monthCount}</div>
+                </InWorkHourTableTd>
+              </tr>
+            ))}
           </tbody>
         </InWorkHourTable>
       </InWorkHourWrap>
@@ -331,7 +408,7 @@ export default function InWorkHour({
 
 /** ───────── styled ───────── */
 const InWorkHourFrame = styled.div`
-  padding: 22px 24px;
+  padding: 0 22px 24px;
   height: calc(100vh - 178px);
   overflow: hidden;
 `;
@@ -356,6 +433,15 @@ const InWorkHourTable = styled.table`
   table-layout: fixed;
   font-family: 'Pretendard';
   border-top: 2px solid ${({ theme }) => theme.colors.black};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.gray02};
+
+  th,
+  td {
+    padding: 8px 0;
+    font-size: 14px;
+    border-right: none;
+    border-bottom: none;
+  }
 
   thead {
     tr {
@@ -368,41 +454,56 @@ const InWorkHourTable = styled.table`
         }
       }
       &:last-of-type {
+        th:nth-of-type(1) {
+          border-left: 1px solid ${({ theme }) => theme.colors.gray02};
+        }
         th:nth-of-type(4) {
           border-right: 1px solid ${({ theme }) => theme.colors.black};
         }
       }
     }
   }
-
-
-  th, td {
-    padding: 8px 10px;
-    font-size: 14px;
-  }
 `;
 
-const InWorkHourTableTh = styled.th`
-  background-color: ${({ theme }) => theme.colors.gray08};
+// 주말 + 오늘 표시용
+const InWorkHourTableTh = styled.th<{
+  $isPeriod?: boolean;
+  $isWeekend?: boolean;
+  $isToday?: boolean;
+}>`
+  background-color: ${({ theme, $isPeriod, $isWeekend, $isToday }) => {
+    if ($isToday) return "#cf67f769";          // 오늘
+    if ($isWeekend) return "#fb828261";        // 토/일요일
+    return $isPeriod ? theme.colors.pink01 : theme.colors.gray08;
+  }};
   font-weight: 700;
+  white-space: nowrap;
 
   &:first-of-type {
     border-left: none;
   }
 
   &:last-of-type {
-    border-right:none;
-  }
-
-  &:nth-of-type(n + 5):nth-of-type(-n + 16) {
-    background-color: ${({ theme }) => theme.colors.pink01};
+    border-right: none;
   }
 `;
 
-const InWorkHourTableTd = styled.td`
+const InWorkHourTableTd = styled.td<{
+  $isWeekend?: boolean;
+  $isToday?: boolean;
+}>`
   text-align: center;
   font-weight: 500;
-
+  background-color: ${({ $isWeekend, $isToday }) => {
+    if ($isToday) return "#f1d0ff96";          // 오늘
+    if ($isWeekend) return "#ffdfdf45";        // 토/일요일
+    return "transparent";
+  }};
+  color: ${({ $isWeekend, $isToday }) => {
+    if ($isToday) return "#000000";          // 오늘
+    if ($isWeekend) return "#ffdfdf45";        // 토/일요일
+    return "#000";
+  }};
   &:first-of-type {
     border-left: none;
   }

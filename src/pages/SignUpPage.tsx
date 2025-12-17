@@ -11,12 +11,14 @@ const COMPANY_MAP: Record<string, string> = {
   homeplus: "HomePlus",
   nsmall: "NSmall",
   pushcomz: "PushComz",
+  oliveyoung: "OLIVEYOUNG"
 };
 
 const ROLE_BY_PARAM: Record<string, number> = {
   homeplus: 1,
   nsmall: 1,
-  pushcomz: 2,
+  oliveyoung: 1,
+  pushcomz: 3,
 };
 
 export default function SignUpPage() {
@@ -34,7 +36,7 @@ export default function SignUpPage() {
     [searchParams]
   );
 
-  // ★ 변경: URL의 ?company= 값이 바뀔 때마다 항상 반영 (초기 1회 제한 제거)
+  // URL의 ?company= 값이 바뀔 때마다 항상 반영 (초기 1회 제한 제거)
   useEffect(() => {
     const mapped = COMPANY_MAP[companyParam];
     if (mapped) {

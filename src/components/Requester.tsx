@@ -10,6 +10,7 @@ import DashBoard from "./DashBoard";
 import { makeSearchIndex, matchesQuery } from "../utils/search.ts";
 import ExportCSV from "./ExportCSV";
 import { downloadArrayToCSV } from "../utils/firestoreToCSV";
+import { addHistoryComment } from "../utils/commentHistory";
 
 type ViewType = "dashboard" | "myrequestlist" | "allrequestlist" | "inworkhour";
 
@@ -19,9 +20,31 @@ interface RequesterProps {
   setEditData: (data: RequestData) => void;
   setDetailData: (data: RequestData) => void;
   userRole: number | null;
+  statusFromAside?: string | null;
+  clearStatusFromAside?: () => void;
+  filterResetKey?: number;
 }
 
 const DEFAULT_STATUS = "진행 상태 선택";
+const DEFAULT_DEPT = "부서 선택";
+
+// 회사별 부서 옵션(요청서 작성폼의 로직과 동일하게 맞추면 됨)
+const DEPT_OPTIONS_BY_COMPANY: Record<string, string[]> = {
+  HomePlus: ["GHS", "MHC"],
+  NSmall: [
+    "M영업기획팀",
+    "디지털마케팅팀",
+    "M상품1팀",
+    "M상품2팀",
+    "M상품3팀",
+    "TV영업기획팀",
+    "TC영업기획팀",
+    "미디어컨텐츠팀",
+    "전략기획팀",
+    "마케팅본부직할",
+    "MC서비스기획팀",
+  ],
+};
 
 // 회사 문자열 변형 세트(공백 trim + 대/소문자 변형)
 const companyVariants = (raw: string) => {
@@ -34,25 +57,18 @@ const companyVariants = (raw: string) => {
   return Array.from(new Set([t, lower, upper, cap]));
 };
 
-// 월 범위 헬퍼(이번 달, 직전 달)
-const monthRange = (base: Date) => {
-  const s = new Date(base.getFullYear(), base.getMonth(), 1);
-  const e = new Date(base.getFullYear(), base.getMonth() + 1, 0, 23, 59, 59, 999);
-  return { start: s, end: e };
-};
-const prevMonthRange = (base: Date) => {
-  const s = new Date(base.getFullYear(), base.getMonth() - 1, 1);
-  const e = new Date(base.getFullYear(), base.getMonth(), 0, 23, 59, 59, 999);
-  return { start: s, end: e };
-};
+// 이번 달 판정 헬퍼
+const isSameMonth = (d: Date, base = new Date()) =>
+  d.getFullYear() === base.getFullYear() && d.getMonth() === base.getMonth();
 
-export default function Requester({ view, userRole, setIsDrawerOpen, setEditData, setDetailData }: RequesterProps) {
+export default function Requester({ view, userRole, setIsDrawerOpen, setEditData, setDetailData, statusFromAside, clearStatusFromAside, filterResetKey }: RequesterProps) {
   const [userName, setUserName] = useState("");
   const [userCompany, setUserCompany] = useState<string>("");
   const [userUid, setUserUid]   = useState("");
   const [requests, setRequests] = useState<RequestData[]>([]); // request DB 배열
   const [statusFilter, setStatusFilter] = useState<string>("진행 상태 선택");
   const [dateRange, setDateRange] = useState<{ start: Date | null; end: Date | null }>({ start: null, end: null });
+  const [deptFilter, setDeptFilter] = useState<string>(DEFAULT_DEPT);
 
   // 🔍 검색: 입력값과 적용값 분리
   const [keywordInput, setKeywordInput] = useState<string>(""); // 인풋 바인딩(타이핑용)
@@ -153,9 +169,21 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
     }
   }, [view, userCompany, userName]);
 
+  useEffect(() => {
+    if (!statusFromAside) return;
+    setStatusFilter(statusFromAside);
+  }, [statusFromAside])
+
+  // 부서 옵션 계산 – 회사별 고정 목록
+  const deptOptions = useMemo(() => {
+    if (!userCompany) return [];
+    return DEPT_OPTIONS_BY_COMPANY[userCompany] ?? [];
+  }, [userCompany]);
+
   // 필터 적용 콜백 (하위에서 올라옴)
   const applyRange  = (r: { start: Date | null; end: Date | null }) => setDateRange(r); // ⬅️ 추가
   const applyStatus = (status: string) => setStatusFilter(status);
+  const applyDept   = (dept: string) => setDeptFilter(dept);
 
   // 🔍 실시간 검색 (버튼 개념 X)
   const applySearch = (kw: string) => setKeyword(kw);
@@ -202,12 +230,6 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
     });
   }, [requests]);
 
-  // “이번 달 생성 + (직전 달 생성 & 이번 달 완료 이월)” 전역 게이트용 기준일/범위
-  const today = useMemo(() => new Date(), []);
-  // const today = useMemo(() => new Date(new Date().getFullYear(), 10, 15), []);
-  const { start: curS, end: curE } = useMemo(() => monthRange(today), [today]);
-  const { start: prevS, end: prevE } = useMemo(() => prevMonthRange(today), [today]);
-
   // ⭐ 화면에 보여줄 리스트
   // ② 뷰 리스트(기간 + 상태 + 실시간 검색)
   type Action = "review" | "edit" | "cancel" | "revision";
@@ -215,50 +237,48 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
   const viewList = useMemo(() => {
     const s = dateRange.start ? toMidnight(dateRange.start) : null;
     const e = dateRange.end ? toMidnight(dateRange.end) : null;
+    const dateFilterOn = !!(s && e);
+    const today = new Date();
     const q = keyword.trim();
+    const searchOn = !!q;
 
     return prepared.filter((r: any) => {
-      // ── 0) ★ 추가: 월 게이트
-      // created: created_date > request_date > requested_at > requestDate 순으로 완화 파싱
-      const created =
-        parseLoose((r as any).created_date) ||
-        parseLoose(r.request_date) ||
-        parseLoose(r.requested_at) ||
-        parseLoose(r.requestDate);
+      const status = String(r.status ?? "").trim();
+      const isDone = status === "완료" || status === "취소";
 
-      const completed = parseLoose(r.completion_date);
+      // 부서 필터(task_form 기준)
+      if (deptFilter !== DEFAULT_DEPT) {
+        if (String(r.task_form ?? "") !== deptFilter) return false;
+      }
 
-      const inCurrentByCreated = !!created && created >= curS && created <= curE;
-
-      // 직전 달 생성 + 이번 달 완료(이월건 유지)
-      const carryOverPrevToCurrent =
-        !!created &&
-        !!completed &&
-        created >= prevS &&
-        created <= prevE &&
-        completed >= curS &&
-        completed <= curE;
-
-      if (!(inCurrentByCreated || carryOverPrevToCurrent)) return false;
-
-      // ── 1) 상태 필터(표시 상태 기준)
-      if (statusFilter !== DEFAULT_STATUS && r.displayStatus !== statusFilter) return false;
-
-      // ── 2) 날짜 범위(사용자가 선택한 경우만 추가로 좁힘, inclusive)
-      if (s && e) {
-        const reqDate =
+      if (dateFilterOn) {
+        const rd =
           parseLoose(r.request_date) ||
           parseLoose(r.requested_at) ||
           parseLoose(r.requestDate);
-        if (!reqDate || reqDate < s || reqDate > e) return false;
+        if (!rd || rd < s! || rd > e!) return false;
+      } else {
+        const cd =
+          parseLoose(r.completion_date) ||
+          parseLoose((r as any).complete_date) ||
+          null;
+
+        const completedThisMonth = cd ? isSameMonth(cd, today) : false;
+
+        if (!searchOn && !completedThisMonth && isDone) return false;
+
+        if (
+          statusFilter !== DEFAULT_STATUS &&
+          r.displayStatus !== statusFilter
+        )
+          return false;
       }
 
-      // ── 3) 키워드
-      if (!matchesQuery(r, q)) return false;
+      if (q && !matchesQuery(r, q)) return false;
 
       return true;
     });
-  }, [prepared, statusFilter, dateRange, keyword, curS, curE, prevS, prevE]);
+  }, [prepared, statusFilter, dateRange, keyword, deptFilter]); 
 
   const canMutate = (id: string, action: Action) => {
     const row = requests.find(r => r.id === id);
@@ -278,27 +298,48 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
     return true;
   };
 
-  // ✅ 검수완료 처리
+  // ✅ 검수완료 처리 + 히스토리
   const reviewComplete = async (id: string) => {
     if (!canMutate(id, "review")) return;
-    await updateDoc(doc(db, "design_request", id), {
+
+    // ★ 추가: 이전 상태/문서번호 조회
+    const ref = doc(db, "design_request", id);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return;
+    const data = snap.data() as RequestData;
+    const prevStatus = data.status || "대기";
+    const designRequestId = data.design_request_id;
+
+    // 1) 상태 업데이트
+    await updateDoc(ref, {
       status: "완료",
-      requester_review_status: "검수완료"
+      requester_review_status: "검수완료",
     });
 
-    setRequests(prev =>
-      prev.map(req =>
-        req.id === id ? { ...req, status: "완료", requester_review_status: "검수완료" } : req
+    // 2) 클라이언트 상태 동기화
+    setRequests((prev) =>
+      prev.map((req) =>
+        req.id === id
+          ? { ...req, status: "완료", requester_review_status: "검수완료" }
+          : req
       )
     );
+
+    // ★ 3) 히스토리 댓글 기록
+    if (designRequestId) {
+      await addHistoryComment(
+        designRequestId,
+        `${userName} 님이 검수를 완료했습니다. (상태: '${prevStatus}' → '완료')`
+      );
+    }
 
     alert("완료 처리되었습니다.");
   };
 
   const editRequest = async (id: string) => {
     if (!canMutate(id, "edit")) return;
+
     const docRef = doc(db, "design_request", id);
-    await updateDoc(docRef, { requester_edit_state: true });
 
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
@@ -306,22 +347,45 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
       setEditData(data);
       setIsDrawerOpen(true);
     }
-  }
+  };
 
   // 수정요청 처리 (status: "수정")
   const requestRevision = async (id: string) => {
     if (!canMutate(id, "revision")) return;
 
+    // ★ 추가: 이전 상태/문서번호 확보
+    const row = requests.find((r) => r.id === id);
+    const prevStatus = row?.status || "대기";
+    const designRequestId = row?.design_request_id;
+
     try {
       await updateDoc(doc(db, "design_request", id), {
         status: "수정",
-        requester_revision_state: true,             // 선택 필드(있으면 사용)
-        requester_revision_at: serverTimestamp(),   // 타임스탬프 로그
-        requester_design_edit_state: true           // 요청자가 ‘디자인 수정’ 권한 토글
+        requester_revision_state: true,
+        requester_revision_at: serverTimestamp(),
+        requester_design_edit_state: true,
       });
-      setRequests(prev => prev.map(req =>
-        req.id === id ? { ...req, status: "수정", requester_revision_state: true, requester_design_edit_state: true } : req
-      ));
+      setRequests((prev) =>
+        prev.map((req) =>
+          req.id === id
+            ? {
+                ...req,
+                status: "수정",
+                requester_revision_state: true,
+                requester_design_edit_state: true,
+              }
+            : req
+        )
+      );
+
+      // ★ 히스토리 댓글
+      if (designRequestId) {
+        await addHistoryComment(
+          designRequestId,
+          `${userName} 님이 디자인 수정요청을 보냈습니다. (상태: '${prevStatus}' → '수정')`
+        );
+      }
+
       alert("디자인 수정 요청이 등록되었습니다.");
     } catch (e) {
       console.error(e);
@@ -331,19 +395,23 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
 
   // ✅ 메모/작업항목 클릭 → 디테일 모드
   const openDetail = async (item: RequestData) => {
-    // ★ 추가: 낙관적 읽음 처리 (로컬 캐시 즉시 갱신)
+    // ★ 추가: 낙관적 읽음 처리 (로컬 캐시 즉시 갱신) — 메모 + 문서수정 공용
     if (userUid) {
       const now = Date.now();
       setReadLocal(prev => ({ ...prev, [item.id]: now }));
 
-      // ★ 추가: 서버에도 동시 반영 (센티넬 + 클라이언트 타임스탬프)
+      // ★ 변경: 메모 읽음 + 문서 수정 읽음 둘 다 서버에 기록
       try {
         await updateDoc(doc(db, "design_request", item.id), {
+          // 메모 Talk 읽음
           [`comment_read_by.${userUid}`]: serverTimestamp(),
           [`comment_read_by_client.${userUid}`]: now,
+          // ★ 추가: 문서 수정 읽음
+          [`requester_edit_read_by.${userUid}`]: serverTimestamp(),
+          [`requester_edit_read_by_client.${userUid}`]: now,
         });
       } catch (e) {
-        // 실패해도 UI 깜빡임은 막힘. 필요하면 콘솔 로깅 정도만.
+        // 실패해도 UI는 localReadMs 덕분에 깜빡임 없음
         // console.error(e);
       }
     }
@@ -354,18 +422,30 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
 
   // ✅ 취소 처리
   const cancelRequest = async (id: string) => {
-    if (!canMutate(id, "cancel")) return; // 🔒 권한 없음
-    const row = requests.find(r => r.id === id);
+    if (!canMutate(id, "cancel")) return;
+
+    const row = requests.find((r) => r.id === id);
+    const prevStatus = row?.status || "대기";
+    const designRequestId = row?.design_request_id;
+
     const ok = window.confirm(
-      `문서번호 ${row?.design_request_id ?? ""} 요청을 취소하시겠습니까?` 
+      `문서번호 ${designRequestId ?? ""} 요청을 취소하시겠습니까?`
     );
-    if (!ok) return; // 사용자가 "취소" 누르면 아무 것도 안 함
+    if (!ok) return;
 
     try {
       await updateDoc(doc(db, "design_request", id), { status: "취소" });
-      setRequests(prev =>
-        prev.map(req => (req.id === id ? { ...req, status: "취소" } : req))
+      setRequests((prev) =>
+        prev.map((req) => (req.id === id ? { ...req, status: "취소" } : req))
       );
+
+      // ★ 히스토리 댓글
+      if (designRequestId) {
+        await addHistoryComment(
+          designRequestId,
+          `${userName} 님이 요청을 취소했습니다. (상태: '${prevStatus}' → '취소')`
+        );
+      }
     } catch (e) {
       console.error(e);
       alert("취소 처리 중 오류가 발생했습니다. 다시 시도해 주세요.");
@@ -481,13 +561,15 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
             onSearch={applySearch}
             keyword={keywordInput}
             onKeywordChange={setKeywordInput}
+            deptOptions={deptOptions}
+            onApplyDept={applyDept} 
           />
           <RequesterRequestList
             data={viewList}
             disableActions={false}
             lockOthers={lockOthers}
             currentUserName={userName}
-            currentUid={userUid}
+            userUid={userUid}
             onReviewComplete={reviewComplete}
             onCancel={cancelRequest}
             onEditClick={editRequest}
@@ -500,9 +582,9 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
 
       {view === "myrequestlist" && (
         <MainContentWrap>
-          <RequestFilterSearchWrap roleNumber={1} onApplyStatus={applyStatus} onApplyRange={applyRange} onSearch={applySearch} keyword={keywordInput} onKeywordChange={setKeywordInput}/>
+          <RequestFilterSearchWrap roleNumber={1} onApplyStatus={applyStatus} onApplyRange={applyRange} onSearch={applySearch} keyword={keywordInput} onKeywordChange={setKeywordInput} onResetFilters={clearStatusFromAside} resetKey={filterResetKey} deptOptions={deptOptions} onApplyDept={applyDept} />
           <ExportCSV onClick={handleExportCSV} loading={exporting} />
-          <RequesterRequestList data={viewList} disableActions={false} currentUid={userUid} onReviewComplete={reviewComplete} onCancel={cancelRequest} onEditClick={editRequest} onRequestRevision={requestRevision} onDetailClick={openDetail} readLocal={readLocal} />
+          <RequesterRequestList data={viewList} disableActions={false} userUid={userUid} onReviewComplete={reviewComplete} onCancel={cancelRequest} onEditClick={editRequest} onRequestRevision={requestRevision} onDetailClick={openDetail} readLocal={readLocal} />
         </MainContentWrap>
       )}
     </>

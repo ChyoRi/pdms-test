@@ -17,6 +17,10 @@ export default function RequestFilterSearchWrap({
   onApplyCompany,
   onApplyDesigner,
   roleNumber,
+  onResetFilters,
+  resetKey,
+  deptOptions = [],
+  onApplyDept
 }: {
   onApplyStatus: (status: string) => void;
   onApplyRange: (range: { start: Date | null; end: Date | null }) => void;
@@ -31,6 +35,10 @@ export default function RequestFilterSearchWrap({
   onApplyCompany?: (name: string) => void;
   onApplyDesigner?: (name: string) => void;
   roleNumber?: number | null;
+  onResetFilters?: () => void;
+  resetKey?: number;
+  deptOptions?: string[];
+  onApplyDept?: (dept: string) => void;
 }) {
   return (
     <Container>
@@ -45,6 +53,10 @@ export default function RequestFilterSearchWrap({
         onApplyCompany={onApplyCompany}
         onApplyDesigner={onApplyDesigner}
         roleNumber={roleNumber}
+        onResetFilters={onResetFilters}
+        resetKey={resetKey}
+        deptOptions={deptOptions}
+        onApplyDept={onApplyDept}
       />
       <RequestSearch keyword={keyword} onKeywordChange={onKeywordChange} onSearch={onSearch} />
     </Container>

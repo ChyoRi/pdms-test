@@ -8,6 +8,7 @@ import MainTitle from "./MainTitle";
 import RequestFilterSearchWrap from "./RequestFilterSearchWrap";
 import DashBoard from "./DashBoard";
 import { makeSearchIndex, matchesQuery } from "../utils/search";
+import { addHistoryComment } from "../utils/commentHistory";
 
 type ViewType = "dashboard" | "myrequestlist" | "allrequestlist" | "inworkhour";
 
@@ -16,6 +17,9 @@ interface RequesterProps {
   userRole: number | null;
   setIsDrawerOpen: (value: boolean) => void;
   setDetailData: (data: RequestData) => void;
+  statusFromAside?: string | null;
+  clearStatusFromAside?: () => void;
+  filterResetKey?: number;
 }
 
 interface DesignRequest {
@@ -53,7 +57,11 @@ const DEFAULT_STATUS = "진행 상태 선택";
 const DEFAULT_COMPANY = "회사 선택";
 const SPECIAL_SOLO_NAME = "홈돌이";
 
-export default function Designer({ view, userRole, setIsDrawerOpen, setDetailData }: RequesterProps) {
+// 이번 달 판정 헬퍼(요청자 코드와 동일)
+const isSameMonth = (d: Date, base = new Date()) =>
+  d.getFullYear() === base.getFullYear() && d.getMonth() === base.getMonth();
+
+export default function Designer({ view, userRole, setIsDrawerOpen, setDetailData, statusFromAside, clearStatusFromAside, filterResetKey }: RequesterProps) {
   const [assignedRequests, setAssignedRequests] = useState<DesignRequest[]>([]);
   const [designerName, setDesignerName] = useState(""); // ✅ 로그인 디자이너 이름
   const [userUid, setUserUid]   = useState("");
@@ -131,6 +139,12 @@ export default function Designer({ view, userRole, setIsDrawerOpen, setDetailDat
     });
     return () => unsub();
   }, []);
+
+  // ⭐ 사이드바 상태 클릭 시 필터 동기화
+  useEffect(() => {
+    if (!statusFromAside) return;
+    setStatusFilter(statusFromAside);
+  }, [statusFromAside]);
 
   // 필터 적용 콜백 (하위에서 올라옴)
   const applyRange  = (r: { start: Date | null; end: Date | null }) => setDateRange(r); // ⬅️ 추가
@@ -236,32 +250,56 @@ export default function Designer({ view, userRole, setIsDrawerOpen, setDetailDat
   const viewList = useMemo(() => {
     const s = dateRange.start ? toMidnight(dateRange.start) : null;
     const e = dateRange.end ? toMidnight(dateRange.end) : null;
+    const dateFilterOn = !!(s && e);
+    const today = new Date();
+    const q = keyword.trim();
+    const searchOn = !!q;
 
     return preparedNormalized.filter((r: any) => {
-      let ok = true;
+      const statusRaw = String(r.status ?? "").trim();
+      const isDone = statusRaw === "완료" || statusRaw === "취소";
 
-      if (ok && !isVisibleForDesigner(r, designerName, view)) ok = false;
+      if (!isVisibleForDesigner(r, designerName, view)) return false;
 
-      // 1) 상태
-      if (ok && statusFilter && statusFilter !== DEFAULT_STATUS) {
-        if (mapStatusForDesigner(r.status) !== statusFilter) ok = false;
+      // ── A) 요청 기간 선택된 경우: request_date 기준, 상태/완료월 무시
+      if (dateFilterOn) {
+        const rd =
+          parseLoose(r.request_date) ||
+          parseLoose(r.requested_at) ||
+          parseLoose(r.requestDate);
+        if (!rd || rd < s! || rd > e!) return false;
+      } else {
+        // ── B) completion_date 월 필터(검색 없을 때만 적용)
+        const cd =
+          parseLoose((r as any).completion_date) ||
+          parseLoose((r as any).complete_date) ||
+          null;
+        const completedThisMonth = cd ? isSameMonth(cd, today) : false;
+
+        if (!searchOn && !completedThisMonth && isDone) return false; // ★ 변경
+
+        // 상태 필터 (기간 미선택일 때만)
+        if (
+          statusFilter !== DEFAULT_STATUS &&
+          r.displayStatus !== statusFilter
+        ) {
+          return false;
+        }
       }
 
-      // 2) 회사
-      if (ok && companyFilter !== DEFAULT_COMPANY && String(r.company) !== companyFilter) ok = false;
+      // 회사 필터는 항상 AND
+      if (
+        companyFilter !== DEFAULT_COMPANY &&
+        String(r.company) !== companyFilter
+      )
+        return false;
 
-      // 3) 날짜
-      if (ok && s && e) {
-        const rd = parseLoose(r.request_date) || parseLoose(r.requested_at) || parseLoose(r.requestDate);
-        if (!rd || rd < s || rd > e) ok = false;
-      }
+      // 검색어는 항상 AND, 대신 위에서 과거 완료/취소는 searchOn일 때 열어 둠
+      if (q && !matchesQuery(r, q)) return false;
 
-      // 4) 검색
-      if (ok && keyword && !matchesQuery(r, keyword)) ok = false;
-
-      return ok;
+      return true;
     });
-  }, [preparedNormalized, statusFilter, companyFilter, dateRange, keyword, view, designerName]);
+  }, [ preparedNormalized, statusFilter, companyFilter, dateRange, keyword, view, designerName ]);
 
   // 🔍 검색 버튼 클릭 시 적용
   const applySearch = (kw: string) => setKeyword(kw);
@@ -326,6 +364,11 @@ export default function Designer({ view, userRole, setIsDrawerOpen, setDetailDat
       return;
     }
 
+    // ★ 추가: 기존 상태/문서번호 확보
+    const req = assignedRequests.find((r) => r.id === requestId);
+    const designRequestId = req?.design_request_id;
+    const prevStatus = req?.status ?? "대기";
+
     await updateDoc(doc(db, "design_request", requestId), {
       designer_start_date: toTimestamp(row.start_dt),
       designer_end_date: toTimestamp(row.end_dt),
@@ -334,30 +377,61 @@ export default function Designer({ view, userRole, setIsDrawerOpen, setDetailDat
     });
 
     alert("저장되었습니다.");
+
+    // ★ 히스토리 댓글 기록
+    if (designRequestId) {
+      const actor = designerName || "디자이너";
+      const nextStatus = row.status ?? prevStatus;
+      const parts: string[] = [];
+
+      parts.push(`${actor} 님이 디자이너 작업 정보를 저장했습니다.`);
+
+      if (row.start_dt || row.end_dt) {
+        parts.push(`디자인 기간: ${row.start_dt || "-"} ~ ${row.end_dt || "-"}.`);
+      }
+
+      if (nextStatus !== prevStatus) {
+        parts.push(`상태: '${prevStatus}' → '${nextStatus}'.`);
+      }
+
+      if (row.result_url) {
+        parts.push(`산출물 URL이 업데이트되었습니다.`);
+      }
+
+      await addHistoryComment(designRequestId, parts.join(" "));
+    }
   };
 
   // ✅ 메모/작업항목 클릭 → 디테일 모드
-    const openDetail = async (item: RequestData) => {
-      // ★ 추가: 낙관적 읽음 처리 (로컬 캐시 즉시 갱신)
-      if (userUid) {
-        const now = Date.now();
-        setReadLocal(prev => ({ ...prev, [item.id]: now }));
-  
-        // ★ 추가: 서버에도 동시 반영 (센티넬 + 클라이언트 타임스탬프)
-        try {
-          await updateDoc(doc(db, "design_request", item.id), {
-            [`comment_read_by.${userUid}`]: serverTimestamp(),
-            [`comment_read_by_client.${userUid}`]: now,
-          });
-        } catch (e) {
-          // 실패해도 UI 깜빡임은 막힘. 필요하면 콘솔 로깅 정도만.
-          // console.error(e);
+  const openDetail = async (item: RequestData) => {
+    // ★ 변경: 매니저와 동일하게 댓글 + 문서수정 읽음 둘 다 기록
+    if (userUid) {
+      const now = Date.now();
+      setReadLocal(prev => ({ ...prev, [item.id]: now }));
+
+      try {
+        const updates: any = {
+          // 댓글 읽음
+          [`comment_read_by.${userUid}`]: serverTimestamp(),
+          [`comment_read_by_client.${userUid}`]: now,
+        };
+
+        // ★ 추가: 문서 수정 상태일 때만 문서 읽음 필드 기록
+        if ((item as any).requester_edit_state) {
+          updates[`requester_edit_read_by.${userUid}`] = serverTimestamp();
+          updates[`requester_edit_read_by_client.${userUid}`] = now;
         }
+
+        await updateDoc(doc(db, "design_request", item.id), updates);
+      } catch (e) {
+        // 필요하면 콘솔 정도만
+        // console.error(e);
       }
-  
-      setDetailData(item);
-      setIsDrawerOpen(true);
-    };
+    }
+
+    setDetailData(item);
+    setIsDrawerOpen(true);
+  };
 
   return (
     <>
@@ -370,7 +444,7 @@ export default function Designer({ view, userRole, setIsDrawerOpen, setDetailDat
       )}
       {view === "myrequestlist" && (
         <MainContentWrap>
-          <RequestFilterSearchWrap roleNumber={2} onApplyStatus={applyStatus} onApplyRange={applyRange} onSearch={applySearch} keyword={keywordInput} onKeywordChange={setKeywordInput} companyOptions={companyOptions} onApplyCompany={applyCompany} />
+          <RequestFilterSearchWrap roleNumber={2} onApplyStatus={applyStatus} onApplyRange={applyRange} onSearch={applySearch} keyword={keywordInput} onKeywordChange={setKeywordInput} companyOptions={companyOptions} onApplyCompany={applyCompany} onResetFilters={clearStatusFromAside} resetKey={filterResetKey} />
           <DesignerRequestList requests={viewList} formData={formData} currentUid={userUid} readLocal={readLocal} onChange={handleChange} onSave={saveResponse} onDetailClick={openDetail} disableActions={false}/>
         </MainContentWrap>
       )}

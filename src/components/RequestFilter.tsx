@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import styled from "styled-components"
 import selectBoxArrow from "../assets/selectbox-arrow.svg";
 import DateCalendar from "./DateCalendar";
@@ -7,6 +7,7 @@ const DEFAULT_STATUS = "진행 상태 선택";
 const DEFAULT_REQUESTER = "요청자 선택";
 const DEFAULT_DESIGNER = "디자이너 선택";
 const DEFAULT_COMPANY = "회사 선택";
+const DEFAULT_DEPT = "부서 선택";
 const EXCLUDED_COMPANIES = new Set(["PushComz"].map(s => s.toLowerCase()));
 const EMPTY_RANGE = { start: null, end: null };
 
@@ -22,7 +23,7 @@ const STATUS_OPTIONS: Record<RoleKey, string[]> = {
   designer:  [DEFAULT_STATUS, "대기", "진행중", "검수요청", "수정", "완료", "취소"],
 };
 
-// ★ 추가: 역할별(=매니저) 셀렉트 표시값 → 실제 필터값 매핑
+// 역할별(=매니저) 셀렉트 표시값 → 실제 필터값 매핑
 const mapSelectToFilterValue = (role: RoleKey, v: string) => {
   if (role === "manager") {
     if (v === "검수중") return "검수요청";
@@ -41,7 +42,11 @@ export default function RequestFilter({
   companyOptions = [],
   onApplyCompany,
   onApplyDesigner,
-  roleNumber
+  roleNumber,
+  onResetFilters,
+  resetKey,
+  deptOptions = [],
+  onApplyDept
 }: {
   onApplyStatus: (status: string) => void;
   onApplyRange: (range: { start: Date | null; end: Date | null }) => void;
@@ -53,24 +58,55 @@ export default function RequestFilter({
   onApplyDesigner?: (name: string) => void;
   onApplyCompany?: (company: string) => void;
   roleNumber?: number | null;
+  onResetFilters?: () => void;
+  resetKey?: number;
+  deptOptions?: string[];
+  onApplyDept?: (dept: string) => void;
 }) {
   const [range, setRange] = useState<{ start: Date | null; end: Date | null }>(EMPTY_RANGE);
   const [status, setStatus] = useState(DEFAULT_STATUS);
   const [requester, setRequester] = useState(DEFAULT_REQUESTER);
   const [designer, setDesigner] = useState(DEFAULT_DESIGNER);
   const [company, setCompany]   = useState(DEFAULT_COMPANY);
+  const [dept, setDept]         = useState(DEFAULT_DEPT);
+
+  // 외부에서 resetKey 가 바뀌면 UI 필터값 초기화
+  useEffect(() => {
+    if (resetKey === undefined) return;
+
+    const nextRange = EMPTY_RANGE;
+
+    // 1) 자기 자신 UI 초기화
+    setStatus(DEFAULT_STATUS);
+    setRange(nextRange);
+    setRequester(DEFAULT_REQUESTER);
+    setDesigner(DEFAULT_DESIGNER);
+    setCompany(DEFAULT_COMPANY);
+    setDept(DEFAULT_DEPT);
+
+    // 2) 부모 필터 상태도 같이 초기화
+    onApplyStatus(DEFAULT_STATUS);
+    onApplyRange(nextRange);
+    onApplyRequester?.(DEFAULT_REQUESTER);
+    onApplyDesigner?.(DEFAULT_DESIGNER);
+    onApplyCompany?.(DEFAULT_COMPANY);
+    onApplyDept?.(DEFAULT_DEPT);
+  }, [resetKey]);
 
   const reset = () => {
     setStatus(DEFAULT_STATUS);
     setRange(EMPTY_RANGE);
     setRequester(DEFAULT_REQUESTER);
-    setDesigner(DEFAULT_DESIGNER);                // ★ 추가
+    setDesigner(DEFAULT_DESIGNER);
     setCompany(DEFAULT_COMPANY);
+    setDept(DEFAULT_DEPT);
     onApplyStatus(DEFAULT_STATUS);
     onApplyRange(EMPTY_RANGE);
     onApplyRequester?.(DEFAULT_REQUESTER);
-    onApplyDesigner?.(DEFAULT_DESIGNER);          // ★ 추가
+    onApplyDesigner?.(DEFAULT_DESIGNER);
     onApplyCompany?.(DEFAULT_COMPANY);
+    onApplyDept?.(DEFAULT_DEPT);
+    onResetFilters?.();
   };
 
   const roleKey = toRoleKey(roleNumber);
@@ -103,6 +139,24 @@ export default function RequestFilter({
             .map((name) => (
               <option key={name} value={name}>{name}</option>
             ))}
+        </SelectBox>
+      )}
+
+      {/* ★ 요청자 전용: 부서(업무부서) 필터 셀렉트 */}
+      {roleKey === "requester" && (
+        <SelectBox
+          aria-label="부서 선택"
+          value={dept}
+          onChange={(e) => {
+            const v = e.target.value;
+            setDept(v);
+            onApplyDept?.(v);
+          }}
+        >
+          <option value={DEFAULT_DEPT}>{DEFAULT_DEPT}</option>
+          {(deptOptions || []).map((name) => (
+            <option key={name} value={name}>{name}</option>
+          ))}
         </SelectBox>
       )}
 

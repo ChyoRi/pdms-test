@@ -10,12 +10,15 @@ interface MainProps {
   setIsDrawerOpen: (value: boolean) => void;
   setEditData: (data: RequestData) => void;
   setDetailData: (data: RequestData) => void;
+  statusFromAside?: string | null;
+  clearStatusFromAside?: () => void;
+  filterResetKey?: number;
 }
 
 // 전역 타입과 동일해야 함
 type ViewType = "dashboard" | "myrequestlist" | "allrequestlist" | "inworkhour";
 
-export default function Main({ userRole, setIsDrawerOpen, setEditData, setDetailData }: MainProps) {
+export default function Main({ userRole, setIsDrawerOpen, setEditData, setDetailData, statusFromAside, clearStatusFromAside, filterResetKey }: MainProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const view = (searchParams.get("view") || "dashboard") as ViewType;
 
@@ -32,9 +35,9 @@ export default function Main({ userRole, setIsDrawerOpen, setEditData, setDetail
 
   // ✅ 권한별 컴포넌트 렌더링
   const renderComponent = () => {
-    if (userRole === 1) return <Requester view={view} userRole={userRole} setIsDrawerOpen={setIsDrawerOpen} setEditData={setEditData} setDetailData={setDetailData} />;
-    if (userRole === 2) return <Designer view={view} userRole={userRole} setIsDrawerOpen={setIsDrawerOpen} setDetailData={setDetailData} />;
-    if (userRole === 3) return <Manager view={view} userRole={userRole} setIsDrawerOpen={setIsDrawerOpen} setDetailData={setDetailData} />;
+    if (userRole === 1) return <Requester view={view} userRole={userRole} setIsDrawerOpen={setIsDrawerOpen} setEditData={setEditData} setDetailData={setDetailData} statusFromAside={statusFromAside} clearStatusFromAside={clearStatusFromAside} filterResetKey={filterResetKey} />;
+    if (userRole === 2) return <Designer view={view} userRole={userRole} setIsDrawerOpen={setIsDrawerOpen} setDetailData={setDetailData} statusFromAside={statusFromAside} clearStatusFromAside={clearStatusFromAside} filterResetKey={filterResetKey} />;
+    if (userRole === 3) return <Manager view={view} userRole={userRole} setIsDrawerOpen={setIsDrawerOpen} setDetailData={setDetailData} statusFromAside={statusFromAside} clearStatusFromAside={clearStatusFromAside} filterResetKey={filterResetKey} />;
   }
 
   return <Container>{renderComponent()}</Container>;

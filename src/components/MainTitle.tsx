@@ -25,7 +25,7 @@ export default function MainTitle({ userRole }: MainTitleProps) {
       // 디자이너
       return {
         ...common,
-        myrequestlist: "작업 리스트",
+        myrequestlist: "나의 작업 리스트",
         allrequestlist: "전체 작업 리스트",
       };
     }
@@ -40,7 +40,7 @@ export default function MainTitle({ userRole }: MainTitleProps) {
     // 요청자(기본)
     return {
       ...common,
-      myrequestlist: "요청 리스트",
+      myrequestlist: "나의 요청 리스트",
       allrequestlist: "전체 요청 리스트",
     };
   }, [role]);

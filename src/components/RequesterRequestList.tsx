@@ -6,7 +6,7 @@ interface RequestListProps {
   disableActions: boolean;
   lockOthers?: boolean;
   currentUserName?: string;
-  currentUid?: string; // ★ 추가
+  userUid?: string; // ★ 추가
   onReviewComplete: (id: string) => void;
   onCancel: (id: string) => void;
   onEditClick: (id: string) => void;
@@ -17,7 +17,7 @@ interface RequestListProps {
   onRequestRevision?: (id: string) => void;
 }
 
-export default function RequesterRequestList({ data, disableActions = false, lockOthers = false, currentUserName = "", currentUid, readLocal, onReviewComplete, onCancel, onEditClick, onRequestRevision, onDetailClick }: RequestListProps) {
+export default function RequesterRequestList({ data, disableActions = false, lockOthers = false, currentUserName = "", userUid, readLocal, onReviewComplete, onCancel, onEditClick, onRequestRevision, onDetailClick }: RequestListProps) {
   return (
     <RequestListTableWrap>
       <RequestListTable>
@@ -65,7 +65,7 @@ export default function RequesterRequestList({ data, disableActions = false, loc
                   index={index + 1}
                   item={item}
                   disableActions={rowDisabled}
-                  currentUid={currentUid}
+                  userUid={userUid}
                   onReviewComplete={onReviewComplete}
                   onCancel={onCancel}
                   onEditClick={onEditClick}
@@ -99,7 +99,9 @@ const RequestListTableWrap = styled.div`
 const RequestListTable = styled.table`
   table-layout: fixed;
   width: 100%;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.gray02};
   text-align: center;
+  transform: translateY(-2px);
 `;
 
 const RequestListTableCaption = styled.caption`
@@ -113,10 +115,10 @@ const RequestListTableCaption = styled.caption`
 
 const RequestListTableTh = styled.th`
   position: sticky;
-  top: -2px;
+  top: 1px;
   line-height: 16px;
   padding: 13px 0;
-  border-bottom: none;
+  border-right: none;
   font-family: 'Pretendard';
   font-size: 14px;
   font-weight: 700;
@@ -136,7 +138,7 @@ const RequestListTableTh = styled.th`
   }
 
   &:nth-of-type(13), &:nth-of-type(14), &:nth-of-type(15), &:nth-of-type(16) {
-    border-right: 1px solid ${({ theme }) => theme.colors.pink02}
+    /* border-right: 1px solid ${({ theme }) => theme.colors.pink02} */
   }
 
   &:nth-of-type(13), &:nth-of-type(14), &:nth-of-type(15), &:nth-of-type(16), &:nth-of-type(17) {

@@ -1,12 +1,15 @@
 import styled from "styled-components";
 import urlIcon from "../assets/url-icon.svg";
+import urlIconGray from "../assets/url-icon-gray.svg"
 import commentIcon from "../assets/comment.svg";
+import commentIconGray from "../assets/comment_gray.svg"
 import { useCallback } from "react";
+import { auth } from "../firebaseconfig";
 
 interface ManagerRequestItemProps {
   index: number;
   item: RequestData;
-  currentUid?: string;
+  userUid?: string;
   designerList: any[];
   selectedDesigners: string[];
   onDesignerSelect: (designerNames: string[]) => void;
@@ -25,7 +28,7 @@ interface ManagerRequestItemProps {
 export default function ManagerRequestItem({
   index,
   item,
-  currentUid,
+  userUid,
   designerList,
   selectedDesigners,
   onDesignerSelect,
@@ -97,9 +100,9 @@ export default function ManagerRequestItem({
   const hasUrl = !!item.url && item.url.trim().length > 0;
 
   const lastAt   = toMillisSafe((item as any)?.comments_last_date);
-  const readRaw  = (item as any)?.comment_read_by?.[currentUid ?? ""];
+  const readRaw  = (item as any)?.comment_read_by?.[userUid ?? ""];
   // ★ 추가: 서버 확정 안되기 전에 서버-독립적으로 쓰는 클라이언트 보조 필드
-  const readClient = (item as any)?.comment_read_by_client?.[currentUid ?? ""];
+  const readClient = (item as any)?.comment_read_by_client?.[userUid ?? ""];
 
   // ★ 변경: 내 읽음 시각 계산 우선순위
   // 1) localReadMs(낙관적) → 2) comment_read_by_client(숫자) → 3) serverTimestamp 확정값(또는 보류중 now)
@@ -114,21 +117,53 @@ export default function ManagerRequestItem({
     Number(item.comments_count ?? 0) > 0 &&
     typeof lastAt === "number" &&
     (myReadAt == null || lastAt > myReadAt) &&
-    (currentUid ? lastAuthorUid !== currentUid : true);
+    (userUid ? lastAuthorUid !== userUid : true);
 
-  const docEdited = !!(item as any)?.requester_edit_state;              // 문서 수정 → 빨간점
-  const designEdited = !!(item as any)?.requester_design_edit_state;    // 디자인 수정 → 파란점
+  // ===== 문서 수정 빨간점 로직 =====
+  const docEdited =
+    !!(item as any)?.requester_edit_state; // 문서 수정 여부
+  const designEdited =
+    !!(item as any)?.requester_design_edit_state; // 디자인 수정 여부
+
+  const editReadBy =
+    ((item as any)?.requester_edit_read_by ??
+      {}) as Record<string, any>; // ★ 추가
+  const editReadClient =
+    ((item as any)?.requester_edit_read_by_client ??
+      {}) as Record<string, number>; // ★ 추가
+
+  const uid = userUid ?? auth.currentUser?.uid ?? ""; // ★ 추가
+
+  const editReadRaw = editReadBy[uid];
+
+  const myDocEditReadAt =
+    (typeof editReadClient[uid] === "number"
+      ? editReadClient[uid]
+      : undefined) ??
+    toMillisSafe(editReadRaw);
+
+  const lastEditAuthorUid =
+    (item as any)?.requester_edit_last_uid ?? "";
+
+  const showDocEditDot =
+    docEdited &&
+    !!uid &&
+    myDocEditReadAt == null && // 아직 내가 읽지 않았고
+    (lastEditAuthorUid ? lastEditAuthorUid !== uid : true); // 내가 수정한 게 아니면 표시
+
+  // 완료 또는 취소 공통 플래그
+  const isEnded = item.status === "완료" || item.status === "취소";
   
   return(
-    <RequestListTableTr isCanceled={item.status === "취소"}>
+    <RequestListTableTr isCanceled={item.status === "취소" || item.status === "완료"}>
       <RequestListTableTd>{index}</RequestListTableTd>
       <RequestListTableTd>
         <RequestListRequestIdText onClick={openDetail}>
           {item.design_request_id}
           <UpdateDotWrap>
             {/* ★ 추가: 점 그룹 (둘 다 true면 나란히 표시) */}
-            {designEdited && <DotBlue title="디자인 수정 요청됨" />}
-            {docEdited && <DotRed title="문서 수정됨" />}
+            {designEdited && <DotBlue />}
+            {showDocEditDot && <DotRed />}
           </UpdateDotWrap>
         </RequestListRequestIdText>
       </RequestListTableTd>
@@ -136,7 +171,9 @@ export default function ManagerRequestItem({
       <RequestListTableTd>{formatDate(item.request_date)}</RequestListTableTd>
       <RequestListCompletionTd>{formatDate(item.completion_date)}</RequestListCompletionTd>
       <RequestListOpenDtTd>{formatDate(item.open_date)}</RequestListOpenDtTd>
-      <RequestListTableTd>{item.merchandiser}</RequestListTableTd>
+      <RequestListTableTd>
+        <RequestListMerchandiser>{item.merchandiser}</RequestListMerchandiser>
+      </RequestListTableTd>
       <RequestListTableTd>{item.requester}</RequestListTableTd>
       <RequestListTableTd>{item.task_form}</RequestListTableTd>
       <RequestListTaskTypeTd>
@@ -155,12 +192,12 @@ export default function ManagerRequestItem({
       </RequestListRequirementTd>
       <RequestListTableTd>
         {hasUrl ? (
-          <UrlLink href={item.url} target="_blank" />
+          <UrlLink href={item.url} target="_blank" $isCompleted={isEnded} />
         ) : null}
       </RequestListTableTd>
       <RequestListMemoTd>
-        <CommentCountWrap onClick={openDetail}>
-          <CommentIcon />
+        <CommentCountWrap status={item.status} onClick={openDetail}>
+          <CommentIcon $isCompleted={isEnded} />
           <CommentCount $hasNew={hasNew}>
             {Number(item.comments_count ?? 0)}
           </CommentCount>
@@ -176,6 +213,7 @@ export default function ManagerRequestItem({
           <UrlLink
             href={item.result_url}
             target="_blank"
+            $isCompleted={isEnded}
           />
         ) : (
           ""
@@ -320,6 +358,8 @@ const RequestListTableTr = styled.tr<{ isCanceled: boolean }>`
     font-family: 'Pretendard';
     font-size: 13px;
     font-weight: 500;
+    border-right: none;
+    border-bottom: none;
   }
 
   &:hover {
@@ -330,7 +370,7 @@ const RequestListTableTr = styled.tr<{ isCanceled: boolean }>`
 `;
 
 const RequestListTableTd = styled.td`
-  padding: 11px 0;
+  padding: 11px 5px;
  
   &:first-of-type {
     border-left: none;
@@ -414,13 +454,16 @@ const RequestListTaskType = styled.span`
   white-space: nowrap;
 `;
 
-const RequestListTaskTypeDetail = styled.span`
-  white-space: nowrap;
-`;
+const RequestListTaskTypeDetail = styled.span``;
 
 const RequestListEmergencyWrap = styled.div`
   ${({ theme }) => theme.mixin.flex('center')};
   padding: 0 12px;
+`;
+
+const RequestListMerchandiser = styled.span`
+  white-space: normal;
+  overflow-wrap: break-word;
 `;
 
 const EmergencyBadge = styled.span`
@@ -448,12 +491,15 @@ const RequestListRequirementText = styled.span`
   }
 `;
 
-const UrlLink = styled.a<{ $disabled?: boolean }>`
+const UrlLink = styled.a<{ $disabled?: boolean; $isCompleted?: boolean }>`
   display: inline-block;
   vertical-align: middle;
   width: 24px;
   height: 24px;
-  background: url(${urlIcon}) no-repeat center / contain;
+  background: ${({ $isCompleted }) =>
+    $isCompleted
+      ? `url(${urlIconGray}) no-repeat center / contain`
+      : `url(${urlIcon}) no-repeat center / contain`};
 `;
 
 const StautsBadge = styled.span<{ status: string }>`
@@ -532,7 +578,7 @@ const ReviewButton = styled.button`
 `;
 
 const CompletedText = styled.span`
-  color: green;
+  color: ${({ theme }) => theme.colors.gray05};
   font-size: 13px;
   font-weight: bold;
 `;
@@ -589,12 +635,14 @@ const RemoveBtn = styled.button`
 
 const AssignRow = styled.div` display: flex; align-items: center; justify-content: center; `;
 
-const CommentCountWrap = styled.div`
+const CommentCountWrap = styled.div<{ status: string }>`  // ★ 타입 추가
   position: relative;
   ${({ theme }) => theme.mixin.flex('center', 'center')};
-  gap:6px;
-  font-size:13px; 
-  color:#111;
+  gap: 6px;
+  font-size: 13px;
+  color: ${({ status, theme }) =>
+    status === "완료" || status === "취소" ? theme.colors.gray05 : "#111"};  // ★ 완료일 때만 gray05
+
   &:hover {
     span {
       text-decoration: underline;
@@ -602,10 +650,13 @@ const CommentCountWrap = styled.div`
   }
 `;
 
-const CommentIcon = styled.i` 
-  width:20px; 
-  height:20px;
-  background: url(${commentIcon}) no-repeat center / contain;
+const CommentIcon = styled.i<{ $isCompleted?: boolean }>`
+  width: 20px;
+  height: 20px;
+  background: ${({ $isCompleted }) =>
+    $isCompleted
+      ? `url(${commentIconGray}) no-repeat center / contain`
+      : `url(${commentIcon}) no-repeat center / contain`};
 `;
 
 const CommentCount = styled.span<{ $hasNew: boolean }>`
