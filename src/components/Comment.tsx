@@ -31,6 +31,7 @@ import data from "@emoji-mart/data";
 interface CommentsProps {
   designRequestId: string; // 비즈니스 키 (예: "DR-2025-001")
   currentUserName: string; // 로그인 사용자 이름
+  status?: string;
 }
 
 type CommentDoc = {
@@ -38,11 +39,12 @@ type CommentDoc = {
   author_name: string;
   author_uid: string;
   body: string;
+  kind?: string;
   createdAt?: any;
   editedAt?: any;
 };
 
-export default function Comments({ designRequestId, currentUserName }: CommentsProps) {
+export default function Comment({ designRequestId, currentUserName, status }: CommentsProps) {
   const [parentDocId, setParentDocId] = useState<string>("");     // Firestore 문서 id
   const [items, setItems] = useState<CommentDoc[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -74,6 +76,10 @@ export default function Comments({ designRequestId, currentUserName }: CommentsP
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const popoverRef = useRef<HTMLDivElement | null>(null);
+
+  // edit_log 판별 헬퍼 (전역에서 row 쓰지 않도록)
+  const isEditLog = (c?: CommentDoc) => (c?.kind ?? "") === "edit_log";
+  const isEnded = status === "완료" || status === "취소";
 
   // 공용 스크롤 헬퍼(맨 아래로 이동)
   const scrollToBottom = (smooth = false) => {
@@ -115,6 +121,7 @@ export default function Comments({ designRequestId, currentUserName }: CommentsP
               author_name: data.author_name || "",
               author_uid: data.author_uid || "",
               body: data.body || "",
+              kind: data.kind || "",
               createdAt: data.createdAt,
               editedAt: data.editedAt,
             };
@@ -142,7 +149,10 @@ export default function Comments({ designRequestId, currentUserName }: CommentsP
     return () => {
       if (unsub) unsub();
       mountedRef.current = false;
-      setJustAdded(false);          // 문서 전환 시 플래그 초기화
+      setJustAdded(false);
+      // 문서 바뀔 때 편집 상태도 초기화 (로그 편집 잔상 방지)
+      setEditingId("");
+      setEditingBody("");
     };
   }, [designRequestId]);
 
@@ -167,6 +177,7 @@ export default function Comments({ designRequestId, currentUserName }: CommentsP
 
   // 3) 추가
   const handleAdd = async () => {
+    if (isEnded) return;
     if (!parentDocId || !body.trim()) return;
     setSaving(true);
     try {
@@ -176,6 +187,7 @@ export default function Comments({ designRequestId, currentUserName }: CommentsP
         author_name: currentUserName || "(익명)",
         author_uid: uid,
         body: body.trim(),
+        kind: "comment",
         createdAt: serverTimestamp(),
       });
 
@@ -195,12 +207,26 @@ export default function Comments({ designRequestId, currentUserName }: CommentsP
 
   // 4) 편집 시작
   const startEdit = (row: CommentDoc) => {
+    if (isEnded) return;
+    // 로그(edit_log)는 편집 진입 자체 차단
+    if (isEditLog(row)) return;
+
     setEditingId(row.id);
     setEditingBody(row.body);
   };
 
   // 5) 수정 저장
   const handleUpdate = async (id: string) => {
+    if (isEnded) return;
+    // 함수 레벨에서도 로그(edit_log) 수정 차단
+    const target = items.find((x) => x.id === id);
+    if (isEditLog(target)) {
+      // 로그는 절대 수정 금지
+      setEditingId("");
+      setEditingBody("");
+      return;
+    }
+
     if (!parentDocId || !editingBody.trim()) return;
     setUpdating(true);
     try {
@@ -221,11 +247,16 @@ export default function Comments({ designRequestId, currentUserName }: CommentsP
 
   // 6) 삭제
   const handleDelete = async (id: string) => {
+    if (isEnded) return;
+    // 함수 레벨에서도 로그(edit_log) 삭제 차단
+    const target = items.find((x) => x.id === id);
+    if (isEditLog(target)) return;
+
     if (!parentDocId) return;
     if (!confirm("이 댓글을 삭제할까요?")) return;
 
     try {
-      const parentRef  = doc(db, "design_request", parentDocId);
+      const parentRef = doc(db, "design_request", parentDocId);
       const commentRef = doc(db, "design_request", parentDocId, "comments", id);
 
       await deleteDoc(commentRef);
@@ -237,7 +268,6 @@ export default function Comments({ designRequestId, currentUserName }: CommentsP
         await updateDoc(parentRef, {
           comments_count: increment(-1),
           updated_date: serverTimestamp(),
-          // 필요 시 마지막 댓글 재계산 로직 추가 가능
         });
       }
     } catch (e) {
@@ -286,6 +316,7 @@ export default function Comments({ designRequestId, currentUserName }: CommentsP
 
   // 입력 textarea 키다운 — Enter=등록, Shift+Enter=줄바꿈, IME 조합 중 무시
   const handleAddKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (isEnded) return;
     if (e.key !== "Enter") return;
     if (e.shiftKey) return;                 // 줄바꿈 허용
     if (isComposing) return;                // 한글 조합 중이면 무시
@@ -306,6 +337,12 @@ export default function Comments({ designRequestId, currentUserName }: CommentsP
     handleUpdate(id);
   };
 
+  // 이모지 버튼 토글 핸들러 (완료/취소면 토글 불가)
+  const handleToggleEmoji = () => { // ★ 추가
+    if (isEnded) return;
+    setEmojiOpen(v => !v);
+  };
+
   return (
     <Wrap>
       <CommentTitleWrap>
@@ -321,6 +358,7 @@ export default function Comments({ designRequestId, currentUserName }: CommentsP
         ) : (
           items.map((row) => {
             const isMine = !!currentUid && currentUid === row.author_uid;
+            const isLog = isEditLog(row);
             return (
               <CommentContent key={row.id}>
                 <CommentWriterFrame>
@@ -329,7 +367,7 @@ export default function Comments({ designRequestId, currentUserName }: CommentsP
                     <span className="date">{formatTS(row.createdAt)}</span>
                   </CommentWriterWrap>
                   <Meta>
-                    {isMine && editingId !== row.id && (
+                    {isMine && !isLog && editingId !== row.id && ( // 로그면 버튼 숨김
                       <Actions>
                         <SmallBtn onClick={() => startEdit(row)}>수정</SmallBtn>
                         <SmallBtn $danger onClick={() => handleDelete(row.id)}>삭제</SmallBtn>
@@ -373,6 +411,7 @@ export default function Comments({ designRequestId, currentUserName }: CommentsP
             ref={textareaRef}
             placeholder="내용을 입력하세요"
             value={body}
+             disabled={isEnded}
             onChange={(e) => setBody(e.target.value)}
             rows={1}
             onKeyDown={handleAddKeyDown}
@@ -382,24 +421,25 @@ export default function Comments({ designRequestId, currentUserName }: CommentsP
           <EmojiBtn
             type="button"
             aria-label="이모지"
-            onClick={() => setEmojiOpen(v => !v)}
+            onClick={handleToggleEmoji}
             title="이모지"
+            disabled={isEnded}
           >
             😊
           </EmojiBtn>
 
-          {emojiOpen && (
+          {emojiOpen && !isEnded && (
             <EmojiPopover ref={popoverRef}>
               <Picker
                 data={data}
                 onEmojiSelect={handleEmojiSelect}
-                locale="ko"                 // 한국어 UI
-                theme="light"               // "light" | "dark" | "auto"
-                navPosition="top"           // 카테고리 탭 위치
-                previewPosition="none"      // 하단 프리뷰 숨김(선호에 따라 "bottom")
-                searchPosition="top"        // 검색창 위치
+                locale="ko"
+                theme="light"
+                navPosition="top"
+                previewPosition="none"
+                searchPosition="top"
                 emojiVersion="14.0"
-                set="native"                // 네이티브 이모지 사용(이미지 스프라이트 불필요)
+                set="native"
               />
             </EmojiPopover>
           )}
@@ -407,7 +447,7 @@ export default function Comments({ designRequestId, currentUserName }: CommentsP
 
         <AddBtn
           type="button"
-          disabled={!body.trim() || saving || !parentDocId}
+          disabled={isEnded || !body.trim() || saving || !parentDocId}
           onClick={handleAdd}
         >
           등록
@@ -545,6 +585,11 @@ const CommentWrite = styled.textarea`
   font-size: 14px;
   line-height: 1.4;
   max-height: 200px;
+
+  &:disabled {
+    background: ${({ theme }) => theme.colors.gray04};
+    cursor: not-allowed;
+  }
 `;
 
 const EmojiBtn = styled.button`

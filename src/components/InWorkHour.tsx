@@ -31,8 +31,11 @@ type RequestDoc = {
   created_date?: any;
 };
 
-const SPECIAL_SOLO = "손미나.";
-const DISPLAY_BLACKLIST = new Set<string>(["미배정", SPECIAL_SOLO]);
+// 이름 끝 '.'(여러 개 포함)인 계정은 전부 제외
+const isDotTailName = (name: string) => /\.+$/.test(String(name ?? "").trim()); // ★ 추가
+
+// DISPLAY_BLACKLIST는 "미배정"만 남기고, 점계정은 함수로 처리
+const DISPLAY_BLACKLIST = new Set<string>(["미배정"]); // ★ 변경
 
 const toMidnight = (d: Date) =>
   new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -195,8 +198,8 @@ export default function InWorkHour({
   const getEffectiveAssignees = (r: RequestDoc): string[] => {
     const raw = getAssignees(r).map((s) => s.trim()).filter(Boolean);
 
-    // ★ 변경: 전역 제외자(미배정, SPECIAL_SOLO)를 선제적으로 제거
-    const cleaned = raw.filter((n) => n !== "미배정" && n !== SPECIAL_SOLO); // ★ 변경
+    // 전역 제외자(미배정 + 이름끝 '.' 전부)를 선제적으로 제거
+    const cleaned = raw.filter((n) => n !== "미배정" && !isDotTailName(n));
 
     const comp = normCompany(r.company);
 
@@ -225,7 +228,7 @@ export default function InWorkHour({
    const rows: DesignerRow[] = useMemo(() => {
     const fromDocs = Array.from(new Set(docs.flatMap((d) => getAssignees(d))));
     const designers = Array.from(new Set([...designerNames, ...fromDocs]))
-      .filter((n) => n && !DISPLAY_BLACKLIST.has(n))
+      .filter((n) => n && !DISPLAY_BLACKLIST.has(n) && !isDotTailName(n))
       .sort((a, b) => a.localeCompare(b, "ko"));
 
     const targetYear = selectedYear;
@@ -309,7 +312,7 @@ export default function InWorkHour({
     selectedMonth,
     dailyHours,
     daysInSelectedMonth,
-    day,                                // ★ 추가
+    day,
   ]);
 
   if (rows.length === 0) {

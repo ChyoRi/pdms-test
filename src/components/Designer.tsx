@@ -8,7 +8,6 @@ import MainTitle from "./MainTitle";
 import RequestFilterSearchWrap from "./RequestFilterSearchWrap";
 import DashBoard from "./DashBoard";
 import { makeSearchIndex, matchesQuery } from "../utils/search";
-import { addHistoryComment } from "../utils/commentHistory";
 
 type ViewType = "dashboard" | "myrequestlist" | "allrequestlist" | "inworkhour";
 
@@ -35,7 +34,7 @@ interface DesignRequest {
   requirement: string;
   url?: string;
   note?: string;
-  assigned_designers?: string[]; // 신규
+  assigned_designers?: string[];
   assigned_designer?: string;
   review_status?: string;
   designer_start_date?: string;
@@ -43,6 +42,7 @@ interface DesignRequest {
   result_url?: string;
   status?: string;
   priority?: string;
+  company?: string;
 }
 
 // 폼 상태 타입 (각 행별로 보관)
@@ -56,6 +56,13 @@ type RowForm = {
 const DEFAULT_STATUS = "진행 상태 선택";
 const DEFAULT_COMPANY = "회사 선택";
 const SPECIAL_SOLO_NAME = "홈돌이";
+
+// ★ 추가: 회사 비교용 정규화(문서ID nsmall vs 표시명 NSmall 모두 매칭)
+const companyKey = (v: any) =>
+  String(v ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "");
 
 // 이번 달 판정 헬퍼(요청자 코드와 동일)
 const isSameMonth = (d: Date, base = new Date()) =>
@@ -127,15 +134,19 @@ export default function Designer({ view, userRole, setIsDrawerOpen, setDetailDat
     });
     return () => unsub();
   }, [designerName, view]);
-  // 회사 옵션(users.company에서 수집) — 제외 처리는 RequestFilter에서 함
+  
+  // 회사 옵션 = companies 컬렉션 문서(company_name)로 구성
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, "users"), (snap) => {
+    const unsub = onSnapshot(collection(db, "companies"), (snap) => {
       const set = new Set<string>();
       snap.forEach((d) => {
-        const name = String((d.data() as any).company ?? "").trim();
-        if (name) set.add(name);
+        const data = d.data() as any;
+        // 표시명 우선, 없으면 docId 사용
+        const name = String(data?.company_name ?? d.id ?? "").trim();
+        if (!name) return;
+        set.add(name);
       });
-      setCompanyOptions(Array.from(set).sort());
+      setCompanyOptions(Array.from(set).sort((a, b) => a.localeCompare(b, "ko")));
     });
     return () => unsub();
   }, []);
@@ -276,7 +287,7 @@ export default function Designer({ view, userRole, setIsDrawerOpen, setDetailDat
           null;
         const completedThisMonth = cd ? isSameMonth(cd, today) : false;
 
-        if (!searchOn && !completedThisMonth && isDone) return false; // ★ 변경
+        if (!searchOn && !completedThisMonth && isDone) return false;
 
         // 상태 필터 (기간 미선택일 때만)
         if (
@@ -287,12 +298,10 @@ export default function Designer({ view, userRole, setIsDrawerOpen, setDetailDat
         }
       }
 
-      // 회사 필터는 항상 AND
-      if (
-        companyFilter !== DEFAULT_COMPANY &&
-        String(r.company) !== companyFilter
-      )
-        return false;
+      // 회사 필터 비교를 정규화해서 매칭(예: "NSmall" vs "nsmall")
+      if (companyFilter !== DEFAULT_COMPANY) {
+        if (companyKey(r.company) !== companyKey(companyFilter)) return false;
+      }
 
       // 검색어는 항상 AND, 대신 위에서 과거 완료/취소는 searchOn일 때 열어 둠
       if (q && !matchesQuery(r, q)) return false;
@@ -364,11 +373,6 @@ export default function Designer({ view, userRole, setIsDrawerOpen, setDetailDat
       return;
     }
 
-    // ★ 추가: 기존 상태/문서번호 확보
-    const req = assignedRequests.find((r) => r.id === requestId);
-    const designRequestId = req?.design_request_id;
-    const prevStatus = req?.status ?? "대기";
-
     await updateDoc(doc(db, "design_request", requestId), {
       designer_start_date: toTimestamp(row.start_dt),
       designer_end_date: toTimestamp(row.end_dt),
@@ -377,29 +381,6 @@ export default function Designer({ view, userRole, setIsDrawerOpen, setDetailDat
     });
 
     alert("저장되었습니다.");
-
-    // ★ 히스토리 댓글 기록
-    if (designRequestId) {
-      const actor = designerName || "디자이너";
-      const nextStatus = row.status ?? prevStatus;
-      const parts: string[] = [];
-
-      parts.push(`${actor} 님이 디자이너 작업 정보를 저장했습니다.`);
-
-      if (row.start_dt || row.end_dt) {
-        parts.push(`디자인 기간: ${row.start_dt || "-"} ~ ${row.end_dt || "-"}.`);
-      }
-
-      if (nextStatus !== prevStatus) {
-        parts.push(`상태: '${prevStatus}' → '${nextStatus}'.`);
-      }
-
-      if (row.result_url) {
-        parts.push(`산출물 URL이 업데이트되었습니다.`);
-      }
-
-      await addHistoryComment(designRequestId, parts.join(" "));
-    }
   };
 
   // ✅ 메모/작업항목 클릭 → 디테일 모드
@@ -450,7 +431,7 @@ export default function Designer({ view, userRole, setIsDrawerOpen, setDetailDat
       )}
       {view === "dashboard" && (
         <DashBoardWrap>
-          <DashBoard capacityHoursPerMonth={704} />
+          <DashBoard />
         </DashBoardWrap>
       )}
     </>

@@ -2,23 +2,14 @@ import styled from "styled-components"
 import { useState, useEffect, useMemo } from "react";
 import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { auth, db } from "../firebaseconfig";
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, setDoc, serverTimestamp, getDoc } from "firebase/firestore";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { saveAutoLoginCookie } from "../utils/authClient";
 
-// ★ 회사 매핑
-const COMPANY_MAP: Record<string, string> = {
-  homeplus: "HomePlus",
-  nsmall: "NSmall",
-  pushcomz: "PushComz",
-  oliveyoung: "OLIVEYOUNG"
-};
-
-const ROLE_BY_PARAM: Record<string, number> = {
-  homeplus: 1,
-  nsmall: 1,
-  oliveyoung: 1,
-  pushcomz: 3,
+type CompanySignUpDoc = {
+  company_name: string;
+  role: number;
+  signup_active: boolean;
 };
 
 export default function SignUpPage() {
@@ -27,36 +18,74 @@ export default function SignUpPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [passwordCheck, setPasswordCheck] = useState("");
-  const [lockCompany, setLockCompany] = useState(false);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+
+  const [companyRole, setCompanyRole] = useState<number | null>(null);
 
   const companyParam = useMemo(
     () => (searchParams.get("company") || "").toLowerCase(),
     [searchParams]
   );
 
-  // URL의 ?company= 값이 바뀔 때마다 항상 반영 (초기 1회 제한 제거)
+  // ★ 변경: companyParam으로 companies/{companyParam} 문서만 읽어서 company/role 세팅
   useEffect(() => {
-    const mapped = COMPANY_MAP[companyParam];
-    if (mapped) {
-      setCompany(mapped);
-      setLockCompany(true);
-    } else {
+    const applyCompanyFromParam = async () => {
+      // 초기화
       setCompany("");
-      setLockCompany(false);
-    }
+      setCompanyRole(null);
+
+      if (!companyParam) return;
+
+      try {
+        const ref = doc(db, "companies", companyParam);
+        const snap = await getDoc(ref);
+
+        if (!snap.exists()) return;
+
+        const data = snap.data() as CompanySignUpDoc;
+
+        // 가입 비활성이면 적용하지 않음
+        if (!data.signup_active) return;
+
+        // 필수 값 확인
+        if (!data.company_name) return;
+        if (typeof data.role !== "number") return;
+
+        setCompany(data.company_name);
+        setCompanyRole(data.role);
+      } catch (e) {
+        // 실패 시 초기 상태 유지
+        setCompany("");
+        setCompanyRole(null);
+      }
+    };
+
+    applyCompanyFromParam();
   }, [companyParam]);
 
   const signUp = async () => {
     const nameTrim = name.trim();
-    const companyTrim = company.trim();
     const emailTrim = email.trim();
 
-    if (!nameTrim) { alert("이름을 입력해주세요."); return; }
-    if (!companyTrim) { alert("회사명을 입력해주세요."); return; }
-    if (!emailTrim) { alert("이메일을 입력해주세요."); return; }
-    if (password !== passwordCheck) { alert("비밀번호가 일치하지 않습니다."); return; }
+    if (!nameTrim) {
+      alert("이름을 입력해주세요.");
+      return;
+    }
+    if (!emailTrim) {
+      alert("이메일을 입력해주세요.");
+      return;
+    }
+    if (password !== passwordCheck) {
+      alert("비밀번호가 일치하지 않습니다.");
+      return;
+    }
+
+    // ★ 변경: 회사/role은 무조건 companies 문서에서 확정된 값만 허용
+    if (!companyParam || !company.trim() || companyRole === null) {
+      alert("회사 정보가 확인되지 않습니다.");
+      return;
+    }
 
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, emailTrim, password);
@@ -64,20 +93,18 @@ export default function SignUpPage() {
 
       await updateProfile(user, { displayName: nameTrim });
 
-      // 역할 결정: 1) 파라미터 매핑 우선 2) 파라미터 없을 때 입력값이 Pushcomz면 2, 그 외 1
-      const role =
-        ROLE_BY_PARAM[companyParam] ??
-        ((companyTrim || "").toLowerCase() === "pushcomz" ? 2 : 1);
-
       await setDoc(doc(db, "users", user.uid), {
         name: nameTrim,
         email: emailTrim,
-        company: companyTrim,
-        role,
+        // ★ 회사 표시명은 company_name 그대로 저장
+        company,
+        // ★ 기준키는 URL param 그대로 저장 (state 불필요)
+        companyKey: companyParam,
+        // ★ role은 companies 문서값 그대로 저장 (기본값 없음)
+        role: companyRole,
         createdAt: serverTimestamp(),
       });
 
-      // 회원가입은 기본적으로 자동로그인 쿠키 저장
       await saveAutoLoginCookie(emailTrim, password);
 
       alert("회원가입이 완료되었습니다!");
@@ -86,6 +113,7 @@ export default function SignUpPage() {
       alert("회원가입 중 오류 발생: " + error.message);
     }
   };
+
 
   return (
     <Container>
@@ -106,12 +134,11 @@ export default function SignUpPage() {
           <Company_input
             type="text"
             value={company}
-            onChange={(e) => !lockCompany && setCompany(e.target.value)}
-            readOnly={lockCompany}
-            aria-readonly={lockCompany ? "true" : undefined}
-            placeholder={lockCompany ? "" : "회사명을 입력해주세요."}
-            title={lockCompany ? "캠페인 링크로 자동 설정되었습니다." : ""}
-            $locked={lockCompany}   // ★ 스타일 분기용 prop
+            readOnly={true}
+            aria-readonly="true"
+            placeholder=""
+            title="캠페인 링크로 자동 설정되었습니다."
+            $locked={true}
           />
 
           <Id_input

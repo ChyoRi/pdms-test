@@ -47,6 +47,7 @@ export async function addHistoryComment(
     author_name: authorName,
     author_uid: authorUid,
     body: body.trim(),
+    kind: "edit_log",
     createdAt: serverTimestamp(),
   });
 

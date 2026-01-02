@@ -1,7 +1,5 @@
 import styled from "styled-components";
-import homeplus from "../assets/homeplus-logo.svg";
-import nsmall from "../assets/nsmall-logo.svg";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "../firebaseconfig";
 import { doc, getDoc } from "firebase/firestore";
@@ -9,44 +7,76 @@ import { useNavigate } from "react-router-dom";
 import Nav from "./Nav";
 import { logoutAll } from "../utils/authClient";
 
-const COMPANY = { HOMEPLUS: "homeplus", NSMALL: "nsmall" } as const;
-type CompanyKind = "homeplus" | "nsmall" | null;
-
 interface HeaderProps {
   onResetFilters?: () => void;
 }
+
+type CompanyDoc = {
+  logo_url?: string;
+  company_name?: string;
+};
 
 export default function Header({ onResetFilters }: HeaderProps) {
   const [userName, setUserName] = useState("");
   const [userCompany, setUserCompany] = useState("");
   const [userRole, setUserRole] = useState<number | null>(null); // ✅ role 상태
-  const navigate = useNavigate(); 
+  const [companyLogoUrl, setCompanyLogoUrl] = useState("");
+  const navigate = useNavigate();
+
+   // users.company(표시명) -> companies 문서 id로 변환
+  const normalizeCompanyKey = (v: any) => {
+    return String(v ?? "")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, ""); // 공백 제거(혹시 있을 경우)
+  };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        if (user.displayName) {
-          setUserName(user.displayName);
-        }
-
-        // ✅ Firestore에서 role 가져오기
-        const snap = await getDoc(doc(db, "users", user.uid));
-        if (snap.exists()) {
-          const data = snap.data() as any;
-          setUserRole(data.role ?? null);
-          setUserCompany(data.company ?? "");  
-        } else {
-          setUserRole(null);
-          setUserCompany("");
-        }
-      } else {
+      if (!user) {
         setUserName("");
         setUserRole(null);
         setUserCompany("");
+        setCompanyLogoUrl("");
+        return;
       }
+
+      setUserName(user.displayName ?? "");
+
+      // 1) users 문서 읽기
+      const userSnap = await getDoc(doc(db, "users", user.uid));
+      if (!userSnap.exists()) {
+        setUserRole(null);
+        setUserCompany("");
+        setCompanyLogoUrl("");
+        return;
+      }
+
+      const userData = userSnap.data() as any;
+
+      const role = userData.role ?? null;
+      const company = userData.company ?? ""; // 예: "HomePlus"
+      setUserRole(role);
+      setUserCompany(company);
+
+      // companyKey 필드 안 쓰고 users.company로 companies 문서 찾기
+      const companyKey = normalizeCompanyKey(company); // "HomePlus" -> "homeplus"
+      if (!companyKey) {
+        setCompanyLogoUrl("");
+        return;
+      }
+
+      const companySnap = await getDoc(doc(db, "companies", companyKey));
+      if (!companySnap.exists()) {
+        setCompanyLogoUrl("");
+        return;
+      }
+
+      const companyData = companySnap.data() as CompanyDoc;
+      setCompanyLogoUrl(companyData.logo_url ?? "");
     });
 
-    return () => unsubscribe(); // 컴포넌트 언마운트 시 리스너 해제
+    return () => unsubscribe();
   }, []);
 
   const logout = async () => {
@@ -67,27 +97,14 @@ export default function Header({ onResetFilters }: HeaderProps) {
     }
   };
 
-  // 회사 종류
-  const companyKind: CompanyKind = useMemo(() => {
-    const k = String(userCompany ?? "").trim().replace(/\s+/g, "").toLowerCase();
-    if (k === "homeplus") return COMPANY.HOMEPLUS;
-    if (k === "nsmall" || k === "n-small") return COMPANY.NSMALL;
-    return null; // pushcomz 포함 비노출
-  }, [userCompany]);
-
-  // 로고 소스
-  const logoSrc = companyKind === "homeplus" ? homeplus
-                 : companyKind === "nsmall" ? nsmall
-                 : null;
-
-  const hasLogo = !!logoSrc;
+  const hasLogo = !!companyLogoUrl;
 
   return (
     <HeaderElement>
       <LogoFrame $hasLogo={hasLogo}>
         {hasLogo && (
           <LogoWrap>
-            <Logo src={logoSrc!} alt="company logo" />
+            <Logo src={companyLogoUrl} alt="company logo" />
           </LogoWrap>
         )}
         <Nav userRole={userRole} onResetFilters={onResetFilters} />

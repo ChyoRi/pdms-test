@@ -17,6 +17,7 @@ interface Props {
   currentRequester: string;
   company?: string;
   onDone?: () => void;
+  status?: string;
 }
 
 type UserLite = {
@@ -25,10 +26,13 @@ type UserLite = {
   company?: string;
 };
 
-export default function RequestDeliver({ designRequestId, currentRequester, company, onDone }: Props) {
+export default function RequestDeliver({ designRequestId, currentRequester, company, status, onDone }: Props) {
   const [candidates, setCandidates] = useState<UserLite[]>([]);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<string>("");
+
+  // 완료/취소면 전달 금지
+  const isEnded = status === "완료" || status === "취소";
 
   useEffect(() => {
     (async () => {
@@ -104,9 +108,11 @@ export default function RequestDeliver({ designRequestId, currentRequester, comp
     })();
   }, [currentRequester, company]);
 
-  const disabled = loading || candidates.length === 0 || !selected;
+  // 완료/취소면 무조건 disabled
+  const disabled = isEnded || loading || candidates.length === 0 || !selected; // ★ 변경
 
   const handleTransfer = async () => {
+    if (isEnded) return;
     if (!selected || selected === currentRequester) return;
     setLoading(true);
     try {
@@ -146,7 +152,7 @@ export default function RequestDeliver({ designRequestId, currentRequester, comp
   return (
     <Wrap>
       <Select
-        disabled={loading || candidates.length === 0}
+        disabled={disabled}
         value={selected}
         onChange={(e) => setSelected(e.target.value)}
       >

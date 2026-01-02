@@ -43,15 +43,65 @@ export default function RequesterRequestItem({ item, index, disableActions, user
     return v ? Date.now() : undefined;
   };
 
+  // url(string[]) 정규화(빈값 제거 + trim + 중복 제거)
+  const normalizeUrlArray = (raw?: any): string[] => {
+    if (!raw) return [];
+
+    // 1) 이미 배열로 저장된 경우
+    if (Array.isArray(raw)) {
+      const cleaned = raw
+        .map((v) => (typeof v === "string" ? v.trim() : ""))
+        .filter(Boolean);
+      return Array.from(new Set(cleaned));
+    }
+
+    // 2) 문자열로 저장된 경우 (여러 줄/쉼표/공백 포함)
+    const text = String(raw);
+
+    // 가장 정확: http/https URL 직접 추출
+    const httpMatches = text.match(/https?:\/\/[^\s<>"']+/g) || [];
+
+    const clean = (u: string) =>
+      u.trim().replace(/[)\]}>,.;:!?]+$/g, ""); // 뒤 문장부호 제거
+
+    let urls = httpMatches.map(clean).filter(Boolean);
+
+    // http URL이 없으면 토큰 분리 후 프로토콜 보정
+    if (urls.length === 0) {
+      const tokens = text
+        .split(/[\n\r\t ]+|,+/g)
+        .map((t) => t.trim())
+        .filter(Boolean);
+
+      urls = tokens
+        .map(clean)
+        .map((t) => {
+          if (/^https?:\/\//i.test(t)) return t;
+          if (/^(www\.)/i.test(t)) return `https://${t}`;
+          if (/^drive\.google\.com\//i.test(t)) return `https://${t}`;
+          if (/^docs\.google\.com\//i.test(t)) return `https://${t}`;
+          return "";
+        })
+        .filter(Boolean);
+    }
+
+    return Array.from(new Set(urls));
+  };
+
+  // 대표 URL(아이콘 클릭 시 열리는 링크) - 첫 번째만 사용
+  const getPrimaryUrl = (urls: string[]) => urls[0];
+
   const isRequesterDone = item.requester_review_status === "검수완료";
   const designers = Array.isArray(item.assigned_designers)
     ? (item.assigned_designers as string[])
     : null;
-  const hasUrl = !!item.url && item.url.trim().length > 0;
+  const urls = normalizeUrlArray((item as any)?.url);
+  const hasUrl = urls.length > 0;
+  const urlHref = hasUrl ? getPrimaryUrl(urls) : undefined;
 
   const lastAt   = toMillisSafe((item as any)?.comments_last_date);
   const readRaw  = (item as any)?.comment_read_by?.[userUid ?? ""];
-  // ★ 추가: 서버 확정 안되기 전에 서버-독립적으로 쓰는 클라이언트 보조 필드
+  // 서버 확정 안되기 전에 서버-독립적으로 쓰는 클라이언트 보조 필드
   const readClient = (item as any)?.comment_read_by_client?.[userUid ?? ""];
 
   // ★ 변경: 내 읽음 시각 계산 우선순위
@@ -108,6 +158,12 @@ export default function RequesterRequestItem({ item, index, disableActions, user
   // 완료 또는 취소 공통 플래그
   const isEnded = item.status === "완료" || item.status === "취소";
 
+  // 요청자 화면에서만 허수계정 끝의 '.' 제거
+  const displayNameForRequester = (raw: any) => {
+    const s = String(raw ?? "").trim();
+    return s.replace(/\.+$/g, ""); // 끝의 점만 제거 ('.' 여러개도 제거)
+  };
+
   return (
     <RequestListTableTr isCanceled={item.status === "취소" || item.status === "완료"}>
       <RequestListTableTd>{index}</RequestListTableTd>
@@ -143,8 +199,9 @@ export default function RequesterRequestItem({ item, index, disableActions, user
         </RequestListEmergencyWrap>
       </RequestListRequirementTd>
       <RequestListTableTd>
-        {hasUrl ? (
-          <UrlLink href={item.url} target="_blank" $isCompleted={isEnded} />
+        {urlHref ? (
+          // ★ 변경: href는 string만
+          <UrlLink href={urlHref} target="_blank" $isCompleted={isEnded} />
         ) : null}
       </RequestListTableTd>
       <RequestListMemoTd>
@@ -166,12 +223,13 @@ export default function RequesterRequestItem({ item, index, disableActions, user
       <RequestListTableTd>
         {designers && designers.length > 0 ? (
           <DesignersWrap>
-            {designers.map((name, i) => (
-              <DesignerSpan key={`${name}-${i}`}>{name}</DesignerSpan>
-            ))}
+            {designers.map((name, i) => {
+              const clean = displayNameForRequester(name);
+              return <DesignerSpan key={`${clean}-${i}`}>{clean}</DesignerSpan>;
+            })}
           </DesignersWrap>
         ) : (
-          item.assigned_designers || "미배정"
+          displayNameForRequester(item.assigned_designers) || "미배정"
         )}
       </RequestListTableTd>
       <RequestResultTd>

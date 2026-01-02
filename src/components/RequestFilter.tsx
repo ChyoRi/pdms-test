@@ -70,6 +70,21 @@ export default function RequestFilter({
   const [company, setCompany]   = useState(DEFAULT_COMPANY);
   const [dept, setDept]         = useState(DEFAULT_DEPT);
 
+  const roleKey = toRoleKey(roleNumber);
+  const visibleStatuses = STATUS_OPTIONS[roleKey];
+
+  // deptOptions가 바뀌면, 현재 선택값이 옵션에 없을 때 자동 리셋 (UI/필터 싱크 유지)
+  useEffect(() => {
+    if (roleKey !== "requester") return;
+    if (dept === DEFAULT_DEPT) return;
+
+    const list = (deptOptions || []).map(v => String(v).trim()).filter(Boolean);
+    if (!list.includes(dept)) {
+      setDept(DEFAULT_DEPT);
+      onApplyDept?.(DEFAULT_DEPT);
+    }
+  }, [deptOptions, roleKey, dept])
+
   // 외부에서 resetKey 가 바뀌면 UI 필터값 초기화
   useEffect(() => {
     if (resetKey === undefined) return;
@@ -109,9 +124,6 @@ export default function RequestFilter({
     onResetFilters?.();
   };
 
-  const roleKey = toRoleKey(roleNumber);
-  const visibleStatuses = STATUS_OPTIONS[roleKey];
-
   return (
     <Container>
       <DateCalendar
@@ -125,7 +137,6 @@ export default function RequestFilter({
       {/* ★ 회사 셀렉트: 요청자(role=1)는 숨김, 그 외(디자이너/매니저)만 표시 */}
       {roleKey !== "requester" && (
         <SelectBox
-          aria-label="회사 선택"
           value={company}
           onChange={(e) => {
             const v = e.target.value;
@@ -145,7 +156,6 @@ export default function RequestFilter({
       {/* ★ 요청자 전용: 부서(업무부서) 필터 셀렉트 */}
       {roleKey === "requester" && (
         <SelectBox
-          aria-label="부서 선택"
           value={dept}
           onChange={(e) => {
             const v = e.target.value;
@@ -154,9 +164,12 @@ export default function RequestFilter({
           }}
         >
           <option value={DEFAULT_DEPT}>{DEFAULT_DEPT}</option>
-          {(deptOptions || []).map((name) => (
-            <option key={name} value={name}>{name}</option>
-          ))}
+          {(deptOptions || [])
+            .map(v => String(v).trim())
+            .filter(Boolean)
+            .map((name) => (
+              <option key={name} value={name}>{name}</option>
+            ))}
         </SelectBox>
       )}
 
@@ -184,7 +197,7 @@ export default function RequestFilter({
             onChange={(e) => {
               const v = e.target.value;
               setDesigner(v);
-              onApplyDesigner?.(v);  // ★ 즉시 반영
+              onApplyDesigner?.(v);
             }}
           >
             <option value={DEFAULT_DESIGNER}>{DEFAULT_DESIGNER}</option>
@@ -224,7 +237,7 @@ const SelectBox = styled.select`
   -webkit-appearance: none;
   -moz-appearance: none;
 
-  width: 125px;
+  width: 135px;
   height: 48px;
   margin-right: 8px;
   padding: 0 12px;

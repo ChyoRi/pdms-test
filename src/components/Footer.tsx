@@ -10,87 +10,107 @@ import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "../firebaseconfig";
 import { doc, getDoc } from "firebase/firestore";
 
-// 회사 상수 및 타입
-const COMPANY = { HOMEPLUS: "homeplus", NSMALL: "nsmall" } as const;
-type CompanyKind = "homeplus" | "nsmall" | null;
+// 링크 아이템 타입
+type LinkItem = { href: string; icon: string; hover: string; key: string };
 
-// 매핑 타입에 slack 항목 추가
-type LinkItem = { href: string; icon: string; hover: string };
-type LinkMap = {
-  slack?: LinkItem;  // ★ 추가
-  chat?: LinkItem;
-  drive?: LinkItem;
+type CompanyDoc = {
+  footer_url?: any; // array
+  company_name?: string;
 };
 
-// 회사별 아이콘/링크 매핑 (HomePlus = Slack + Drive 유지)
-const COMPANY_LINKS: Record<Exclude<CompanyKind, null>, LinkMap> = {
-  homeplus: {
-    // 노출 순서를 Slack → Drive로 하고 싶으면 items 배열 생성 시 그 순서대로 push
-    slack: {
-      href: "https://hmp-m-design.slack.com/?redir=%2Farchives%2FC06TTC8518T%3Fname%3DC06TTC8518T",
-      icon: slackIconGray,
-      hover: slackIconWhite,
-    },
-    drive: {
-      href: "https://drive.google.com/drive/folders/1-hQiEmPEomtaDFgnRqt0bAaxIFEWEvYn",
-      icon: googleDriveIconGray,
-      hover: googleDriveIconWhite,
-    },
-  },
-  nsmall: {
-    // NSmall = Google Chat + Google Drive
-    chat: {
-      href: "https://mail.google.com/chat/u/0/#chat/home",
-      icon: googleChatIconGray,
-      hover: googleChatIconWhite,
-    },
-    drive: {
-      href: "https://drive.google.com/drive/",
-      icon: googleDriveIconGray,
-      hover: googleDriveIconWhite,
-    },
-  },
+// users.company -> companies doc id 변환
+const normalizeCompanyKey = (v: any) => {
+  return String(v ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "");
 };
+
+// unknown 제거 (매칭 안되면 null)
+const detectLinkType = (url: string): "slack" | "drive" | "chat" | null => {
+  const u = String(url || "").toLowerCase();
+  if (u.includes("slack.com")) return "slack";
+  if (u.includes("drive.google.com")) return "drive";
+  if (u.includes("mail.google.com/chat") || u.includes("chat.google.com")) return "chat";
+  return null;
+};
+
+const ICONS = {
+  slack: { icon: slackIconGray, hover: slackIconWhite },
+  drive: { icon: googleDriveIconGray, hover: googleDriveIconWhite },
+  chat: { icon: googleChatIconGray, hover: googleChatIconWhite },
+} as const;
 
 export default function Footer() {
-  const [userCompany, setUserCompany] = useState("");
+  const [footerUrls, setFooterUrls] = useState<string[]>([]); // ★ 유지
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (!user) {
-        setUserCompany("");
+        setFooterUrls([]);
         return;
       }
-      const snap = await getDoc(doc(db, "users", user.uid));
-      if (snap.exists()) {
-        const data = snap.data() as any;
-        setUserCompany(data.company ?? "");
+
+      // 1) users 문서에서 company 읽기
+      const userSnap = await getDoc(doc(db, "users", user.uid));
+      if (!userSnap.exists()) {
+        setFooterUrls([]);
+        return;
+      }
+
+      const userData = userSnap.data() as any;
+      const company = userData.company ?? "";
+
+      // 2) users.company -> companies/{docId} 매칭해서 footer_url 가져오기
+      const companyKey = normalizeCompanyKey(company);
+      if (!companyKey) {
+        setFooterUrls([]);
+        return;
+      }
+
+      const companySnap = await getDoc(doc(db, "companies", companyKey));
+      if (!companySnap.exists()) {
+        setFooterUrls([]);
+        return;
+      }
+
+      const companyData = companySnap.data() as CompanyDoc;
+
+      const raw = companyData.footer_url;
+
+      // 배열만 허용
+      if (Array.isArray(raw)) {
+        const cleaned = raw
+          .map((v) => String(v ?? "").trim())
+          .filter((v) => !!v);
+        setFooterUrls(cleaned);
       } else {
-        setUserCompany("");
+        setFooterUrls([]);
       }
     });
+
     return () => unsub();
   }, []);
 
-   // companyKind 계산
-  const companyKind: CompanyKind = useMemo(() => {
-    const k = String(userCompany ?? "").trim().replace(/\s+/g, "").toLowerCase();
-    if (k === "homeplus") return COMPANY.HOMEPLUS;
-    if (k === "nsmall" || k === "n-small") return COMPANY.NSMALL;
-    return null; // pushcomz 포함: 아이콘 비노출
-  }, [userCompany]);
+  // ★ 변경: 알 수 없는 링크는 렌더링에서 제외 (fallback 없음)
+  const items: LinkItem[] = useMemo(() => {
+    if (!footerUrls || footerUrls.length === 0) return [];
 
-  // 렌더 아이콘 배열 생성 (HomePlus=Slack→Drive, NSmall=Chat→Drive)
-  const items = useMemo(() => {
-    if (!companyKind) return []; // Pushcomz/기타: 아이콘 없음
-    const conf = COMPANY_LINKS[companyKind];
-    const arr: Array<{ href: string; icon: string; hover: string; key: string }> = [];
-    // 노출 우선순위 정의
-    if (conf.slack) arr.push({ href: conf.slack.href, icon: conf.slack.icon, hover: conf.slack.hover, key: "slack" });
-    if (conf.chat)  arr.push({ href: conf.chat.href,  icon: conf.chat.icon,  hover: conf.chat.hover,  key: "chat"  });
-    if (conf.drive) arr.push({ href: conf.drive.href, icon: conf.drive.icon, hover: conf.drive.hover, key: "drive" });
-    return arr;
-  }, [companyKind]);
+    return footerUrls
+      .map((href, idx) => {
+        const t = detectLinkType(href);
+        if (!t) return null; // ★ 변경: unknown skip
+
+        const iconSet = ICONS[t];
+        return {
+          href,
+          icon: iconSet.icon,
+          hover: iconSet.hover,
+          key: `${t}-${idx}`, // 순서 유지
+        };
+      })
+      .filter(Boolean) as LinkItem[];
+  }, [footerUrls]);
 
   return (
     <Container>

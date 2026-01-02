@@ -2,7 +2,7 @@ import styled from "styled-components";
 import { useState, useEffect, useMemo } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "../firebaseconfig";
-import { collection, onSnapshot, query, where, updateDoc, doc, orderBy, getDoc , serverTimestamp } from "firebase/firestore";
+import { collection, onSnapshot, query, where, updateDoc, doc, orderBy, getDoc, serverTimestamp } from "firebase/firestore";
 import RequesterRequestList from "./RequesterRequestList";
 import MainTitle from "./MainTitle";
 import RequestFilterSearchWrap from "./RequestFilterSearchWrap";
@@ -28,24 +28,6 @@ interface RequesterProps {
 const DEFAULT_STATUS = "진행 상태 선택";
 const DEFAULT_DEPT = "부서 선택";
 
-// 회사별 부서 옵션(요청서 작성폼의 로직과 동일하게 맞추면 됨)
-const DEPT_OPTIONS_BY_COMPANY: Record<string, string[]> = {
-  HomePlus: ["GHS", "MHC"],
-  NSmall: [
-    "M영업기획팀",
-    "디지털마케팅팀",
-    "M상품1팀",
-    "M상품2팀",
-    "M상품3팀",
-    "TV영업기획팀",
-    "TC영업기획팀",
-    "미디어컨텐츠팀",
-    "전략기획팀",
-    "마케팅본부직할",
-    "MC서비스기획팀",
-  ],
-};
-
 // 회사 문자열 변형 세트(공백 trim + 대/소문자 변형)
 const companyVariants = (raw: string) => {
   const t = (raw ?? "").trim();
@@ -53,7 +35,6 @@ const companyVariants = (raw: string) => {
   const lower = t.toLowerCase();
   const upper = t.toUpperCase();
   const cap = t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
-  // 중복 제거
   return Array.from(new Set([t, lower, upper, cap]));
 };
 
@@ -70,6 +51,9 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
   const [dateRange, setDateRange] = useState<{ start: Date | null; end: Date | null }>({ start: null, end: null });
   const [deptFilter, setDeptFilter] = useState<string>(DEFAULT_DEPT);
 
+  // Firestore companies.task_form 기반 부서 옵션 state
+  const [deptOptions, setDeptOptions] = useState<string[]>([]);
+
   // 🔍 검색: 입력값과 적용값 분리
   const [keywordInput, setKeywordInput] = useState<string>(""); // 인풋 바인딩(타이핑용)
   const [keyword, setKeyword] = useState<string>("");           // 검색 버튼 클릭 시에만 적용
@@ -77,7 +61,6 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
   const lockOthers = view === "allrequestlist";
   // CSV로 추출 상태
   const [exporting, setExporting] = useState(false);
-
   const [readLocal, setReadLocal] = useState<{ [id: string]: number }>({});
 
   // ✅ 로그인 사용자 이름 가져오기
@@ -99,6 +82,38 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
     });
     return () => unsubscribe();
   }, []);
+
+  // companies에서 company_name == userCompany 로 task_form 구독
+  useEffect(() => {
+    if (!userCompany) {
+      setDeptOptions([]);
+      return;
+    }
+
+    const qRef = query(
+      collection(db, "companies"),
+      where("company_name", "==", userCompany.trim())
+    );
+
+    const unsub = onSnapshot(qRef, (qs) => {
+      if (qs.empty) {
+        setDeptOptions([]);
+        return;
+      }
+
+      // company_name이 유니크하다는 전제: 첫 문서 사용
+      const data = qs.docs[0].data() as any;
+
+      const forms = Array.isArray(data?.task_form) ? data.task_form : [];
+      const cleaned = forms
+        .map((v: any) => String(v ?? "").trim())
+        .filter(Boolean);
+
+      setDeptOptions(cleaned);
+    });
+
+    return () => unsub();
+  }, [userCompany]); // ★ 추가
 
   // ✅ 요청자가 보낸 요청만 가져오기
   // 요청 데이터: view에 따라 쿼리 스위칭
@@ -173,12 +188,6 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
     if (!statusFromAside) return;
     setStatusFilter(statusFromAside);
   }, [statusFromAside])
-
-  // 부서 옵션 계산 – 회사별 고정 목록
-  const deptOptions = useMemo(() => {
-    if (!userCompany) return [];
-    return DEPT_OPTIONS_BY_COMPANY[userCompany] ?? [];
-  }, [userCompany]);
 
   // 필터 적용 콜백 (하위에서 올라옴)
   const applyRange  = (r: { start: Date | null; end: Date | null }) => setDateRange(r); // ⬅️ 추가
@@ -306,9 +315,6 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
     const ref = doc(db, "design_request", id);
     const snap = await getDoc(ref);
     if (!snap.exists()) return;
-    const data = snap.data() as RequestData;
-    const prevStatus = data.status || "대기";
-    const designRequestId = data.design_request_id;
 
     // 1) 상태 업데이트
     await updateDoc(ref, {
@@ -324,14 +330,6 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
           : req
       )
     );
-
-    // ★ 3) 히스토리 댓글 기록
-    if (designRequestId) {
-      await addHistoryComment(
-        designRequestId,
-        `${userName} 님이 검수를 완료했습니다. (상태: '${prevStatus}' → '완료')`
-      );
-    }
 
     alert("완료 처리되었습니다.");
   };
@@ -353,9 +351,8 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
   const requestRevision = async (id: string) => {
     if (!canMutate(id, "revision")) return;
 
-    // ★ 추가: 이전 상태/문서번호 확보
+    // 이전 상태/문서번호 확보
     const row = requests.find((r) => r.id === id);
-    const prevStatus = row?.status || "대기";
     const designRequestId = row?.design_request_id;
 
     try {
@@ -382,7 +379,7 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
       if (designRequestId) {
         await addHistoryComment(
           designRequestId,
-          `${userName} 님이 디자인 수정요청을 보냈습니다. (상태: '${prevStatus}' → '수정')`
+          `${userName} 님이 디자인 수정요청을 보냈습니다.`
         );
       }
 
@@ -548,7 +545,7 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
       <MainTitle userRole={userRole} />
       {view === "dashboard" && (
         <DashBoardWrap>
-          <DashBoard capacityHoursPerMonth={704} />
+          <DashBoard />
         </DashBoardWrap>
       )}
 

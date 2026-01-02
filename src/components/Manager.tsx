@@ -2,7 +2,20 @@ import styled from "styled-components";
 import { useEffect, useState, useMemo } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "../firebaseconfig";
-import { doc, updateDoc, collection, getDocs, onSnapshot, query, where, orderBy, arrayUnion, arrayRemove, serverTimestamp } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  updateDoc,
+  collection,
+  getDocs,
+  onSnapshot,
+  query,
+  where,
+  orderBy,
+  arrayUnion,
+  arrayRemove,
+  serverTimestamp,
+} from "firebase/firestore";
 import ManagerRequestList from "./ManagerRequestList";
 import MainTitle from "./MainTitle";
 import RequestFilterSearchWrap from "./RequestFilterSearchWrap";
@@ -11,7 +24,6 @@ import DashBoard from "./DashBoard";
 import ExportCSV from "./ExportCSV";
 import { makeSearchIndex, matchesQuery } from "../utils/search";
 import { downloadArrayToCSV } from "../utils/firestoreToCSV";
-import { addHistoryComment } from "../utils/commentHistory"
 
 type ViewType = "dashboard" | "myrequestlist" | "allrequestlist" | "inworkhour";
 
@@ -28,69 +40,114 @@ interface RequesterProps {
 const DEFAULT_STATUS = "진행 상태 선택";
 const DEFAULT_REQUESTER = "요청자 선택";
 const DEFAULT_DESIGNER = "디자이너 선택";
-const DEFAULT_COMPANY  = "회사 선택";
+const DEFAULT_COMPANY = "회사 선택";
 
 const norm = (v: any) => String(v ?? "").trim();
 
-// 회사/필드 기준으로 times(배율)만 정확 매칭해서 가져오기
-async function getWorkTimesForRequest(req: RequestData): Promise<number> {
-  const company = norm((req as any).company).toLowerCase();
+// 회사 키 정규화 (docId/표시명 공통 처리)
+const normalizeCompanyKey = (v: any) =>
+  String(v ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "");
 
-  // 1) NSmall → task_type + task_type_detail 일치
-  if (company === "nsmall") {
-    const qRef = query(
-      collection(db, "nsmall_task_work_hour"),
-      where("nsmall_task_type", "==", norm((req as any).task_type)),
-      where("nsmall_task_type_detail", "==", norm((req as any).task_type_detail))
+// companies 문서 타입(필요한 필드만)
+type CompanyOptionsDoc = {
+  company_name?: string;
+  task_work_hour_form?: any;
+};
+
+// 공수 스펙에서 (form/type/detail)로 {base,times} 조회 (RequestForm과 같은 로직)
+const getWorkHourFromCompanySpec = (
+  spec: any,
+  task_form?: string,
+  task_type?: string,
+  task_type_detail?: string
+): { base: number | null; times: number | null } => {
+  const f = norm(task_form);
+  const t = norm(task_type);
+  const d = norm(task_type_detail);
+
+  if (!spec || typeof spec !== "object" || !t) return { base: null, times: null };
+
+  // homeplus처럼 spec[form][type] 구조인지 판별
+  const looksLikeFormSpec = !!(f && spec[f] && typeof spec[f] === "object");
+
+  const baseNode = looksLikeFormSpec ? spec[f]?.[t] : spec[t];
+  if (!baseNode || typeof baseNode !== "object") return { base: null, times: null };
+
+  // (A) leaf: {hour, times}
+  if (typeof baseNode.hour === "number" && typeof baseNode.times === "number") {
+    return { base: baseNode.hour, times: baseNode.times };
+  }
+
+  // (B) detail: { [detail]: {hour, times} }
+  if (d && baseNode[d] && typeof baseNode[d] === "object") {
+    const leaf = baseNode[d];
+    return {
+      base: typeof leaf.hour === "number" ? leaf.hour : null,
+      times: typeof leaf.times === "number" ? leaf.times : null,
+    };
+  }
+
+  return { base: null, times: null };
+};
+
+// 회사/필드 기준으로 times(배율)만 companies 통합 문서에서 가져오기
+async function getWorkTimesForRequest(
+  req: RequestData,
+  companyDocMap?: Record<string, CompanyOptionsDoc>
+): Promise<number> {
+  const companyRaw = (req as any)?.company;
+  const key = normalizeCompanyKey(companyRaw);
+
+  // 1) 캐시(map)에서 먼저 찾기: docId/표시명(company_name) 모두 키로 들어있게 구성할 예정
+  const cached = companyDocMap?.[key];
+  if (cached?.task_work_hour_form) {
+    const { times } = getWorkHourFromCompanySpec(
+      cached.task_work_hour_form,
+      (req as any)?.task_form,
+      (req as any)?.task_type,
+      (req as any)?.task_type_detail
     );
-    const snap = await getDocs(qRef);
-    if (!snap.empty) {
-      const data = snap.docs[0].data() as any;
-      const times = Number(data.nsmall_task_work_times);
-      return Number.isFinite(times) ? times : 1;
-    }
-    return 1; // 못 찾으면 1
+    return typeof times === "number" && Number.isFinite(times) ? times : 1;
   }
 
-  // 2) Homeplus → task_form + task_type 일치
-  if (company === "homeplus") {
-    const qRef = query(
-      collection(db, "homeplus_task_work_hour"),
-      where("homeplus_task_form", "==", norm((req as any).task_form)),
-      where("homeplus_task_type", "==", norm((req as any).task_type))
-    );
-    const snap = await getDocs(qRef);
-    if (!snap.empty) {
-      const data = snap.docs[0].data() as any;
-      const times = Number(data.homeplus_task_work_times);
-      return Number.isFinite(times) ? times : 1;
+  // 2) 캐시에 없으면 docId로 직접 조회 시도 (회사 필드가 docId로 저장된 케이스)
+  if (key) {
+    const snap = await getDoc(doc(db, "companies", key));
+    if (snap.exists()) {
+      const data = snap.data() as CompanyOptionsDoc;
+      const { times } = getWorkHourFromCompanySpec(
+        (data as any)?.task_work_hour_form,
+        (req as any)?.task_form,
+        (req as any)?.task_type,
+        (req as any)?.task_type_detail
+      );
+      return typeof times === "number" && Number.isFinite(times) ? times : 1;
     }
-    return 1;
   }
 
-  // 3) 기타 회사일 때만 기존 공용 테이블 폴백
-  const fbSnap = await getDocs(
-    query(
-      collection(db, "task_work_hour"),
-      where("task_form", "==", norm((req as any).task_form)),
-      where("task_type", "==", norm((req as any).task_type))
-    )
-  );
-  if (!fbSnap.empty) {
-    const times = Number((fbSnap.docs[0].data() as any).task_work_times);
-    return Number.isFinite(times) ? times : 1;
-  }
+  // 3) 끝까지 못 찾으면 1
   return 1;
 }
 
 const isSameMonth = (d: Date, base = new Date()) =>
   d.getFullYear() === base.getFullYear() && d.getMonth() === base.getMonth();
 
-export default function Manager({ view, setIsDrawerOpen, setDetailData, userRole, statusFromAside, clearStatusFromAside, filterResetKey }: RequesterProps) {
+export default function Manager({
+  view,
+  setIsDrawerOpen,
+  setDetailData,
+  userRole,
+  statusFromAside,
+  clearStatusFromAside,
+  filterResetKey,
+}: RequesterProps) {
   const [requests, setRequests] = useState<RequestData[]>([]);
   const [designerList, setDesignerList] = useState<any[]>([]);
-  const [userUid, setUserUid]   = useState("");
-  const [managerName, setManagerName] = useState("");
+  const [userUid, setUserUid] = useState("");
+  const [/*managerName*/, setManagerName] = useState("");
   const [selectedDesigners, setSelectedDesigners] = useState<{ [id: string]: string[] }>({});
   // 공수 입력칸(행별) 컨트롤드 상태
   const [workHours, setWorkHours] = useState<{ [id: string]: string }>({});
@@ -114,6 +171,16 @@ export default function Manager({ view, setIsDrawerOpen, setDetailData, userRole
 
   // 항목별 내가 마지막으로 읽은 시간(ms) 로컬 캐시
   const [readLocal, setReadLocal] = useState<{ [id: string]: number }>({});
+
+  // ★ 추가: companies 문서 캐시 (docId/표시명 둘 다 키로 매핑)
+  const [companyDocMap, setCompanyDocMap] = useState<Record<string, CompanyOptionsDoc>>({});
+
+  // ★ 추가: 회사 비교용 정규화(문서ID nsmall vs 표시명 NSmall 모두 매칭) - 기존 유지
+  const companyKey = (v: any) =>
+    String(v ?? "")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, "");
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user) => {
@@ -141,7 +208,10 @@ export default function Manager({ view, setIsDrawerOpen, setDetailData, userRole
     // 매니저는 myrequestlist도 '전체'와 동일하게 처리(원한다면 별도 규칙으로 분기 가능)
     const qRef = query(collection(db, "design_request"), orderBy("design_request_id", "desc"));
     const unsubscribe = onSnapshot(qRef, (snapshot) => {
-      const data = snapshot.docs.map((doc) => ({ id: doc.id, ...(doc.data() as Omit<RequestData, "id">) }));
+      const data = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...(doc.data() as Omit<RequestData, "id">),
+      }));
       setRequests(data);
     });
     return () => unsubscribe();
@@ -186,7 +256,7 @@ export default function Manager({ view, setIsDrawerOpen, setDetailData, userRole
     const fetchDesigners = async () => {
       const q = query(collection(db, "users"), where("role", "==", 2));
       const snapshot = await getDocs(q);
-      const designers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const designers = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       setDesignerList(designers);
       // ★ 필터용 옵션 (이름 배열)
       setDesignerOptions(
@@ -198,23 +268,36 @@ export default function Manager({ view, setIsDrawerOpen, setDetailData, userRole
     fetchDesigners();
   }, []);
 
-  // 회사 옵션 동적 수집 (users.company)
+  //companies 컬렉션을 "옵션 목록 + times 계산용 캐시" 둘 다로 사용
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, "users"), (snap) => {
-      const s = new Set<string>();
-      snap.forEach(d => {
-        const name = String((d.data() as any).company ?? "").trim();
-        if (!name) return;
-        s.add(name);
+    const unsub = onSnapshot(collection(db, "companies"), (snap) => {
+      const optionSet = new Set<string>();
+      const map: Record<string, CompanyOptionsDoc> = {};
+
+      snap.forEach((d) => {
+        const data = d.data() as any;
+        const docId = String(d.id ?? "").trim();
+        const name = String(data?.company_name ?? docId ?? "").trim();
+        if (name) optionSet.add(name);
+
+        const normalizedDocId = normalizeCompanyKey(docId);
+        const normalizedName = normalizeCompanyKey(name);
+
+        // 캐시에 저장 (docId 기준)
+        if (normalizedDocId) map[normalizedDocId] = data as CompanyOptionsDoc;
+        // 표시명 기준도 같은 문서를 가리키게 저장 (회사 필드가 표시명으로 들어오는 케이스 대비)
+        if (normalizedName) map[normalizedName] = data as CompanyOptionsDoc;
       });
-      setCompanyOptions(Array.from(s).sort());
+
+      setCompanyOptions(Array.from(optionSet).sort((a, b) => a.localeCompare(b, "ko")));
+      setCompanyDocMap(map); // ★ 추가
     });
     return () => unsub();
   }, []);
 
   // ✅ 디자이너 선택
   const designerSelect = (requestId: string, names: string[]) => {
-    setSelectedDesigners(prev => ({ ...prev, [requestId]: names }));
+    setSelectedDesigners((prev) => ({ ...prev, [requestId]: names }));
   };
 
   // ✅ 디자이너 배정
@@ -225,12 +308,6 @@ export default function Manager({ view, setIsDrawerOpen, setDetailData, userRole
       return;
     }
 
-    const req = requests.find((r) => r.id === requestId); // ★ 추가
-    const designRequestId = req?.design_request_id;
-    const prevAssignees = Array.isArray(req?.assigned_designers)
-      ? req!.assigned_designers
-      : [];
-
     const docRef = doc(db, "design_request", requestId);
     await updateDoc(docRef, {
       assigned_designers: arrayUnion(...selected),
@@ -239,42 +316,16 @@ export default function Manager({ view, setIsDrawerOpen, setDetailData, userRole
     // 선택 초기화(헷갈림 방지)
     setSelectedDesigners((prev) => ({ ...prev, [requestId]: [] }));
 
-    // ★ 히스토리 댓글
-    if (designRequestId) {
-      const actor = managerName || "매니저";
-      const added = selected.join(", ");
-      const before = prevAssignees.length ? prevAssignees.join(", ") : "-";
-      await addHistoryComment(
-        designRequestId,
-        `${actor} 님이 디자이너를 배정했습니다. (추가: ${added}, 기존: ${before})`
-      );
-    }
-
     alert("디자이너가 배정되었습니다!");
   };
 
   // ★ 추가: 디자이너 배정 해제
   const unassignDesigner = async (requestId: string, designerNameToRemove: string) => {
-    const req = requests.find((r) => r.id === requestId);
-    const designRequestId = req?.design_request_id;
-
     const docRef = doc(db, "design_request", requestId);
     await updateDoc(docRef, { assigned_designers: arrayRemove(designerNameToRemove) });
-
-    if (designRequestId) {
-      const actor = managerName || "매니저";
-      await addHistoryComment(
-        designRequestId,
-        `${actor} 님이 디자이너 배정을 해제했습니다. (해제: ${designerNameToRemove})`
-      );
-    }
   };
 
   const sendToRequester = async (requestId: string) => {
-    const req = requests.find((r) => r.id === requestId); // ★ 추가
-    const designRequestId = req?.design_request_id;
-    const prevStatus = req?.status ?? "대기";
-
     await updateDoc(doc(db, "design_request", requestId), {
       manager_review_status: "검수완료",
       status: "검수중",
@@ -282,20 +333,9 @@ export default function Manager({ view, setIsDrawerOpen, setDetailData, userRole
 
     setRequests((prev) =>
       prev.map((rq) =>
-        rq.id === requestId
-          ? { ...rq, manager_review_status: "검수완료", status: "검수중" }
-          : rq
+        rq.id === requestId ? { ...rq, manager_review_status: "검수완료", status: "검수중" } : rq
       )
     );
-
-    // ★ 히스토리 댓글
-    if (designRequestId) {
-      const actor = managerName || "매니저";
-      await addHistoryComment(
-        designRequestId,
-        `${actor} 님이 산출물을 검수 완료하여 요청자 확인 단계로 전달했습니다. (상태: '${prevStatus}' → '검수중')`
-      );
-    }
 
     alert("요청자에게 전달되었습니다.");
   };
@@ -305,9 +345,7 @@ export default function Manager({ view, setIsDrawerOpen, setDetailData, userRole
     (async () => {
       const q = query(collection(db, "users"), where("role", "==", 1));
       const snap = await getDocs(q);
-      const names = snap.docs
-        .map((d) => (d.data() as any).name)
-        .filter(Boolean);
+      const names = snap.docs.map((d) => (d.data() as any).name).filter(Boolean);
       setRequesterOptions(names);
     })();
   }, []);
@@ -316,7 +354,7 @@ export default function Manager({ view, setIsDrawerOpen, setDetailData, userRole
   const openDetail = async (item: RequestData) => {
     if (userUid) {
       const now = Date.now();
-      setReadLocal(prev => ({ ...prev, [item.id]: now }));
+      setReadLocal((prev) => ({ ...prev, [item.id]: now }));
 
       try {
         // ★ 변경: 업데이트 payload를 객체로 만든 뒤, 조건에 따라 필드 추가
@@ -333,10 +371,7 @@ export default function Manager({ view, setIsDrawerOpen, setDetailData, userRole
         }
 
         await updateDoc(doc(db, "design_request", item.id), updates);
-      } catch (e) {
-        // 필요하면 콘솔 정도만
-        // console.error(e);
-      }
+      } catch (e) {}
     }
 
     setDetailData(item);
@@ -388,9 +423,7 @@ export default function Manager({ view, setIsDrawerOpen, setDetailData, userRole
   const prepared = useMemo(() => {
     return requests.map((r: any) => {
       const displayStatus = mapStatusForManager(r.status);
-      const assignedStr = Array.isArray(r.assigned_designers)
-        ? r.assigned_designers.join(", ")
-        : "";
+      const assignedStr = Array.isArray(r.assigned_designers) ? r.assigned_designers.join(", ") : "";
       return makeSearchIndex({ ...r, displayStatus, assigned_display: assignedStr });
     });
   }, [requests]);
@@ -399,10 +432,10 @@ export default function Manager({ view, setIsDrawerOpen, setDetailData, userRole
   const viewList = useMemo(() => {
     const s = dateRange.start ? toMidnight(dateRange.start) : null;
     const e = dateRange.end ? toMidnight(dateRange.end) : null;
-    const dateFilterOn = !!(s && e);       // ★ 기존
-    const today = new Date();              // ★ 추가
+    const dateFilterOn = !!(s && e); // ★ 기존
+    const today = new Date(); // ★ 추가
     const q = keyword.trim();
-    const searchOn = !!q;                  // ★ 추가
+    const searchOn = !!q; // ★ 추가
 
     return prepared.filter((r: any) => {
       const status = String(r.status ?? "").trim();
@@ -410,60 +443,42 @@ export default function Manager({ view, setIsDrawerOpen, setDetailData, userRole
 
       // 날짜 범위 선택된 경우: request_date 기준, 완료/취소/상태 무시
       if (dateFilterOn) {
-        const rd =
-          parseLoose(r.request_date) ||
-          parseLoose(r.requested_at) ||
-          parseLoose(r.requestDate);
+        const rd = parseLoose(r.request_date) || parseLoose(r.requested_at) || parseLoose(r.requestDate);
         if (!rd || rd < s! || rd > e!) return false;
       } else {
         // 날짜 범위 미선택: 이번 달 이전 완료/취소는 검색 없을 때만 숨김
-        const cd =
-          parseLoose(r.completion_date) ||
-          parseLoose((r as any).complete_date) ||
-          null;
+        const cd = parseLoose(r.completion_date) || parseLoose((r as any).complete_date) || null;
         const keepThisMonth = cd ? isSameMonth(cd, today) : false;
 
         if (!searchOn && isDone && !keepThisMonth) return false; // ★ 변경
 
         // 상태 필터 (기간 미선택일 때만)
-        if (
-          statusFilter !== DEFAULT_STATUS &&
-          r.status !== statusFilter
-        ) {
+        if (statusFilter !== DEFAULT_STATUS && r.status !== statusFilter) {
           return false;
         }
       }
 
       // 요청자 필터
-      if (
-        requesterFilter !== DEFAULT_REQUESTER &&
-        r.requester !== requesterFilter
-      )
-        return false;
+      if (requesterFilter !== DEFAULT_REQUESTER && r.requester !== requesterFilter) return false;
 
       // 디자이너 필터
       if (designerFilter !== DEFAULT_DESIGNER) {
-        const arr = Array.isArray(r.assigned_designers)
-          ? r.assigned_designers
-          : [];
+        const arr = Array.isArray(r.assigned_designers) ? r.assigned_designers : [];
         const single = r.assigned_designer ?? "";
-        if (!(arr.includes(designerFilter) || single === designerFilter))
-          return false;
+        if (!(arr.includes(designerFilter) || single === designerFilter)) return false;
       }
 
-      // 회사 필터
-      if (
-        companyFilter !== DEFAULT_COMPANY &&
-        String(r.company) !== companyFilter
-      )
-        return false;
+      // 회사 필터 정규화 비교(표시명/문서ID 섞여도 매칭)
+      if (companyFilter !== DEFAULT_COMPANY) {
+        if (companyKey(r.company) !== companyKey(companyFilter)) return false;
+      }
 
       // 검색어 (문서번호 + 작업항목 등)
       if (q && !matchesQuery(r, q)) return false;
 
       return true;
     });
-  }, [ prepared, statusFilter, requesterFilter, designerFilter, companyFilter, dateRange, keyword ]);
+  }, [prepared, statusFilter, requesterFilter, designerFilter, companyFilter, dateRange, keyword]);
 
   // [EXISTING] 공수 입력값 변경
   const changeWorkHour = (requestId: string, val: string) => {
@@ -478,9 +493,7 @@ export default function Manager({ view, setIsDrawerOpen, setDetailData, userRole
       work_hour_edit_state: true,
     });
     setRequests((prev) =>
-      prev.map((r) =>
-        r.id === requestId ? { ...r, work_hour_edit_state: true } : r
-      )
+      prev.map((r) => (r.id === requestId ? { ...r, work_hour_edit_state: true } : r))
     );
     // 입력칸에 현재 out_work_hour가 없다면 채워줌
     setWorkHours((prev) => ({
@@ -497,7 +510,8 @@ export default function Manager({ view, setIsDrawerOpen, setDetailData, userRole
   /**
    * [CHANGED] 공수 저장:
    * - 입력값 → out_work_hour(그대로 저장)
-   * - 입력값 × 배율 → in_work_hour(계산 저장)
+   * - 입력값 × 배율(times) → in_work_hour(계산 저장)
+   * - 배율(times)은 companies/{companyKey}.task_work_hour_form 기준으로 계산
    * - 저장 후 work_hour_edit_state = false
    */
   const saveWorkHour = async (requestId: string) => {
@@ -511,15 +525,15 @@ export default function Manager({ view, setIsDrawerOpen, setDetailData, userRole
       return;
     }
 
-    // ⬇ 배율을 회사/업무타입 기준으로 조회
-    const multiplier = await getWorkTimesForRequest(req);
+    // ★ 변경: 배율을 companies 통합 문서에서 조회
+    const multiplier = await getWorkTimesForRequest(req, companyDocMap);
 
     // 소수 오차 최소화(최대 3자리 유지)
     const computedIn = Math.round(input * multiplier * 1000) / 1000;
 
     await updateDoc(doc(db, "design_request", requestId), {
-      out_work_hour: input,        // 매니저 입력값 그대로
-      in_work_hour: computedIn,    // 회사별 배율 적용 값
+      out_work_hour: input, // 매니저 입력값 그대로
+      in_work_hour: computedIn, // 회사별 times 적용 값
       work_hour_edit_state: false,
     });
 
@@ -555,24 +569,24 @@ export default function Manager({ view, setIsDrawerOpen, setDetailData, userRole
     try {
       // CSV 컬럼 순서(요구사항 그대로)
       const fields = [
-        "design_request_id",   // 문서번호
-        "request_date",        // 요청일
-        "completion_date",     // 완료요청일
-        "open_date",           // 오픈일
-        "merchandiser",        // 담당MD
-        "requester",           // 요청자
-        "task_form",           // 업무부서
-        "task_type",           // 업무형태
-        "task_type_detail",    // 업무형태상세
-        "requirement",         // 작업항목
-        "url",                 // 요청서URL
-        "note",                // 메모
-        "status",              // 진행상태
-        "result_url",          // 산출물URL
+        "design_request_id", // 문서번호
+        "request_date", // 요청일
+        "completion_date", // 완료요청일
+        "open_date", // 오픈일
+        "merchandiser", // 담당MD
+        "requester", // 요청자
+        "task_form", // 업무부서
+        "task_type", // 업무형태
+        "task_type_detail", // 업무형태상세
+        "requirement", // 작업항목
+        "url", // 요청서URL
+        "note", // 메모
+        "status", // 진행상태
+        "result_url", // 산출물URL
         "designer_start_date", // 디자인 시작일
-        "designer_end_date",   // 디자인 종료일
-        "assigned_designers",   // 디자이너
-        "work_hour",           // 공수 (단일)
+        "designer_end_date", // 디자인 종료일
+        "assigned_designers", // 디자이너
+        "work_hour", // 공수 (단일)
       ] as const;
 
       const headers: Record<(typeof fields)[number], string> = {
@@ -598,9 +612,7 @@ export default function Manager({ view, setIsDrawerOpen, setDetailData, userRole
 
       // viewList -> CSV용 매핑(키 맞춤 + 날짜 포맷 + 공수 단일화)
       const rowsForCsv = (viewList as any[]).map((r) => {
-        const assigned = Array.isArray(r.assigned_designers)
-          ? r.assigned_designers.join(", ")
-          : "";
+        const assigned = Array.isArray(r.assigned_designers) ? r.assigned_designers.join(", ") : "";
         return {
           design_request_id: r.design_request_id ?? "",
           request_date: toYmd(r.request_date ?? r.requested_at ?? r.requestDate),
@@ -639,24 +651,22 @@ export default function Manager({ view, setIsDrawerOpen, setDetailData, userRole
     await updateDoc(doc(db, "design_request", requestId), {
       work_hour_edit_state: false,
     });
-    setRequests(prev =>
-      prev.map(r =>
-        r.id === requestId ? { ...r, work_hour_edit_state: false } : r
-      )
+    setRequests((prev) =>
+      prev.map((r) => (r.id === requestId ? { ...r, work_hour_edit_state: false } : r))
     );
   };
 
   return (
     <>
-      <MainTitle userRole={userRole}/>
+      <MainTitle userRole={userRole} />
       {view === "myrequestlist" && (
         <MainContentWrap>
-          <RequestFilterSearchWrap 
+          <RequestFilterSearchWrap
             roleNumber={3}
-            onApplyStatus={applyStatus} 
-            onApplyRange={applyRange} 
-            onSearch={applySearch} 
-            keyword={keywordInput} 
+            onApplyStatus={applyStatus}
+            onApplyRange={applyRange}
+            onSearch={applySearch}
+            keyword={keywordInput}
             onKeywordChange={setKeywordInput}
             onResetFilters={clearStatusFromAside}
             resetKey={filterResetKey}
@@ -670,7 +680,7 @@ export default function Manager({ view, setIsDrawerOpen, setDetailData, userRole
             onApplyCompany={applyCompany}
           />
           <ExportCSV onClick={handleExportCSV} loading={exporting} />
-          <ManagerRequestList 
+          <ManagerRequestList
             data={viewList}
             userUid={userUid}
             designerList={designerList}
@@ -692,7 +702,7 @@ export default function Manager({ view, setIsDrawerOpen, setDetailData, userRole
       )}
       {view === "dashboard" && (
         <DashBoardWrap>
-          <DashBoard capacityHoursPerMonth={704} />
+          <DashBoard />
         </DashBoardWrap>
       )}
       {view === "inworkhour" && (
@@ -724,4 +734,4 @@ const InWorkHourWrap = styled.div`
   flex-direction: column;
   height: calc(100vh - 178px);
   padding-bottom: 24px;
-`
+`;

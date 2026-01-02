@@ -23,7 +23,7 @@ export default function Main({ userRole, setIsDrawerOpen, setEditData, setDetail
   const view = (searchParams.get("view") || "dashboard") as ViewType;
 
   // view 파라미터 기본값 강제 주입 (직접 /main 진입 시)
-  useEffect(() => { // ★ 추가
+  useEffect(() => {
     if (!searchParams.get("view")) {
       setSearchParams(prev => {
         const sp = new URLSearchParams(prev);

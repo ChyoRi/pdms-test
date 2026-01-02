@@ -67,7 +67,58 @@ export default function DesignerRequestItem({
     return v ? Date.now() : undefined;
   };
 
-  const hasUrl = !!item.url && item.url.trim().length > 0;
+  // url(string[]) 정규화(빈값 제거 + trim + 중복 제거)
+  const normalizeUrlArray = (raw?: any): string[] => {
+    if (!raw) return [];
+
+    // 1) 이미 배열로 저장된 경우
+    if (Array.isArray(raw)) {
+      const cleaned = raw
+        .map((v) => (typeof v === "string" ? v.trim() : ""))
+        .filter(Boolean);
+      return Array.from(new Set(cleaned));
+    }
+
+    // 2) 문자열로 저장된 경우 (여러 줄/쉼표/공백 포함)
+    const text = String(raw);
+
+    // 가장 정확: http/https URL 직접 추출
+    const httpMatches = text.match(/https?:\/\/[^\s<>"']+/g) || [];
+
+    const clean = (u: string) =>
+      u.trim().replace(/[)\]}>,.;:!?]+$/g, ""); // 뒤 문장부호 제거
+
+    let urls = httpMatches.map(clean).filter(Boolean);
+
+    // http URL이 없으면 토큰 분리 후 프로토콜 보정
+    if (urls.length === 0) {
+      const tokens = text
+        .split(/[\n\r\t ]+|,+/g)
+        .map((t) => t.trim())
+        .filter(Boolean);
+
+      urls = tokens
+        .map(clean)
+        .map((t) => {
+          if (/^https?:\/\//i.test(t)) return t;
+          if (/^(www\.)/i.test(t)) return `https://${t}`;
+          if (/^drive\.google\.com\//i.test(t)) return `https://${t}`;
+          if (/^docs\.google\.com\//i.test(t)) return `https://${t}`;
+          return "";
+        })
+        .filter(Boolean);
+    }
+
+    return Array.from(new Set(urls));
+  };
+
+  // 대표 URL(아이콘 클릭 시 열리는 링크) - 첫 번째만 사용
+  const getPrimaryUrl = (urls: string[]) => urls[0];
+
+  // url 처리도 요청자와 동일하게 (string[] 기반)
+  const urls = normalizeUrlArray((item as any)?.url); // ★ 변경
+  const hasUrl = urls.length > 0;                     // ★ 변경
+  const urlHref = hasUrl ? getPrimaryUrl(urls) : undefined; // ★ 추가
 
   const lastAt   = toMillisSafe((item as any)?.comments_last_date);
   const readRaw  = (item as any)?.comment_read_by?.[currentUid ?? ""];
@@ -157,8 +208,8 @@ export default function DesignerRequestItem({
         </RequestListEmergencyWrap>
       </RequestListRequirementTd>
       <RequestListTableTd>
-        {hasUrl ? (
-          <UrlLink href={item.url} target="_blank" $isCompleted={isEnded} />
+        {urlHref ? (
+          <UrlLink href={urlHref} target="_blank" rel="noreferrer" $isCompleted={isEnded} />
         ) : null}
       </RequestListTableTd>
       <RequestListMemoTd>
