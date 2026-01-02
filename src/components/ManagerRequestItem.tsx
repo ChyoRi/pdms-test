@@ -3,7 +3,7 @@ import urlIcon from "../assets/url-icon.svg";
 import urlIconGray from "../assets/url-icon-gray.svg"
 import commentIcon from "../assets/comment.svg";
 import commentIconGray from "../assets/comment_gray.svg"
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { auth } from "../firebaseconfig";
 
 interface ManagerRequestItemProps {
@@ -84,6 +84,30 @@ export default function ManagerRequestItem({
   const assignedList: string[] = Array.isArray((item as any).assigned_designers)
     ? (item as any).assigned_designers
     : ((item as any).assigned_designer ? [(item as any).assigned_designer] : []);
+
+  // 허수계정 판별 (DB name 자체가 .../… 로 끝나는 케이스)
+  const isDummyByName = (name: string) => {
+    const n = String(name ?? "").trim();
+    return !!n && n.startsWith("★");
+  };
+
+  // 디자이너 목록 그룹 분리 (실계정 먼저, 허수계정은 아래)
+  const { realDesigners, dummyDesigners } = useMemo(() => {
+    const list = (designerList ?? []).map((d) => ({
+      ...d,
+      __name: String(d?.name ?? "").trim(),
+    }));
+
+    const real = list
+      .filter((d) => d.__name && !isDummyByName(d.__name))
+      .sort((a, b) => a.__name.localeCompare(b.__name, "ko"));
+
+    const dummy = list
+      .filter((d) => d.__name && isDummyByName(d.__name))
+      .sort((a, b) => a.__name.localeCompare(b.__name, "ko"));
+
+    return { realDesigners: real, dummyDesigners: dummy };
+  }, [designerList]);
 
   // ★ 멀티 선택 onChange
   const onChangeSingle = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -296,20 +320,39 @@ export default function ManagerRequestItem({
         {/* ★ 멀티 셀렉트 + 이미 배정된 사람은 disabled */}
         <AssignRow>
           <AssignSelect
-            value={selectedDesigners[0] ?? ""}  // 한 명만 표시
+            value={selectedDesigners[0] ?? ""} // 한 명만 표시
             onChange={onChangeSingle}
             disabled={isDoneOrCanceled}
           >
-            <option value="">선택</option>      {/* placeholder */}
-            {designerList.map((designer) => {
-              const name = designer.name as string;
-              const used = assignedList.includes(name);
-              return (
-                <option key={designer.id} value={name} disabled={used}>
-                  {name}{used ? " (배정됨)" : ""}
-                </option>
-              );
-            })}
+            <option value="">선택</option> {/* placeholder */}
+
+            <optgroup label="디자이너">
+              {realDesigners.map((designer: any) => {
+                const name = designer.__name as string;
+                const used = assignedList.includes(name);
+                return (
+                  <option key={designer.id} value={name} disabled={used}>
+                    {name}
+                    {used ? " (배정됨)" : ""}
+                  </option>
+                );
+              })}
+            </optgroup>
+
+            {dummyDesigners.length > 0 && (
+              <optgroup label="허수계정">
+                {dummyDesigners.map((designer: any) => {
+                  const name = designer.__name as string;
+                  const used = assignedList.includes(name);
+                  return (
+                    <option key={designer.id} value={name} disabled={used}>
+                      {name}
+                      {used ? " (배정됨)" : ""}
+                    </option>
+                  );
+                })}
+              </optgroup>
+            )}
           </AssignSelect>
 
           <AssignButton

@@ -32,7 +32,10 @@ type RequestDoc = {
 };
 
 // 이름 끝 '.'(여러 개 포함)인 계정은 전부 제외
-const isDotTailName = (name: string) => /\.+$/.test(String(name ?? "").trim()); // ★ 추가
+const isDummyByName = (name: string) => {
+  const n = String(name ?? "").trim();
+  return !!n && n.startsWith("★");
+};
 
 // DISPLAY_BLACKLIST는 "미배정"만 남기고, 점계정은 함수로 처리
 const DISPLAY_BLACKLIST = new Set<string>(["미배정"]); // ★ 변경
@@ -170,7 +173,8 @@ export default function InWorkHour({
     const unSub = onSnapshot(qUsers, (snap) => {
       const names = snap.docs
         .map((d) => String((d.data() as any).name || "").trim())
-        .filter(Boolean);
+        .filter(Boolean)
+        .filter((n) => !isDummyByName(n));
       setDesignerNames(names);
     });
     return () => unSub();
@@ -198,8 +202,8 @@ export default function InWorkHour({
   const getEffectiveAssignees = (r: RequestDoc): string[] => {
     const raw = getAssignees(r).map((s) => s.trim()).filter(Boolean);
 
-    // 전역 제외자(미배정 + 이름끝 '.' 전부)를 선제적으로 제거
-    const cleaned = raw.filter((n) => n !== "미배정" && !isDotTailName(n));
+    // ★ 변경: 전역 제외자(미배정 + ★허수계정)를 선제적으로 제거
+    const cleaned = raw.filter((n) => n !== "미배정" && !isDummyByName(n));
 
     const comp = normCompany(r.company);
 
@@ -211,7 +215,7 @@ export default function InWorkHour({
       return cleaned;
     }
 
-    // NSmall/기타: 이제 SPECIAL_SOLO는 이미 빠져 있으므로 그대로 반환
+    // NSmall/기타: 그대로 반환
     return cleaned;
   };
 
@@ -225,10 +229,18 @@ export default function InWorkHour({
   };
 
   // 디자이너별 집계 (배정 배열 기반)
-   const rows: DesignerRow[] = useMemo(() => {
-    const fromDocs = Array.from(new Set(docs.flatMap((d) => getAssignees(d))));
+  const rows: DesignerRow[] = useMemo(() => {
+    // 문서에서 나온 배정자도 ★허수계정은 제외해서 "행" 자체가 안 생기게
+    const fromDocs = Array.from(
+      new Set(
+        docs
+          .flatMap((d) => getAssignees(d))
+          .filter((n) => n && n !== "미배정" && !isDummyByName(n))
+      )
+    );
+
     const designers = Array.from(new Set([...designerNames, ...fromDocs]))
-      .filter((n) => n && !DISPLAY_BLACKLIST.has(n) && !isDotTailName(n))
+      .filter((n) => n && !DISPLAY_BLACKLIST.has(n) && !isDummyByName(n))
       .sort((a, b) => a.localeCompare(b, "ko"));
 
     const targetYear = selectedYear;
@@ -241,11 +253,7 @@ export default function InWorkHour({
       // 선택 연/월에 속하는 문서만 뽑아서 "월집계"에 사용
       const monthDocs = mine.filter((d) => {
         const dt = anchorDate(d);
-        return (
-          dt &&
-          dt.getFullYear() === targetYear &&
-          dt.getMonth() === targetMonth
-        );
+        return dt && dt.getFullYear() === targetYear && dt.getMonth() === targetMonth;
       });
 
       // ✅ 기준일(당일)에 속하는 문서만 뽑아서 "현재 공수(h)"에 사용
@@ -262,10 +270,7 @@ export default function InWorkHour({
       const done = monthDocs.filter((d) => isDone(d.status)).length;
 
       // 공수(h)는 "기준일(당일)" 기준
-      const usedHoursRaw = dayDocs.reduce(
-        (s, d) => s + shareHourFor(d, name),
-        0
-      );
+      const usedHoursRaw = dayDocs.reduce((s, d) => s + shareHourFor(d, name), 0);
       const usedHours = floorTo(usedHoursRaw, 2);
 
       // 일별 / 월평균은 그대로 "선택 월" 기준
@@ -290,9 +295,7 @@ export default function InWorkHour({
       const monthHours = dailyHoursArr.reduce((s, h) => s + h, 0);
       const monthCount = dailyCountsArr.reduce((s, c) => s + c, 0);
       const monthRate =
-        monthHours > 0
-          ? Math.round((monthHours / MONTHLY_TARGET_HOURS) * 100)
-          : 0;
+        monthHours > 0 ? Math.round((monthHours / MONTHLY_TARGET_HOURS) * 100) : 0;
 
       return {
         name,

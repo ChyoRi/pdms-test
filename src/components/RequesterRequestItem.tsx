@@ -159,9 +159,10 @@ export default function RequesterRequestItem({ item, index, disableActions, user
   const isEnded = item.status === "완료" || item.status === "취소";
 
   // 요청자 화면에서만 허수계정 끝의 '.' 제거
-  const displayNameForRequester = (raw: any) => {
+  const displayNameForRequester = (raw: any): string => {
     const s = String(raw ?? "").trim();
-    return s.replace(/\.+$/g, ""); // 끝의 점만 제거 ('.' 여러개도 제거)
+    if (!s) return "";
+    return s.replace(/^★+/, "");
   };
 
   return (
@@ -224,7 +225,7 @@ export default function RequesterRequestItem({ item, index, disableActions, user
         {designers && designers.length > 0 ? (
           <DesignersWrap>
             {designers.map((name, i) => {
-              const clean = displayNameForRequester(name);
+              const clean = displayNameForRequester(name); // ★ 변경 반영
               return <DesignerSpan key={`${clean}-${i}`}>{clean}</DesignerSpan>;
             })}
           </DesignersWrap>
