@@ -108,40 +108,52 @@ const parseTaskTypeSpec = (taskType: any, forms: string[]): TaskTypeParsed => {
   return { mode: "flat", allTypes: [] };
 };
 
+// number/string 모두 안전하게 number로 변환
+const _toNum = (v: any): number | null => {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string") {
+    const n = parseFloat(v.trim());
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+};
+
 // companies.task_work_hour_form 스펙에서 (form/type/detail)로 공수 조회
 const getWorkHourFromCompanySpec = (
   spec: any,
   task_form?: string,
   task_type?: string,
   task_type_detail?: string
-): { base: number | null; times: number | null } => {
+): { out: number | null; in: number | null } => {
   const f = (task_form ?? "").trim();
   const t = (task_type ?? "").trim();
   const d = (task_type_detail ?? "").trim();
 
-  if (!spec || typeof spec !== "object" || !t) return { base: null, times: null };
+  if (!spec || typeof spec !== "object" || !t) return { out: null, in: null };
 
-  // - spec[form]이 객체면 homeplus 구조로 간주
+  // homeplus처럼 form이 1차키인 구조 지원
   const looksLikeFormSpec = !!(f && spec[f] && typeof spec[f] === "object");
-
   const baseNode = looksLikeFormSpec ? spec[f]?.[t] : spec[t];
-  if (!baseNode || typeof baseNode !== "object") return { base: null, times: null };
 
-  // (A) leaf: {hour, times}
-  if (typeof baseNode.hour === "number" && typeof baseNode.times === "number") {
-    return { base: baseNode.hour, times: baseNode.times };
-  }
+  if (!baseNode || typeof baseNode !== "object") return { out: null, in: null };
 
-  // (B) detail: { [detail]: {hour, times} }
+  // leaf 읽기 함수 (out/in 전용)
+  const readLeaf = (node: any) => {
+    const out = _toNum(node?.out_work_hour);
+    const inn = _toNum(node?.in_work_hour);
+    return { out, in: inn };
+  };
+
+  // (A) leaf: { out_work_hour, in_work_hour }
+  const leafA = readLeaf(baseNode);
+  if (leafA.out != null || leafA.in != null) return leafA;
+
+  // (B) detail: { [detail]: { out_work_hour, in_work_hour } }
   if (d && baseNode[d] && typeof baseNode[d] === "object") {
-    const leaf = baseNode[d];
-    return {
-      base: typeof leaf.hour === "number" ? leaf.hour : null,
-      times: typeof leaf.times === "number" ? leaf.times : null,
-    };
+    return readLeaf(baseNode[d]);
   }
 
-  return { base: null, times: null };
+  return { out: null, in: null };
 };
 
 // task_work_hour_form 기반 옵션 파싱 유틸
@@ -255,7 +267,7 @@ const buildCompanyCfg = (docData: CompanyOptionsDoc | null, companyKey?: string)
 
   // 공수 조회 시 homeplus만 task_form을 사용, 그 외는 formKey를 "공통"으로 고정해서 계산만 통일
   const getWorkHour = (form?: string, type?: string, detail?: string) => {
-  
+
   return getWorkHourFromCompanySpec(docData?.task_work_hour_form, form, type, detail);
 };
 
@@ -691,12 +703,10 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
     task_form?: string,
     task_type?: string,
     task_type_detail?: string
-  ): Promise<{ base: number | null; times: number | null }> => {
-    // companies 문서가 아직 로드 전이면 null
-    if (!companyDoc) return { base: null, times: null };
-
-    const { base, times } = companyCfg.getWorkHour(task_form, task_type, task_type_detail);
-    return { base, times };
+  ): Promise<{ out: number | null; in: number | null }> => {
+    if (!companyDoc) return { out: null, in: null };
+    const { out, in: inn } = companyCfg.getWorkHour(task_form, task_type, task_type_detail);
+    return { out, in: inn };
   };
 
   // textarea의 raw 문자열 -> string[] URL 리스트
@@ -754,13 +764,13 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
         (requestData.task_type_detail || "") !== ((editData as any).task_type_detail || "");
 
       if (formChanged || typeChanged || detailChanged) {
-        const { base: baseHour, times } = await fetchWorkHourPreset(
+        const { out, in: inn } = await fetchWorkHourPreset(
           patch.task_form,
           patch.task_type,
           patch.task_type_detail
         );
-        patch.out_work_hour = baseHour;
-        patch.in_work_hour = baseHour != null && times != null ? Number((baseHour * times).toFixed(2)) : null;
+        patch.out_work_hour = out;
+        patch.in_work_hour = inn;
         patch.work_hour_edit_state = false;
       }
 
@@ -830,12 +840,11 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
       const rawType = (f.task_type as string) || "";
       const typeValue = allowedTypes.includes(rawType) ? rawType : (allowedTypes[0] ?? rawType);
 
-      const { base: baseHour, times } = await fetchWorkHourPreset(
+      const { out, in: inn } = await fetchWorkHourPreset(
         formValue,
         typeValue,
         f.task_type_detail as string
       );
-      const computedIn = baseHour != null && times != null ? Number((baseHour * times).toFixed(2)) : null;
 
       await addDoc(collection(db, "design_request"), {
         design_request_id,
@@ -871,8 +880,8 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
         comments_last_author_uid: null,
         comment_read_by: {},
         comment_new_state: false,
-        in_work_hour: computedIn,
-        out_work_hour: baseHour,
+        in_work_hour: inn,
+        out_work_hour: out,
         work_hour_edit_state: false,
         created_date: serverTimestamp(),
         updated_date: null,

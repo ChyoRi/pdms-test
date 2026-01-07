@@ -58,6 +58,9 @@ function normalizeStatus(s?: string) {
   return s;
 }
 
+// 퍼센트 소수 1자리 반올림 유틸 (0~∞)
+const round1 = (n: number) => Math.round((Number(n) || 0) * 10) / 10;
+
 // ★ 전체 탭 전용: 기간 도우미
 const isWeekend = (ms:number) => { const d = new Date(ms).getDay(); return d===0 || d===6; };
 const ymd = (ms:number) => { const d=new Date(ms); return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,"0")}.${String(d.getDate()).padStart(2,"0")}`; };
@@ -100,7 +103,7 @@ export default function DashBoard() {
 
   const [companyMode, setCompanyMode] = useState<string>("homeplus");
 
-  // ★ 추가: companies 문서 목록
+  // companies 문서 목록
   const [companyDocs, setCompanyDocs] = useState<CompanyDoc[]>([]);
 
   useEffect(() => {
@@ -246,12 +249,12 @@ export default function DashBoard() {
     const producedCount = monthRows.filter((r) => normalizeStatus(r.status) === "완료").length;
     const usedHours = sum(monthRows.map((r) => Number((r as any).out_work_hour) || 0));
 
-    // ★ 변경: 회사 KPI 가용공수는 companies.avail_hour만 사용 (없으면 0)
+    // 회사 KPI 가용공수는 companies.avail_hour만 사용 (없으면 0)
     const targetCompanyId = isRequester ? requesterCompanyKey : effectiveMode;
     const v = getAvailHourByCompanyId(targetCompanyId);
     const availHours = v ?? 0; // ★ 변경: fallback 제거(704 같은 값이 튀는 원인)
 
-    const usedRatio = availHours > 0 ? Math.round((usedHours / availHours) * 100) : 0;
+    const usedRatio = availHours > 0 ? round1((usedHours / availHours) * 100) : 0;
 
     return {
       totalRequests,
@@ -266,7 +269,7 @@ export default function DashBoard() {
     isOpsAllMode,
     isRequester,
     requesterCompanyKey,
-    companyDocs, // ★ 추가: avail_hour 바뀌면 KPI 재계산
+    companyDocs, // avail_hour 바뀌면 KPI 재계산
   ]);
 
   const taskTypeArr = useMemo(() => {
@@ -329,7 +332,8 @@ export default function DashBoard() {
     const rawAvailHours = people * workingDaysForCapacity * 8;
     const availHours = Math.round(rawAvailHours);
 
-    const usedRatio = availHours ? Math.round((usedHours/availHours)*100) : 0;
+    const usedRatio = availHours ? round1((usedHours/availHours)*100) : 0;
+
     return {
       totalRequests, producedCount,
       usedHoursDisplay: usedHours.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}),
@@ -512,6 +516,12 @@ export default function DashBoard() {
   const KPI = isOpsAllMode ? kpiAll : kpiMonth;
   const isAll = isOpsAllMode;
 
+  // KPI 퍼센트 표시 문자열(항상 소수 1자리)
+  const usedRatioText = useMemo(() => { // ★ 추가
+    const v = KPI?.usedRatio;
+    return typeof v === "number" ? `${v.toFixed(1)}%` : "0.0%";
+  }, [KPI?.usedRatio]);
+
   return (
     <Wrap>
       <DashBoardFilter
@@ -535,21 +545,21 @@ export default function DashBoard() {
         <OperationItem><OperationTitle>실 제작건수(건)</OperationTitle><OpereationValue>{KPI?.producedCount ?? 0}</OpereationValue></OperationItem>
         <OperationItem><OperationTitle>사용공수</OperationTitle><OpereationValue>{KPI?.usedHoursDisplay ?? "0.00"}</OpereationValue></OperationItem>
         <OperationItem><OperationTitle>가용공수</OperationTitle><OpereationValue>{KPI?.availHours?.toLocaleString() ?? "0"}</OpereationValue></OperationItem>
-        <OperationItem><OperationTitle>사용공수비율</OperationTitle><OpereationValue>{KPI?.usedRatio ? `${KPI.usedRatio}%` : "0%"}</OpereationValue></OperationItem>
+        <OperationItem><OperationTitle>사용공수비율</OperationTitle><OpereationValue>{usedRatioText}</OpereationValue></OperationItem>
       </OperationList>
 
       {/* 차트 */}
       <ChartsWrap $isAll={isAll}>
         <LeftChartWrap $isAll={isAll}>
           <LeftChart>
-            <ChartTitle>{isAll ? "회사별 분포 (일/주/월 기준, 평일)" : "업무유형별 분포현황"}</ChartTitle> {/* ★ 변경 */}
+            <ChartTitle>{isAll ? "회사별 분포 (일/주/월 기준, 평일)" : "업무유형별 분포현황"}</ChartTitle>
             <CanvasBox $size="lg"><canvas ref={doughnutRef} /></CanvasBox>
           </LeftChart>
         </LeftChartWrap>
 
         <RightCol $isAll={isAll}>
           <RightChart $isAll={isAll}>
-            <ChartTitle>{isAll ? "디자이너별 배정 건수 (회사 스택)" : "업무형태현황 (task_form)"}</ChartTitle> {/* ★ 변경 */}
+            <ChartTitle>{isAll ? "디자이너별 배정 건수 (회사 스택)" : "업무형태현황 (task_form)"}</ChartTitle>
             <CanvasBox $size="md"><canvas ref={barBottomRef} /></CanvasBox>
           </RightChart>
           <RightChart $isAll={isAll}>
