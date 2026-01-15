@@ -2,8 +2,8 @@ import styled from "styled-components";
 import Requester from "./Requester";
 import Designer from "./Designer";
 import Manager from "./Manager";
-import { useSearchParams } from "react-router-dom"; // ★ 추가
-import { useEffect } from "react"; // ★ 추가
+import { useSearchParams } from "react-router-dom";
+import { useEffect } from "react";
 
 interface MainProps {
   userRole: number | null;
@@ -13,12 +13,13 @@ interface MainProps {
   statusFromAside?: string | null;
   clearStatusFromAside?: () => void;
   filterResetKey?: number;
+  onOpenAssignDesigner?: (target: RequestData) => void;
 }
 
 // 전역 타입과 동일해야 함
 type ViewType = "dashboard" | "myrequestlist" | "allrequestlist" | "inworkhour";
 
-export default function Main({ userRole, setIsDrawerOpen, setEditData, setDetailData, statusFromAside, clearStatusFromAside, filterResetKey }: MainProps) {
+export default function Main({ userRole, setIsDrawerOpen, setEditData, setDetailData, statusFromAside, clearStatusFromAside, filterResetKey, onOpenAssignDesigner }: MainProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const view = (searchParams.get("view") || "dashboard") as ViewType;
 
@@ -37,7 +38,7 @@ export default function Main({ userRole, setIsDrawerOpen, setEditData, setDetail
   const renderComponent = () => {
     if (userRole === 1) return <Requester view={view} userRole={userRole} setIsDrawerOpen={setIsDrawerOpen} setEditData={setEditData} setDetailData={setDetailData} statusFromAside={statusFromAside} clearStatusFromAside={clearStatusFromAside} filterResetKey={filterResetKey} />;
     if (userRole === 2) return <Designer view={view} userRole={userRole} setIsDrawerOpen={setIsDrawerOpen} setDetailData={setDetailData} statusFromAside={statusFromAside} clearStatusFromAside={clearStatusFromAside} filterResetKey={filterResetKey} />;
-    if (userRole === 3) return <Manager view={view} userRole={userRole} setIsDrawerOpen={setIsDrawerOpen} setDetailData={setDetailData} statusFromAside={statusFromAside} clearStatusFromAside={clearStatusFromAside} filterResetKey={filterResetKey} />;
+    if (userRole === 3) return <Manager view={view} userRole={userRole} setIsDrawerOpen={setIsDrawerOpen} setDetailData={setDetailData} statusFromAside={statusFromAside} clearStatusFromAside={clearStatusFromAside} filterResetKey={filterResetKey} onOpenAssignDesigner={onOpenAssignDesigner} />;
   }
 
   return <Container>{renderComponent()}</Container>;

@@ -23,6 +23,29 @@ interface DesignerRequestItemProps {
   disableActions: boolean;
 }
 
+type AssignedDesignerLike = { uid?: string; name?: string; out_work_hour?: number; in_work_hour?: number };
+const normalizeAssignedDesigners = (raw: any): AssignedDesignerLike[] => {
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    if (raw.length === 0) return [];
+    if (typeof raw[0] === "string") {
+      return raw.map((s: string) => ({ name: String(s).trim() })).filter(d => d.name);
+    }
+    if (typeof raw[0] === "object") {
+      return raw
+        .map((o: any) => ({
+          uid: typeof o?.uid === "string" ? o.uid : undefined,
+          name: String(o?.name ?? "").trim(),
+          out_work_hour: Number(o?.out_work_hour ?? 0),
+          in_work_hour: Number(o?.in_work_hour ?? 0),
+        }))
+        .filter(d => d.name);
+    }
+  }
+  if (typeof raw === "string") return [{ name: raw.trim() }];
+  return [];
+};
+
 export default function DesignerRequestItem({
   index,
   item,
@@ -34,11 +57,12 @@ export default function DesignerRequestItem({
   onDetailClick,
   disableActions
 }: DesignerRequestItemProps) {
-  const designers: string[] = Array.isArray(item.assigned_designers)
-    ? item.assigned_designers
-    : item.assigned_designer
-    ? [item.assigned_designer]
-    : [];
+  const designers = (() => {
+    const norm = normalizeAssignedDesigners(item.assigned_designers);
+    if (norm.length) return norm.map(d => String(d.name ?? "").trim()).filter(Boolean);
+    if (item.assigned_designer) return [String(item.assigned_designer).trim()];
+    return [];
+  })();
 
   const formatDate = (timestamp: any) => {
     if (!timestamp) return "-";

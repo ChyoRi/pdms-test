@@ -4,28 +4,21 @@ import ManagerRequestItem from "./ManagerRequestItem";
 interface ManagerRequestListProps {
   data: RequestData[];
   userUid?: string;
-  designerList: any[];
-  selectedDesigners: { [key: string]: string[] };
-  designerSelect: (requestId: string, designerNames: string[]) => void;
-  assignDesigner: (requestId: string) => void;
   sendToRequester: (requestId: string) => void;
   onDetailClick: (item: RequestData) => void;
-  unassignDesigner: (requestId: string, designerName: string) => void;
+  unassignDesigner: (requestId: string, payload: { uid?: string; name: string }) => void;
   workHours: { [id: string]: string };
   onChangeWorkHour: (requestId: string, val: string) => void;
   onSaveWorkHour: (requestId: string) => void;
   onStartEditWorkHour: (requestId: string) => void;
   onCancelEditWorkHour: (requestId: string) => void;
   readLocal: { [id: string]: number };
+  onOpenAssignDesigner?: (target: RequestData) => void;
 }
 
 export default function ManagerRequestList({
   data,
   userUid,
-  designerList,
-  selectedDesigners,
-  designerSelect,
-  assignDesigner,
   unassignDesigner,
   sendToRequester,
   onDetailClick,
@@ -34,7 +27,8 @@ export default function ManagerRequestList({
   onSaveWorkHour,
   onStartEditWorkHour,
   onCancelEditWorkHour,
-  readLocal
+  readLocal,
+  onOpenAssignDesigner
 }: ManagerRequestListProps) {
   return (
     <RequestListTableWrap>
@@ -83,11 +77,7 @@ export default function ManagerRequestList({
                                   index={index + 1} 
                                   item={item}
                                   userUid={userUid}
-                                  designerList={designerList}
-                                  selectedDesigners={selectedDesigners[item.id] || []}
-                                  onDesignerSelect={(names) => designerSelect(item.id, names)}
-                                  onAssignDesigner={() => assignDesigner(item.id)}
-                                  onUnassignDesigner={(name) => unassignDesigner(item.id, name)}
+                                  onUnassignDesigner={(payload) => unassignDesigner(item.id, payload)}
                                   onSendToRequester={() => sendToRequester(item.id)} 
                                   onDetailClick={onDetailClick}
                                   workHourValue={workHours[item.id] ?? ""}
@@ -96,6 +86,7 @@ export default function ManagerRequestList({
                                   onStartEditWorkHour={() => onStartEditWorkHour(item.id)}
                                   onCancelEditWorkHour={() => onCancelEditWorkHour(item.id)}
                                   localReadMs={readLocal[item.id]}
+                                  onOpenAssignDesigner={onOpenAssignDesigner}
               />
             ))
           ) : (

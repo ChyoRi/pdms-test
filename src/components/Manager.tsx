@@ -12,8 +12,6 @@ import {
   query,
   where,
   orderBy,
-  arrayUnion,
-  arrayRemove,
   serverTimestamp,
 } from "firebase/firestore";
 import ManagerRequestList from "./ManagerRequestList";
@@ -35,6 +33,7 @@ interface RequesterProps {
   statusFromAside?: string | null;
   clearStatusFromAside?: () => void;
   filterResetKey?: number;
+  onOpenAssignDesigner?: (target: RequestData) => void;
 }
 
 const DEFAULT_STATUS = "진행 상태 선택";
@@ -56,6 +55,23 @@ type CompanyOptionsDoc = {
   company_name?: string;
   task_work_hour_form?: any;
 };
+
+// assigned_designer 객체 타입
+type AssignedDesignerObj = {
+  uid: string;
+  name: string;
+  out_work_hour: number;
+  in_work_hour: number;
+};
+
+// 하위호환 포함해서 이름 배열로 뽑기
+const getAssignedNames = (raw: any): string[] => {
+  if (!Array.isArray(raw) || raw.length === 0) return [];
+  if (typeof raw[0] === "string") return raw.map((x: any) => String(x).trim()).filter(Boolean);
+  return raw.map((d: any) => String(d?.name ?? "").trim()).filter(Boolean);
+};
+
+const round3 = (n: number) => Math.round(n * 1000) / 1000;
 
 // 공수 스펙에서 (form/type/detail)로 {base,times} 조회 (RequestForm과 같은 로직)
 const getWorkHourFromCompanySpec = (
@@ -143,12 +159,12 @@ export default function Manager({
   statusFromAside,
   clearStatusFromAside,
   filterResetKey,
+  onOpenAssignDesigner
 }: RequesterProps) {
   const [requests, setRequests] = useState<RequestData[]>([]);
-  const [designerList, setDesignerList] = useState<any[]>([]);
+  const [/* designerList */, setDesignerList] = useState<any[]>([]);
   const [userUid, setUserUid] = useState("");
   const [/*managerName*/, setManagerName] = useState("");
-  const [selectedDesigners, setSelectedDesigners] = useState<{ [id: string]: string[] }>({});
   // 공수 입력칸(행별) 컨트롤드 상태
   const [workHours, setWorkHours] = useState<{ [id: string]: string }>({});
   // 필터/검색
@@ -172,10 +188,10 @@ export default function Manager({
   // 항목별 내가 마지막으로 읽은 시간(ms) 로컬 캐시
   const [readLocal, setReadLocal] = useState<{ [id: string]: number }>({});
 
-  // ★ 추가: companies 문서 캐시 (docId/표시명 둘 다 키로 매핑)
+  // companies 문서 캐시 (docId/표시명 둘 다 키로 매핑)
   const [companyDocMap, setCompanyDocMap] = useState<Record<string, CompanyOptionsDoc>>({});
 
-  // ★ 추가: 회사 비교용 정규화(문서ID nsmall vs 표시명 NSmall 모두 매칭) - 기존 유지
+  // 회사 비교용 정규화(문서ID nsmall vs 표시명 NSmall 모두 매칭) - 기존 유지
   const companyKey = (v: any) =>
     String(v ?? "")
       .trim()
@@ -222,20 +238,6 @@ export default function Manager({
     if (!statusFromAside) return;
     setStatusFilter(statusFromAside);
   }, [statusFromAside]);
-
-  // ✅ 스냅샷으로 받은 리스트로 선택 맵을 seed (빈 키만 채움)
-  useEffect(() => {
-    if (!requests.length) return;
-    setSelectedDesigners((prev) => {
-      const next = { ...prev };
-      requests.forEach((r: any) => {
-        if (next[r.id] === undefined) {
-          next[r.id] = Array.isArray(r.assigned_designers) ? r.assigned_designers : [];
-        }
-      });
-      return next;
-    });
-  }, [requests]);
 
   // 스냅샷으로 받은 리스트로 공수 입력칸 seed (in_work_hour가 있으면 표시)
   useEffect(() => {
@@ -295,34 +297,45 @@ export default function Manager({
     return () => unsub();
   }, []);
 
-  // ✅ 디자이너 선택
-  const designerSelect = (requestId: string, names: string[]) => {
-    setSelectedDesigners((prev) => ({ ...prev, [requestId]: names }));
-  };
+  // 디자이너 배정 해제
+  const unassignDesigner = async (
+    requestId: string,
+    payload: { uid?: string; name: string } // ★ 변경
+  ) => {
+    const docRef = doc(db, "design_request", requestId);
+    const snap = await getDoc(docRef);
+    if (!snap.exists()) return;
 
-  // ✅ 디자이너 배정
-  const assignDesigner = async (requestId: string) => {
-    const selected = (selectedDesigners[requestId] || []).filter(Boolean);
-    if (!selected.length) {
-      alert("디자이너를 선택하세요.");
+    const data = snap.data() as any;
+    const raw = data?.assigned_designers;
+
+    // 예전 스키마(string[])는 name으로만 제거(토탈 재계산 불가)
+    if (Array.isArray(raw) && raw.length > 0 && typeof raw[0] === "string") {
+      const nextArr = (raw as string[]).filter((n) => String(n).trim() !== String(payload.name).trim());
+      await updateDoc(docRef, { assigned_designers: nextArr });
       return;
     }
 
-    const docRef = doc(db, "design_request", requestId);
-    await updateDoc(docRef, {
-      assigned_designers: arrayUnion(...selected),
+    // 현 스키마: 객체 배열
+    const cur: AssignedDesignerObj[] = Array.isArray(raw) ? (raw as any[]) : [];
+    const uid = String(payload.uid ?? "").trim();
+    const name = String(payload.name ?? "").trim();
+
+    const next = cur.filter((d) => {
+      const duid = String((d as any)?.uid ?? "").trim();
+      const dname = String((d as any)?.name ?? "").trim();
+      if (uid) return duid !== uid;
+      return dname !== name;
     });
 
-    // 선택 초기화(헷갈림 방지)
-    setSelectedDesigners((prev) => ({ ...prev, [requestId]: [] }));
+    const totalOut = round3(next.reduce((s, d) => s + Number((d as any)?.out_work_hour ?? 0), 0));
+    const totalIn = round3(next.reduce((s, d) => s + Number((d as any)?.in_work_hour ?? 0), 0));
 
-    alert("디자이너가 배정되었습니다!");
-  };
-
-  // ★ 추가: 디자이너 배정 해제
-  const unassignDesigner = async (requestId: string, designerNameToRemove: string) => {
-    const docRef = doc(db, "design_request", requestId);
-    await updateDoc(docRef, { assigned_designers: arrayRemove(designerNameToRemove) });
+    await updateDoc(docRef, {
+      assigned_designers: next,
+      out_work_hour: totalOut,
+      in_work_hour: totalIn,
+    });
   };
 
   const sendToRequester = async (requestId: string) => {
@@ -432,48 +445,44 @@ export default function Manager({
   const viewList = useMemo(() => {
     const s = dateRange.start ? toMidnight(dateRange.start) : null;
     const e = dateRange.end ? toMidnight(dateRange.end) : null;
-    const dateFilterOn = !!(s && e); // ★ 기존
-    const today = new Date(); // ★ 추가
+    const dateFilterOn = !!(s && e);
+    const today = new Date();
     const q = keyword.trim();
-    const searchOn = !!q; // ★ 추가
+    const searchOn = !!q;
 
     return prepared.filter((r: any) => {
       const status = String(r.status ?? "").trim();
       const isDone = status === "완료" || status === "취소";
 
-      // 날짜 범위 선택된 경우: request_date 기준, 완료/취소/상태 무시
       if (dateFilterOn) {
         const rd = parseLoose(r.request_date) || parseLoose(r.requested_at) || parseLoose(r.requestDate);
         if (!rd || rd < s! || rd > e!) return false;
       } else {
-        // 날짜 범위 미선택: 이번 달 이전 완료/취소는 검색 없을 때만 숨김
         const cd = parseLoose(r.completion_date) || parseLoose((r as any).complete_date) || null;
         const keepThisMonth = cd ? isSameMonth(cd, today) : false;
 
-        if (!searchOn && isDone && !keepThisMonth) return false; // ★ 변경
+        if (!searchOn && isDone && !keepThisMonth) return false;
 
-        // 상태 필터 (기간 미선택일 때만)
         if (statusFilter !== DEFAULT_STATUS && r.status !== statusFilter) {
           return false;
         }
       }
 
-      // 요청자 필터
       if (requesterFilter !== DEFAULT_REQUESTER && r.requester !== requesterFilter) return false;
 
-      // 디자이너 필터
+      // ★ 변경: 디자이너 필터(객체배열 대응)
       if (designerFilter !== DEFAULT_DESIGNER) {
-        const arr = Array.isArray(r.assigned_designers) ? r.assigned_designers : [];
-        const single = r.assigned_designer ?? "";
-        if (!(arr.includes(designerFilter) || single === designerFilter)) return false;
+        const raw = (r as any).assigned_designers;
+        const arrNames = getAssignedNames(raw);
+        const single = (r as any).assigned_designer ?? "";
+
+        if (!(arrNames.includes(designerFilter) || single === designerFilter)) return false;
       }
 
-      // 회사 필터 정규화 비교(표시명/문서ID 섞여도 매칭)
       if (companyFilter !== DEFAULT_COMPANY) {
         if (companyKey(r.company) !== companyKey(companyFilter)) return false;
       }
 
-      // 검색어 (문서번호 + 작업항목 등)
       if (q && !matchesQuery(r, q)) return false;
 
       return true;
@@ -525,15 +534,12 @@ export default function Manager({
       return;
     }
 
-    // ★ 변경: 배율을 companies 통합 문서에서 조회
     const multiplier = await getWorkTimesForRequest(req, companyDocMap);
-
-    // 소수 오차 최소화(최대 3자리 유지)
     const computedIn = Math.round(input * multiplier * 1000) / 1000;
 
     await updateDoc(doc(db, "design_request", requestId), {
-      out_work_hour: input, // 매니저 입력값 그대로
-      in_work_hour: computedIn, // 회사별 times 적용 값
+      out_work_hour: input,
+      in_work_hour: computedIn,
       work_hour_edit_state: false,
     });
 
@@ -612,7 +618,7 @@ export default function Manager({
 
       // viewList -> CSV용 매핑(키 맞춤 + 날짜 포맷 + 공수 단일화)
       const rowsForCsv = (viewList as any[]).map((r) => {
-        const assigned = Array.isArray(r.assigned_designers) ? r.assigned_designers.join(", ") : "";
+        const assigned = getAssignedNames((r as any).assigned_designers).join(", ");
         return {
           design_request_id: r.design_request_id ?? "",
           request_date: toYmd(r.request_date ?? r.requested_at ?? r.requestDate),
@@ -683,10 +689,6 @@ export default function Manager({
           <ManagerRequestList
             data={viewList}
             userUid={userUid}
-            designerList={designerList}
-            selectedDesigners={selectedDesigners}
-            designerSelect={designerSelect}
-            assignDesigner={assignDesigner}
             unassignDesigner={unassignDesigner}
             sendToRequester={sendToRequester}
             onDetailClick={openDetail}
@@ -697,6 +699,7 @@ export default function Manager({
             onStartEditWorkHour={startEditWorkHour}
             onCancelEditWorkHour={cancelEditWorkHour}
             readLocal={readLocal}
+            onOpenAssignDesigner={onOpenAssignDesigner}
           />
         </MainContentWrap>
       )}

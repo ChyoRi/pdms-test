@@ -92,9 +92,37 @@ export default function RequesterRequestItem({ item, index, disableActions, user
   const getPrimaryUrl = (urls: string[]) => urls[0];
 
   const isRequesterDone = item.requester_review_status === "검수완료";
-  const designers = Array.isArray(item.assigned_designers)
-    ? (item.assigned_designers as string[])
-    : null;
+
+  type AssignedDesignerLike = { uid?: string; name?: string; out_work_hour?: number; in_work_hour?: number };
+  const normalizeAssignedDesigners = (raw: any): AssignedDesignerLike[] => {
+    if (!raw) return [];
+    if (Array.isArray(raw)) {
+      if (raw.length === 0) return [];
+      if (typeof raw[0] === "string") {
+        return raw.map((s: string) => ({ name: String(s).trim() })).filter(d => d.name);
+      }
+      if (typeof raw[0] === "object") {
+        return raw
+          .map((o: any) => ({
+            uid: typeof o?.uid === "string" ? o.uid : undefined,
+            name: String(o?.name ?? "").trim(),
+            out_work_hour: Number(o?.out_work_hour ?? 0),
+            in_work_hour: Number(o?.in_work_hour ?? 0),
+          }))
+          .filter(d => d.name);
+      }
+    }
+    if (typeof raw === "string") return [{ name: raw.trim() }];
+    return [];
+  };
+
+  const designers = (() => {
+    const norm = normalizeAssignedDesigners(item.assigned_designers);
+    if (norm.length) return norm.map(d => String(d.name ?? "").trim()).filter(Boolean);
+    // 레거시 단일 필드 fallback
+    if ((item as any).assigned_designer) return [String((item as any).assigned_designer).trim()];
+    return [];
+  })();
   const urls = normalizeUrlArray((item as any)?.url);
   const hasUrl = urls.length > 0;
   const urlHref = hasUrl ? getPrimaryUrl(urls) : undefined;
@@ -222,15 +250,15 @@ export default function RequesterRequestItem({ item, index, disableActions, user
         </StautsBadge>
       </RequestListTableTd>
       <RequestListTableTd>
-        {designers && designers.length > 0 ? (
+        {designers.length > 0 ? (
           <DesignersWrap>
             {designers.map((name, i) => {
-              const clean = displayNameForRequester(name); // ★ 변경 반영
+              const clean = displayNameForRequester(name);
               return <DesignerSpan key={`${clean}-${i}`}>{clean}</DesignerSpan>;
             })}
           </DesignersWrap>
         ) : (
-          displayNameForRequester(item.assigned_designers) || "미배정"
+          "미배정"
         )}
       </RequestListTableTd>
       <RequestResultTd>

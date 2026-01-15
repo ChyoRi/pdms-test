@@ -314,6 +314,75 @@ export default function Comment({ designRequestId, currentUserName, status }: Co
     return `${mm}/${dd} ${hh}:${mi}`;
   };
 
+  // ★ 추가: URL을 <a>로 변환 (dangerouslySetInnerHTML 없이 안전하게)
+  const URL_RE =
+    /https?:\/\/[^\s<>"']+|www\.[^\s<>"']+|(?:docs|drive)\.google\.com\/[^\s<>"']+|figma\.com\/[^\s<>"']+/gi;
+
+  const cleanUrl = (u: string) =>
+    u
+      .trim()
+      // 앞에 괄호/따옴표가 붙는 케이스
+      .replace(/^[(\[{"'`]+/g, "")
+      // 뒤에 붙는 흔한 문장부호/괄호/따옴표 제거
+      .replace(/[)\]}>"'`,.;:!?]+$/g, "");
+
+  const toHref = (u: string) => {
+    const x = cleanUrl(u);
+    if (!x) return "";
+    if (/^https?:\/\//i.test(x)) return x;
+    if (/^www\./i.test(x)) return `https://${x}`;
+    // docs.google.com / drive.google.com / figma.com 같은 프로토콜 없는 케이스
+    return `https://${x}`;
+  };
+
+  const renderBodyWithLinks = (text: string) => {
+    const lines = String(text ?? "").split("\n");
+
+    return lines.map((line, lineIdx) => {
+      const nodes: React.ReactNode[] = [];
+      let last = 0;
+
+      for (const m of line.matchAll(URL_RE)) {
+        const raw = m[0];
+        const start = m.index ?? 0;
+        const end = start + raw.length;
+
+        // 매치 전 텍스트
+        if (start > last) nodes.push(line.slice(last, start));
+
+        const href = toHref(raw);
+        const label = cleanUrl(raw);
+
+        if (href) {
+          nodes.push(
+            <a
+              key={`url-${lineIdx}-${start}`}
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {label}
+            </a>
+          );
+        } else {
+          nodes.push(raw);
+        }
+
+        last = end;
+      }
+
+      // 남은 텍스트
+      if (last < line.length) nodes.push(line.slice(last));
+
+      return (
+        <span key={`line-${lineIdx}`}>
+          {nodes}
+          {lineIdx < lines.length - 1 ? <br /> : null}
+        </span>
+      );
+    });
+  };
+
   // 입력 textarea 키다운 — Enter=등록, Shift+Enter=줄바꿈, IME 조합 중 무시
   const handleAddKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (isEnded) return;
@@ -396,7 +465,7 @@ export default function Comment({ designRequestId, currentUserName, status }: Co
                     </BtnRow>
                   </EditRow>
                 ) : (
-                  <Body>{row.body}</Body>
+                  <Body>{renderBodyWithLinks(row.body)}</Body>
                 )}
               </CommentContent>
             );
@@ -541,6 +610,14 @@ const Body = styled.p`
   white-space: pre-wrap;
   font-size: 14px;
   overflow-wrap: anywhere;
+
+  a {
+    text-decoration: underline;
+    word-break: break-word;
+  }
+  a:hover {
+    opacity: 0.85;
+  }
 `;
 const Actions = styled.div`
   display: flex;

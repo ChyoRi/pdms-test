@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import styled from "styled-components"
 import selectBoxArrow from "../assets/selectbox-arrow.svg";
 import DateCalendar from "./DateCalendar";
@@ -30,6 +30,13 @@ const mapSelectToFilterValue = (role: RoleKey, v: string) => {
     if (v === "검수요청") return "검수중";
   }
   return v;
+};
+
+// 별(★) 붙은 허수 계정 필터
+const isFakeDesignerName = (name: unknown) => {
+  const s = String(name ?? "").trim();
+  if (!s) return true;
+  return s.includes("★");
 };
 
 export default function RequestFilter({
@@ -73,6 +80,13 @@ export default function RequestFilter({
   const roleKey = toRoleKey(roleNumber);
   const visibleStatuses = STATUS_OPTIONS[roleKey];
 
+  // 디자이너 옵션 정리(★ 계정 제거)
+  const visibleDesignerOptions = useMemo(() => {
+    return (designerOptions || [])
+      .map(v => String(v).trim())
+      .filter(v => !isFakeDesignerName(v));
+  }, [designerOptions]);
+
   // deptOptions가 바뀌면, 현재 선택값이 옵션에 없을 때 자동 리셋 (UI/필터 싱크 유지)
   useEffect(() => {
     if (roleKey !== "requester") return;
@@ -84,6 +98,18 @@ export default function RequestFilter({
       onApplyDept?.(DEFAULT_DEPT);
     }
   }, [deptOptions, roleKey, dept])
+
+  // 디자이너 옵션이 바뀌면, 현재 선택값이 "★계정/미존재"일 때 자동 리셋
+  useEffect(() => {
+    if (!isManager) return;
+    if (designer === DEFAULT_DESIGNER) return;
+
+    // 현재 선택값이 ★ 포함이거나, 필터링 후 옵션에 없으면 리셋
+    if (isFakeDesignerName(designer) || !visibleDesignerOptions.includes(designer)) {
+      setDesigner(DEFAULT_DESIGNER);
+      onApplyDesigner?.(DEFAULT_DESIGNER);
+    }
+  }, [isManager, designer, visibleDesignerOptions]);
 
   // 외부에서 resetKey 가 바뀌면 UI 필터값 초기화
   useEffect(() => {
@@ -201,7 +227,9 @@ export default function RequestFilter({
             }}
           >
             <option value={DEFAULT_DESIGNER}>{DEFAULT_DESIGNER}</option>
-            {designerOptions.map((name) => (
+
+            {/* ★ 변경: 별(★) 붙은 허수 디자이너 제거된 목록만 렌더 */}
+            {visibleDesignerOptions.map((name) => (
               <option key={name} value={name}>
                 {name}
               </option>

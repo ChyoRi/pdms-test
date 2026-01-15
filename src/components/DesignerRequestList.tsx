@@ -75,11 +75,17 @@ export default function DesignerRequestList({
         <tbody>
           {requests.length > 0 ? (
             requests.map((item, index) => {
+              // ★ 변경: "내 배정" 판정은 uid 배열로
               const isMine =
-                Array.isArray(item.assigned_designers)
-                  ? item.assigned_designers.includes(currentDesignerName)
-                  : item.assigned_designer === currentDesignerName;
-              const rowDisabled = disableActions || (lockOthers && !isMine); // ✨ 타인 행만 잠금
+                Array.isArray(item.assigned_designer_uids) && currentUid
+                  ? item.assigned_designer_uids.includes(currentUid)
+                  : (
+                      Array.isArray(item.assigned_designers)
+                        ? item.assigned_designers.includes(currentDesignerName)
+                        : item.assigned_designer === currentDesignerName
+                    );
+
+              const rowDisabled = disableActions || (lockOthers && !isMine);
               return (
                 <DesignerRequestItem
                   key={item.id}

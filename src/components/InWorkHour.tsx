@@ -18,27 +18,56 @@ type DesignerRow = {
   monthCount: number;   // 선택 월 총 건수
 };
 
+type AssignedDesignerObj = {
+  uid?: string;
+  name?: string;
+  displayName?: string;
+  designer_uid?: string;
+  designer_name?: string;
+  designer?: string;
+
+  // ★ 추가: 스키마 최신(문서에 실제 존재)
+  in_work_hour?: number | string;
+  out_work_hour?: number | string;
+};
+
 type RequestDoc = {
   id: string;
-  assigned_designers?: string[];
+
+  // ★ 변경: assigned_designers가 string[] 뿐 아니라 object[]로도 올 수 있음
+  assigned_designers?: Array<string | AssignedDesignerObj>;
+
   assigned_designer?: string;
   status?: string;
   in_work_hour?: number;
   company?: string;
+
   // 날짜 필드(서로 다른 스키마 대비)
   request_date?: any;
   open_date?: any;
   created_date?: any;
+
+  // 디자이너별 내부공수 맵 (키: uid 또는 name)
+  in_work_hour_by_designer?: Record<string, number | string>;
+
+  // 행(row) 기반 배정 데이터
+  assign_rows?: Array<{
+    designer_uid?: string;
+    designer_name?: string;
+    designer?: string;
+    in_work_hour?: number | string;
+    out_work_hour?: number | string;
+  }>;
 };
 
 // 이름 끝 '.'(여러 개 포함)인 계정은 전부 제외
 const isDummyByName = (name: string) => {
   const n = String(name ?? "").trim();
-  return !!n && n.startsWith("★");
+  if (!n) return false;
+  return /\.+$/.test(n) || n.startsWith("★");
 };
 
-// DISPLAY_BLACKLIST는 "미배정"만 남기고, 점계정은 함수로 처리
-const DISPLAY_BLACKLIST = new Set<string>(["미배정"]); // ★ 변경
+const DISPLAY_BLACKLIST = new Set<string>(["미배정"]);
 
 const toMidnight = (d: Date) =>
   new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -67,47 +96,33 @@ const parseLoose = (v: any): Date | null => {
   return null;
 };
 
-/**
- * ✅ 공수/건수/일일현황 **모두** 한 가지 기준 날짜로만 집계한다.
- * - 완료/시작/종료와 무관하게, 공수는 “대기부터” 누적되므로
- * - 요청이 실제로 올라온 시점(요청일 → open_date → created_date)을 기준으로 묶는다.
- */
 const anchorDate = (r: RequestDoc): Date | null =>
   parseLoose(r.request_date) ??
   parseLoose((r as any).open_date) ??
   parseLoose((r as any).created_date);
 
-// 해당 연/월의 실제 일수 구하기 (윤년 자동 반영)
 const getDaysInMonth = (year: number, monthIndex: number) =>
   new Date(year, monthIndex + 1, 0).getDate();
 
-// 상태 버킷
 const isWait = (s?: string) => s === "대기" || s === "대기중";
 const isDone = (s?: string) => s === "완료";
 const isProgress = (s?: string) =>
   s === "진행중" ||
   s === "검수중" ||
   s === "검수요청" ||
-  s === "수정"; 
+  s === "수정";
 
-// 디자이너 1명 월 목표 공수(고정 160h) 20.3 * 하루 8시간
 const MONTHLY_TARGET_HOURS = 162;
-// const WEEKLY_TARGET_HOURS = 40;
 
-// 소수점 n자리 "버림(끊기)" 유틸 (부동소수 보정 포함)
 const floorTo = (n: number, digits = 2) => {
   const p = Math.pow(10, digits);
-  // 작은 epsilon을 더해 0.43000000000006 같은 경우도 안정적으로 처리
   return Math.sign(n) * Math.floor(Math.abs(n) * p + 1e-9) / p;
 };
 
-// 출력용(최대 2자리, 불필요한 0 제거)
 const formatMax2 = (n: number) => {
-  // 두 자리로 고정한 뒤, 끝의 0과 점을 정리 -> "0.40" → "0.4", "1.00" → "1"
-  return n.toFixed(2).replace(/\.?0+$/,"");
+  return n.toFixed(2).replace(/\.?0+$/, "");
 };
 
-// company 정규화
 const normCompany = (c?: string): "nsmall" | "homeplus" | "other" => {
   const k = String(c ?? "").trim().replace(/\s+/g, "").toLowerCase();
   if (k === "nsmall" || k === "n-small") return "nsmall";
@@ -115,47 +130,46 @@ const normCompany = (c?: string): "nsmall" | "homeplus" | "other" => {
   return "other";
 };
 
+const toNum = (v: any) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+};
+
 /** ───────── Component ───────── */
 export default function InWorkHour({
   dailyHours = 8,
   targetDate,
 }: {
-  /** 헤더 표시용 일공수 */
   dailyHours?: number;
-  /** 현재현황 집계 기준일(기본: 오늘) */
   targetDate?: Date;
 }) {
   const [docs, setDocs] = useState<RequestDoc[]>([]);
   const [designerNames, setDesignerNames] = useState<string[]>([]);
 
-  // 기준일(오늘 또는 외부에서 넘긴 날짜)
-  const day = toMidnight(targetDate ?? new Date());
+  const [uidByName, setUidByName] = useState<Record<string, string>>({});
+  const [nameByUid, setNameByUid] = useState<Record<string, string>>({});
 
-  // 오늘(실제 오늘) 기준 – today 하이라이트용
+  const day = toMidnight(targetDate ?? new Date());
   const todayMidnight = useMemo(() => toMidnight(new Date()), []);
 
-  // 선택 연/월 상태
   const [selectedYear, setSelectedYear] = useState(day.getFullYear());
-  const [selectedMonth, setSelectedMonth] = useState(day.getMonth()); // 0~11
+  const [selectedMonth, setSelectedMonth] = useState(day.getMonth());
 
-  // 선택된 연/월의 실제 일수 (28, 29, 30, 31)
   const daysInSelectedMonth = useMemo(
     () => getDaysInMonth(selectedYear, selectedMonth),
     [selectedYear, selectedMonth]
   );
 
-  // 선택 연/월의 각 날짜가 주말인지 여부 배열
   const weekendFlags = useMemo(
     () =>
       Array.from({ length: daysInSelectedMonth }, (_, i) => {
         const d = new Date(selectedYear, selectedMonth, i + 1);
-        const dow = d.getDay(); // 0: 일요일, 6: 토요일
+        const dow = d.getDay();
         return dow === 0 || dow === 6;
       }),
     [selectedYear, selectedMonth, daysInSelectedMonth]
   );
 
-  // 선택 연/월의 각 날짜가 "오늘"인지 여부 배열
   const todayFlags = useMemo(() => {
     if (
       todayMidnight.getFullYear() !== selectedYear ||
@@ -164,23 +178,37 @@ export default function InWorkHour({
       return Array(daysInSelectedMonth).fill(false);
     }
 
-    const todayIdx = todayMidnight.getDate() - 1; // 1일 → 0
+    const todayIdx = todayMidnight.getDate() - 1;
     return Array.from({ length: daysInSelectedMonth }, (_, i) => i === todayIdx);
   }, [todayMidnight, selectedYear, selectedMonth, daysInSelectedMonth]);
 
   useEffect(() => {
     const qUsers = query(collection(db, "users"), where("role", "==", 2));
     const unSub = onSnapshot(qUsers, (snap) => {
-      const names = snap.docs
-        .map((d) => String((d.data() as any).name || "").trim())
-        .filter(Boolean)
-        .filter((n) => !isDummyByName(n));
+      const names: string[] = [];
+      const _uidByName: Record<string, string> = {};
+      const _nameByUid: Record<string, string> = {};
+
+      snap.docs.forEach((d) => {
+        const data = d.data() as any;
+        const uid = d.id;
+        const name = String(data.name || data.displayName || "").trim();
+        if (!name) return;
+        if (isDummyByName(name)) return;
+
+        names.push(name);
+        _uidByName[name] = uid;
+        _nameByUid[uid] = name;
+      });
+
       setDesignerNames(names);
+      setUidByName(_uidByName);
+      setNameByUid(_nameByUid);
     });
+
     return () => unSub();
   }, []);
 
-  // 실시간 구독
   useEffect(() => {
     const qRef = query(collection(db, "design_request"));
     const unSub = onSnapshot(qRef, (snap) => {
@@ -190,47 +218,174 @@ export default function InWorkHour({
     return () => unSub();
   }, []);
 
+  // assigned_designers 요소(문자/객체/uid 혼재)를 "표시용 name"으로 정규화
+  const normalizeAssigneeName = (v: any): string => {
+    if (!v) return "";
+
+    if (typeof v === "string") {
+      const s = v.trim();
+      return nameByUid[s] ? nameByUid[s] : s;
+    }
+
+    if (typeof v === "object") {
+      const name =
+        v.name ?? v.displayName ?? v.designer_name ?? v.designer ?? "";
+      const uid = v.uid ?? v.designer_uid ?? "";
+
+      const n = String(name ?? "").trim();
+      if (n) return n;
+
+      const u = String(uid ?? "").trim();
+      if (!u) return "";
+      return nameByUid[u] ? nameByUid[u] : u;
+    }
+
+    const s = String(v).trim();
+    return nameByUid[s] ? nameByUid[s] : s;
+  };
+
   // 원본 배정 배열
   const getAssignees = (r: RequestDoc): string[] => {
-    if (Array.isArray(r.assigned_designers) && r.assigned_designers.length)
-      return r.assigned_designers.filter(Boolean).map((s) => s.trim());
-    if (r.assigned_designer) return [String(r.assigned_designer).trim()];
+    if (Array.isArray(r.assigned_designers) && r.assigned_designers.length) {
+      return r.assigned_designers
+        .map((x) => normalizeAssigneeName(x))
+        .filter(Boolean);
+    }
+    if (r.assigned_designer) return [normalizeAssigneeName(r.assigned_designer)];
     return [];
   };
 
-  // company별 "실제 집계 대상" 계산
-  const getEffectiveAssignees = (r: RequestDoc): string[] => {
-    const raw = getAssignees(r).map((s) => s.trim()).filter(Boolean);
+  // ★ 추가: doc에서 "공수 근거"로 잡을 디자이너 식별자들(이름/uid)을 모두 끌어오기
+  const getAssigneeKeysFromHours = (r: RequestDoc): string[] => {
+    const keys = new Set<string>();
 
-    // ★ 변경: 전역 제외자(미배정 + ★허수계정)를 선제적으로 제거
-    const cleaned = raw.filter((n) => n !== "미배정" && !isDummyByName(n));
-
-    const comp = normCompany(r.company);
-
-    // 단일 배정이면 그대로
-    if (cleaned.length <= 1) return cleaned;
-
-    if (comp === "homeplus") {
-      // HomePlus 동배정: 남은 사람들 균등 분배
-      return cleaned;
+    // 0) ★ 추가: assigned_designers 객체(최신 스키마)에도 uid/name이 있음
+    const ad = (r as any)?.assigned_designers;
+    if (Array.isArray(ad)) {
+      ad.forEach((x: any) => {
+        if (!x) return;
+        if (typeof x === "object") {
+          const u = String(x?.uid ?? x?.designer_uid ?? "").trim();
+          const n = String(
+            x?.name ?? x?.displayName ?? x?.designer_name ?? x?.designer ?? ""
+          ).trim();
+          if (u) keys.add(u);
+          if (n) keys.add(n);
+        } else if (typeof x === "string") {
+          const s = String(x).trim();
+          if (s) keys.add(s);
+        }
+      });
     }
 
-    // NSmall/기타: 그대로 반환
+    // 1) in_work_hour_by_designer keys
+    const map = (r as any)?.in_work_hour_by_designer;
+    if (map && typeof map === "object") {
+      Object.keys(map).forEach((k) => {
+        const kk = String(k).trim();
+        if (kk) keys.add(kk);
+      });
+    }
+
+    // 2) assign_rows
+    const rows = (r as any)?.assign_rows;
+    if (Array.isArray(rows)) {
+      rows.forEach((row: any) => {
+        const u = String(row?.designer_uid ?? "").trim();
+        const n = String(row?.designer_name ?? row?.designer ?? "").trim();
+        if (u) keys.add(u);
+        if (n) keys.add(n);
+      });
+    }
+
+    return Array.from(keys);
+  };
+
+  const getEffectiveAssignees = (r: RequestDoc): string[] => {
+    const raw = getAssignees(r).map((s) => s.trim()).filter(Boolean);
+    const fromHours = getAssigneeKeysFromHours(r);
+
+    const merged = [...raw, ...fromHours]
+      .map((k) => {
+        const kk = String(k).trim();
+        if (!kk) return "";
+        return nameByUid[kk] ? nameByUid[kk] : kk;
+      })
+      .filter(Boolean);
+
+    const cleaned = merged.filter((n) => n !== "미배정" && !isDummyByName(n));
+
+    const comp = normCompany(r.company);
+    if (cleaned.length <= 1) return cleaned;
+    if (comp === "homeplus") return cleaned;
     return cleaned;
   };
 
-  // 문서가 특정 디자이너에게 차지하는 내부공수 = in_work_hour ÷ (제외자 뺀 배정 인원)
-  const shareHourFor = (r: RequestDoc, who: string): number => {
-    const eff = getEffectiveAssignees(r);
-    if (!eff.includes(who)) return 0;
-    const base = Number(r.in_work_hour) || 0;
-    const n = eff.length || 1;
-    return base / n;
+  // ★ 변경: 내부공수는 "균등분배" 금지.
+  // (1) assigned_designers[].in_work_hour
+  // (2) in_work_hour_by_designer
+  // (3) assign_rows
+  // 외에는 0
+  const shareHourFor = (r: RequestDoc, whoName: string): number => {
+    const who = String(whoName ?? "").trim();
+    if (!who) return 0;
+
+    const whoUid = uidByName[who];
+
+    // 0) ★ 추가: assigned_designers(객체배열)에서 직접 내부공수 합산
+    const ad = (r as any)?.assigned_designers;
+    if (Array.isArray(ad) && ad.length) {
+      const sumFromAssigned = ad
+        .filter((x: any) => x && typeof x === "object")
+        .filter((x: any) => {
+          const u = String(x?.uid ?? x?.designer_uid ?? "").trim();
+          const n = String(
+            x?.name ?? x?.displayName ?? x?.designer_name ?? x?.designer ?? ""
+          ).trim();
+
+          // uid 매칭 우선, 없으면 name 매칭
+          if (whoUid && u) return u === whoUid;
+          if (n) return n === who;
+          // 레거시로 uid를 name 칸에 넣은 경우 대비
+          if (whoUid && n) return n === whoUid;
+          return false;
+        })
+        .reduce((acc: number, x: any) => acc + toNum(x?.in_work_hour), 0);
+
+      if (sumFromAssigned > 0) return sumFromAssigned;
+    }
+
+    // 1) in_work_hour_by_designer
+    const map = (r as any)?.in_work_hour_by_designer;
+    if (map && typeof map === "object") {
+      if (Object.prototype.hasOwnProperty.call(map, who)) return toNum(map[who]);
+
+      const uid = whoUid;
+      if (uid && Object.prototype.hasOwnProperty.call(map, uid)) return toNum(map[uid]);
+    }
+
+    // 2) assign_rows
+    const rows = (r as any)?.assign_rows;
+    if (Array.isArray(rows) && rows.length) {
+      const uid = whoUid;
+
+      const sum = rows
+        .filter((row: any) => {
+          const ru = String(row?.designer_uid ?? "").trim();
+          const rn = String(row?.designer_name ?? row?.designer ?? "").trim();
+          if (uid && ru) return ru === uid;
+          if (rn) return rn === who;
+          return ru === who;
+        })
+        .reduce((acc: number, row: any) => acc + toNum(row?.in_work_hour), 0);
+
+      return sum;
+    }
+
+    return 0;
   };
 
-  // 디자이너별 집계 (배정 배열 기반)
   const rows: DesignerRow[] = useMemo(() => {
-    // 문서에서 나온 배정자도 ★허수계정은 제외해서 "행" 자체가 안 생기게
     const fromDocs = Array.from(
       new Set(
         docs
@@ -250,30 +405,23 @@ export default function InWorkHour({
     return designers.map((name) => {
       const mine = docs.filter((d) => getEffectiveAssignees(d).includes(name));
 
-      // 선택 연/월에 속하는 문서만 뽑아서 "월집계"에 사용
       const monthDocs = mine.filter((d) => {
         const dt = anchorDate(d);
         return dt && dt.getFullYear() === targetYear && dt.getMonth() === targetMonth;
       });
 
-      // ✅ 기준일(당일)에 속하는 문서만 뽑아서 "현재 공수(h)"에 사용
       const dayDocs = mine.filter((d) => {
         const dt = anchorDate(d);
         return sameDay(dt, day);
       });
 
-      // ✅ 대기 / 진행중은 전체 요청 기준
       const wait = mine.filter((d) => isWait(d.status)).length;
       const progress = mine.filter((d) => isProgress(d.status)).length;
-
-      // ✅ 완료만 선택 월 기준
       const done = monthDocs.filter((d) => isDone(d.status)).length;
 
-      // 공수(h)는 "기준일(당일)" 기준
       const usedHoursRaw = dayDocs.reduce((s, d) => s + shareHourFor(d, name), 0);
       const usedHours = floorTo(usedHoursRaw, 2);
 
-      // 일별 / 월평균은 그대로 "선택 월" 기준
       const dailyHoursArr = Array(daysInMonth).fill(0);
       const dailyCountsArr = Array(daysInMonth).fill(0);
 
@@ -316,6 +464,8 @@ export default function InWorkHour({
     dailyHours,
     daysInSelectedMonth,
     day,
+    uidByName,
+    nameByUid,
   ]);
 
   if (rows.length === 0) {
@@ -333,10 +483,9 @@ export default function InWorkHour({
 
       <InWorkHourWrap>
         <InWorkHourTable>
-          {/* colgroup: 앞부분 폭만 고정, 일자는 해당 월 일수만큼 자동 분배 */}
           <colgroup>
-            <col style={{ width: "3%" }} />   {/* 번호 */}
-            <col style={{ width: "5%" }} />   {/* 디자이너명 */}
+            <col style={{ width: "3%" }} />
+            <col style={{ width: "5%" }} />
             <col style={{ width: "4%" }} />
             <col style={{ width: "4%" }} />
             <col style={{ width: "4%" }} />
@@ -344,7 +493,7 @@ export default function InWorkHour({
             {Array.from({ length: daysInSelectedMonth }).map((_, i) => (
               <col key={i} />
             ))}
-            <col style={{ width: "5%" }} />   {/* 월 평균 */}
+            <col style={{ width: "5%" }} />
           </colgroup>
 
           <thead>
@@ -471,15 +620,14 @@ const InWorkHourTable = styled.table`
   }
 `;
 
-// 주말 + 오늘 표시용
 const InWorkHourTableTh = styled.th<{
   $isPeriod?: boolean;
   $isWeekend?: boolean;
   $isToday?: boolean;
 }>`
   background-color: ${({ theme, $isPeriod, $isWeekend, $isToday }) => {
-    if ($isToday) return "#cf67f769";          // 오늘
-    if ($isWeekend) return "#fb828261";        // 토/일요일
+    if ($isToday) return "#cf67f769";
+    if ($isWeekend) return "#fb828261";
     return $isPeriod ? theme.colors.pink01 : theme.colors.gray08;
   }};
   font-weight: 700;
@@ -501,13 +649,13 @@ const InWorkHourTableTd = styled.td<{
   text-align: center;
   font-weight: 500;
   background-color: ${({ $isWeekend, $isToday }) => {
-    if ($isToday) return "#f1d0ff96";          // 오늘
-    if ($isWeekend) return "#ffdfdf45";        // 토/일요일
+    if ($isToday) return "#f1d0ff96";
+    if ($isWeekend) return "#ffdfdf45";
     return "transparent";
   }};
   color: ${({ $isWeekend, $isToday }) => {
-    if ($isToday) return "#000000";          // 오늘
-    if ($isWeekend) return "#ffdfdf45";        // 토/일요일
+    if ($isToday) return "#000000";
+    if ($isWeekend) return "#ffdfdf45";
     return "#000";
   }};
   &:first-of-type {

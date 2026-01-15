@@ -34,8 +34,14 @@ interface DesignRequest {
   requirement: string;
   url?: string;
   note?: string;
-  assigned_designers?: string[];
+
+  // 이제 assigned_designers는 string[]이 아니라 객체 배열일 수 있음
+  assigned_designers?: any[];
   assigned_designer?: string;
+
+  // 디자이너 화면 쿼리용
+  assigned_designer_uids?: string[];
+
   review_status?: string;
   designer_start_date?: string;
   designer_end_date?: string;
@@ -57,7 +63,7 @@ const DEFAULT_STATUS = "진행 상태 선택";
 const DEFAULT_COMPANY = "회사 선택";
 const SPECIAL_SOLO_NAME = "홈돌이";
 
-// ★ 추가: 회사 비교용 정규화(문서ID nsmall vs 표시명 NSmall 모두 매칭)
+// 회사 비교용 정규화(문서ID nsmall vs 표시명 NSmall 모두 매칭)
 const companyKey = (v: any) =>
   String(v ?? "")
     .trim()
@@ -67,6 +73,29 @@ const companyKey = (v: any) =>
 // 이번 달 판정 헬퍼(요청자 코드와 동일)
 const isSameMonth = (d: Date, base = new Date()) =>
   d.getFullYear() === base.getFullYear() && d.getMonth() === base.getMonth();
+
+type AssignedDesignerLike = { uid?: string; name?: string; out_work_hour?: number; in_work_hour?: number };
+const normalizeAssignedDesigners = (raw: any): AssignedDesignerLike[] => {
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    if (raw.length === 0) return [];
+    if (typeof raw[0] === "string") {
+      return raw.map((s: string) => ({ name: String(s).trim() })).filter(d => d.name);
+    }
+    if (typeof raw[0] === "object") {
+      return raw
+        .map((o: any) => ({
+          uid: typeof o?.uid === "string" ? o.uid : undefined,
+          name: String(o?.name ?? "").trim(),
+          out_work_hour: Number(o?.out_work_hour ?? 0),
+          in_work_hour: Number(o?.in_work_hour ?? 0),
+        }))
+        .filter(d => d.name);
+    }
+  }
+  if (typeof raw === "string") return [{ name: raw.trim() }];
+  return [];
+};
 
 export default function Designer({ view, userRole, setIsDrawerOpen, setDetailData, statusFromAside, clearStatusFromAside, filterResetKey }: RequesterProps) {
   const [assignedRequests, setAssignedRequests] = useState<DesignRequest[]>([]);
@@ -103,8 +132,7 @@ export default function Designer({ view, userRole, setIsDrawerOpen, setDetailDat
 
   // ✅ Firestore에서 로그인 디자이너에게 배정된 요청만 가져오기
   useEffect(() => {
-    if (!designerName) return;
-
+    // ★ 변경: 디자이너 배정은 UID 기반으로 조회해야 함
     if (view === "dashboard" || view === "inworkhour") {
       setAssignedRequests([]);
       return;
@@ -122,10 +150,12 @@ export default function Designer({ view, userRole, setIsDrawerOpen, setDetailDat
       return () => unsubAll();
     }
 
-    // 내 작업 리스트 (이제 배열만 사용)
+    // ★ 변경: "내 작업 리스트"는 assigned_designer_uids array-contains(userUid)
+    if (!userUid) return;
+
     const qArr = query(
       collection(db, "design_request"),
-      where("assigned_designers", "array-contains", designerName),
+      where("assigned_designer_uids", "array-contains", userUid), // ★ 변경
       orderBy("design_request_id", "desc")
     );
 
@@ -133,7 +163,7 @@ export default function Designer({ view, userRole, setIsDrawerOpen, setDetailDat
       setAssignedRequests(snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })));
     });
     return () => unsub();
-  }, [designerName, view]);
+  }, [userUid, view]);
   
   // 회사 옵션 = companies 컬렉션 문서(company_name)로 구성
   useEffect(() => {
@@ -242,9 +272,10 @@ export default function Designer({ view, userRole, setIsDrawerOpen, setDetailDat
 
   // 문서에서 배정자 목록을 안전하게 꺼내기
   const getAssignees = (r: any): string[] => {
-    if (Array.isArray(r.assigned_designers)) {
-      return r.assigned_designers.filter(Boolean).map((s: string) => s.trim());
-    }
+    // ★ 변경: 객체 배열이면 name만 추출
+    const arr = normalizeAssignedDesigners(r.assigned_designers);
+    if (arr.length) return arr.map(d => String(d.name ?? "").trim()).filter(Boolean);
+
     if (r.assigned_designer) return [String(r.assigned_designer).trim()];
     return [];
   };
@@ -357,9 +388,9 @@ export default function Designer({ view, userRole, setIsDrawerOpen, setDetailDat
     if (row.status === "완료" || row.status === "취소") return false;
 
     const mine =
-      Array.isArray(row.assigned_designers)
-        ? row.assigned_designers.includes(designerName)
-        : row.assigned_designer === designerName;
+      Array.isArray(row.assigned_designer_uids) && userUid
+        ? row.assigned_designer_uids.includes(userUid)
+        : false;
 
     if (view === "allrequestlist" && !mine) return false;
     return true;

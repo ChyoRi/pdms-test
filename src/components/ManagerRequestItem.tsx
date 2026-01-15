@@ -3,18 +3,14 @@ import urlIcon from "../assets/url-icon.svg";
 import urlIconGray from "../assets/url-icon-gray.svg"
 import commentIcon from "../assets/comment.svg";
 import commentIconGray from "../assets/comment_gray.svg"
-import { useCallback, useMemo } from "react";
+import { useCallback } from "react";
 import { auth } from "../firebaseconfig";
 
 interface ManagerRequestItemProps {
   index: number;
   item: RequestData;
   userUid?: string;
-  designerList: any[];
-  selectedDesigners: string[];
-  onDesignerSelect: (designerNames: string[]) => void;
-  onAssignDesigner: () => void;
-  onUnassignDesigner: (designerName: string) => void;
+  onUnassignDesigner: (payload: { uid?: string; name: string }) => void;
   onSendToRequester: () => void;
   onDetailClick: (item: RequestData) => void;
   workHourValue: string;
@@ -23,16 +19,26 @@ interface ManagerRequestItemProps {
   onStartEditWorkHour: () => void;
   onCancelEditWorkHour: () => void;
   localReadMs?: number;
+  onOpenAssignDesigner?: (target: RequestData) => void;
 }
+
+const normalizeAssigned = (raw: any): { uid?: string; name: string }[] => {
+  if (!Array.isArray(raw) || raw.length === 0) return [];
+  if (typeof raw[0] === "string") {
+    return raw.map((n: any) => ({ name: String(n).trim() })).filter((x) => x.name);
+  }
+  return raw
+    .map((d: any) => ({
+      uid: String(d?.uid ?? "").trim() || undefined,
+      name: String(d?.name ?? "").trim(),
+    }))
+    .filter((x) => x.name);
+};
 
 export default function ManagerRequestItem({
   index,
   item,
   userUid,
-  designerList,
-  selectedDesigners,
-  onDesignerSelect,
-  onAssignDesigner,
   onUnassignDesigner,
   onSendToRequester,
   onDetailClick,
@@ -41,7 +47,8 @@ export default function ManagerRequestItem({
   onSaveWorkHour,
   onStartEditWorkHour,
   onCancelEditWorkHour,
-  localReadMs
+  localReadMs,
+  onOpenAssignDesigner
 }: ManagerRequestItemProps) {
   // 🔁 매니저 화면 표시 전용 매핑
   const displayStatusForManager = (s: string) =>
@@ -80,40 +87,15 @@ export default function ManagerRequestItem({
     [onCancelEditWorkHour]
   );
 
-  // 이미 배정된 사람들
-  const assignedList: string[] = Array.isArray((item as any).assigned_designers)
-    ? (item as any).assigned_designers
-    : ((item as any).assigned_designer ? [(item as any).assigned_designer] : []);
+  // ★ 변경: assigned_designers(객체/문자열) normalize
+  const assignedRaw = (item as any).assigned_designers;
+  const assignedList = normalizeAssigned(assignedRaw);
 
-  // 허수계정 판별 (DB name 자체가 .../… 로 끝나는 케이스)
-  const isDummyByName = (name: string) => {
-    const n = String(name ?? "").trim();
-    return !!n && n.startsWith("★");
-  };
-
-  // 디자이너 목록 그룹 분리 (실계정 먼저, 허수계정은 아래)
-  const { realDesigners, dummyDesigners } = useMemo(() => {
-    const list = (designerList ?? []).map((d) => ({
-      ...d,
-      __name: String(d?.name ?? "").trim(),
-    }));
-
-    const real = list
-      .filter((d) => d.__name && !isDummyByName(d.__name))
-      .sort((a, b) => a.__name.localeCompare(b.__name, "ko"));
-
-    const dummy = list
-      .filter((d) => d.__name && isDummyByName(d.__name))
-      .sort((a, b) => a.__name.localeCompare(b.__name, "ko"));
-
-    return { realDesigners: real, dummyDesigners: dummy };
-  }, [designerList]);
-
-  // ★ 멀티 선택 onChange
-  const onChangeSingle = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const v = e.target.value;
-    onDesignerSelect(v ? [v] : []); // 선택 해제 시 빈 배열
-  };
+  // ★ 추가: legacy single 지원
+  const legacySingle = String((item as any).assigned_designer ?? "").trim();
+  const finalAssigned = legacySingle
+    ? [...assignedList, { name: legacySingle }]
+    : assignedList;
 
   // ★ 안전 변환: Timestamp → ms, 보류중은 now
   const toMillisSafe = (v: any): number | undefined => {
@@ -230,7 +212,7 @@ export default function ManagerRequestItem({
   const isEnded = item.status === "완료" || item.status === "취소";
   
   return(
-    <RequestListTableTr isCanceled={item.status === "취소" || item.status === "완료"}>
+    <RequestListTableTr isCanceled={item.status === "취소" || item.status === "완료"} isCancelOnly={item.status === "취소"}>
       <RequestListTableTd>{index}</RequestListTableTd>
       <RequestListTableTd>
         <RequestListRequestIdText onClick={openDetail}>
@@ -298,17 +280,18 @@ export default function ManagerRequestItem({
       <RequestListTableTd>{formatDate(item.designer_end_date)}</RequestListTableTd>
       {/* ✅ 디자이너 선택 + 배정 */}
       <RequestListTableTd>
-        {/* 배정된 태그 */}
-        {assignedList.length > 0 && (
+        {finalAssigned.length > 0 && (
           <AssignedWrap>
-            {assignedList.map((name) => (
-              <AssignedTag key={name}>
-                {name}
+            {finalAssigned.map((d) => (
+              <AssignedTag key={d.uid || d.name}>
+                {d.name}
                 <RemoveBtn
                   type="button"
-                  onClick={() => { if (!isDoneOrCanceled) onUnassignDesigner(name); }}
+                  onClick={() => {
+                    if (!isDoneOrCanceled) onUnassignDesigner({ uid: d.uid, name: d.name }); // ★ 변경
+                  }}
                   disabled={isDoneOrCanceled}
-                  aria-label={`${name} 배정 해제`}
+                  aria-label={`${d.name} 배정 해제`}
                 >
                   ×
                 </RemoveBtn>
@@ -317,49 +300,17 @@ export default function ManagerRequestItem({
           </AssignedWrap>
         )}
 
-        {/* ★ 멀티 셀렉트 + 이미 배정된 사람은 disabled */}
         <AssignRow>
-          <AssignSelect
-            value={selectedDesigners[0] ?? ""} // 한 명만 표시
-            onChange={onChangeSingle}
-            disabled={isDoneOrCanceled}
-          >
-            <option value="">선택</option> {/* placeholder */}
-
-            <optgroup label="디자이너">
-              {realDesigners.map((designer: any) => {
-                const name = designer.__name as string;
-                const used = assignedList.includes(name);
-                return (
-                  <option key={designer.id} value={name} disabled={used}>
-                    {name}
-                    {used ? " (배정됨)" : ""}
-                  </option>
-                );
-              })}
-            </optgroup>
-
-            {dummyDesigners.length > 0 && (
-              <optgroup label="허수계정">
-                {dummyDesigners.map((designer: any) => {
-                  const name = designer.__name as string;
-                  const used = assignedList.includes(name);
-                  return (
-                    <option key={designer.id} value={name} disabled={used}>
-                      {name}
-                      {used ? " (배정됨)" : ""}
-                    </option>
-                  );
-                })}
-              </optgroup>
-            )}
-          </AssignSelect>
-
           <AssignButton
-            onClick={onAssignDesigner}
-            disabled={isDoneOrCanceled || selectedDesigners.length === 0}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (item.status === "취소") return;
+              onOpenAssignDesigner?.(item);
+            }}
+            disabled={item.status === "취소" || !onOpenAssignDesigner}
           >
-            배정
+            상세배정
           </AssignButton>
         </AssignRow>
       </RequestListTableTd>
@@ -423,7 +374,7 @@ export default function ManagerRequestItem({
   )
 }
 
-const RequestListTableTr = styled.tr<{ isCanceled: boolean }>`
+const RequestListTableTr = styled.tr<{ isCanceled: boolean; isCancelOnly: boolean }>`
   ${({ isCanceled }) =>
     isCanceled &&
     `
@@ -432,7 +383,7 @@ const RequestListTableTr = styled.tr<{ isCanceled: boolean }>`
         background-color: #f4f4f4;
       }
     `}
-  
+
   ${({ isCanceled, theme }) =>
     isCanceled &&
     `
@@ -440,7 +391,13 @@ const RequestListTableTr = styled.tr<{ isCanceled: boolean }>`
         background-color: ${theme.colors.gray07};
         color: ${theme.colors.gray06};
       }
-      ${ReviewButton}, ${AssignButton} {
+    `}
+
+  /* ★ 핵심 변경: 버튼 차단(pointer-events:none)은 "취소"일 때만 */
+  ${({ isCancelOnly, theme }) =>
+    isCancelOnly &&
+    `
+      ${ReviewButton} {
         background-color: ${theme.colors.gray07};
         color: ${theme.colors.gray06};
         border-color: ${theme.colors.gray06};
@@ -448,6 +405,7 @@ const RequestListTableTr = styled.tr<{ isCanceled: boolean }>`
         pointer-events: none;
       }
     `}
+
   & td {
     font-family: 'Pretendard';
     font-size: 13px;
@@ -458,7 +416,7 @@ const RequestListTableTr = styled.tr<{ isCanceled: boolean }>`
 
   &:hover {
     td {
-      background-color: ${({ theme }) => theme.colors.gray04}
+      background-color: ${({ theme }) => theme.colors.gray04};
     }
   }
 `;
@@ -655,13 +613,6 @@ const AssignButton = styled.button`
     cursor: default;
     pointer-events: none;
   }
-`;
-
-const AssignSelect = styled.select`
-  width: 90px;
-  padding: 6px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
 `;
 
 const ReviewButton = styled.button`
