@@ -7,11 +7,6 @@ interface ManagerRequestListProps {
   sendToRequester: (requestId: string) => void;
   onDetailClick: (item: RequestData) => void;
   unassignDesigner: (requestId: string, payload: { uid?: string; name: string }) => void;
-  workHours: { [id: string]: string };
-  onChangeWorkHour: (requestId: string, val: string) => void;
-  onSaveWorkHour: (requestId: string) => void;
-  onStartEditWorkHour: (requestId: string) => void;
-  onCancelEditWorkHour: (requestId: string) => void;
   readLocal: { [id: string]: number };
   onOpenAssignDesigner?: (target: RequestData) => void;
 }
@@ -22,11 +17,6 @@ export default function ManagerRequestList({
   unassignDesigner,
   sendToRequester,
   onDetailClick,
-  workHours,
-  onChangeWorkHour,
-  onSaveWorkHour,
-  onStartEditWorkHour,
-  onCancelEditWorkHour,
   readLocal,
   onOpenAssignDesigner
 }: ManagerRequestListProps) {
@@ -80,11 +70,6 @@ export default function ManagerRequestList({
                                   onUnassignDesigner={(payload) => unassignDesigner(item.id, payload)}
                                   onSendToRequester={() => sendToRequester(item.id)} 
                                   onDetailClick={onDetailClick}
-                                  workHourValue={workHours[item.id] ?? ""}
-                                  onChangeWorkHour={(v) => onChangeWorkHour(item.id, v)}
-                                  onSaveWorkHour={() => onSaveWorkHour(item.id)}
-                                  onStartEditWorkHour={() => onStartEditWorkHour(item.id)}
-                                  onCancelEditWorkHour={() => onCancelEditWorkHour(item.id)}
                                   localReadMs={readLocal[item.id]}
                                   onOpenAssignDesigner={onOpenAssignDesigner}
               />

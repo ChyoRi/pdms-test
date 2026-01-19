@@ -2,7 +2,7 @@ import styled from "styled-components";
 import { useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 
-type ViewType = "dashboard" | "myrequestlist" | "allrequestlist" | "inworkhour";
+type ViewType = "dashboard" | "myrequestlist" | "allrequestlist" | "inworkhour" | "channelworkhour";
 
 interface NavProps {
   userRole: number | null; // 1: 요청자, 2: 디자이너, 3: 담당자(매니저)
@@ -42,7 +42,7 @@ export default function Nav({ userRole, onResetFilters }: NavProps) {
     }
   }, [role]);
 
-  // ★ 변경: 매니저의 단일 메뉴 타깃을 myrequestlist 로 고정
+  // 매니저의 단일 메뉴 타깃을 myrequestlist 로 고정
   const firstTarget: ViewType = isManager ? "myrequestlist" : "myrequestlist";
 
   // ★ 매니저는 두 번째(전체) 버튼 숨김
@@ -95,6 +95,19 @@ export default function Nav({ userRole, onResetFilters }: NavProps) {
               $active={view === "inworkhour"}
             >
               내부 공수
+            </MainMenuItemButton>
+          </MainMenuItem>
+        )}
+
+        {/* 5) 매니저 전용: 채널별 공수 */}
+        {isManager && (
+          <MainMenuItem>
+            <MainMenuItemButton
+              type="button"
+              onClick={() => go("channelworkhour")}
+              $active={view === "channelworkhour"}
+            >
+              채널별 공수
             </MainMenuItemButton>
           </MainMenuItem>
         )}

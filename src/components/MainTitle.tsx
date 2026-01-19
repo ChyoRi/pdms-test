@@ -2,7 +2,7 @@ import styled from "styled-components"
 import { useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 
-type ViewType = "dashboard" | "myrequestlist" | "allrequestlist" | "inworkhour";
+type ViewType = "dashboard" | "myrequestlist" | "allrequestlist" | "inworkhour" | "channelworkhour";
 
 interface MainTitleProps {
   userRole: number | null; // 1: 요청자, 2: 디자이너, 3: 매니저
@@ -19,6 +19,7 @@ export default function MainTitle({ userRole }: MainTitleProps) {
     const common = {
       dashboard: "전체 현황",
       inworkhour: "내부 공수",
+      channelworkhour: "채널별 공수",
     } as const;
 
     if (role === 2) {

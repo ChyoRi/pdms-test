@@ -3,7 +3,6 @@ import urlIcon from "../assets/url-icon.svg";
 import urlIconGray from "../assets/url-icon-gray.svg"
 import commentIcon from "../assets/comment.svg";
 import commentIconGray from "../assets/comment_gray.svg"
-import { useCallback } from "react";
 import { auth } from "../firebaseconfig";
 
 interface ManagerRequestItemProps {
@@ -13,11 +12,6 @@ interface ManagerRequestItemProps {
   onUnassignDesigner: (payload: { uid?: string; name: string }) => void;
   onSendToRequester: () => void;
   onDetailClick: (item: RequestData) => void;
-  workHourValue: string;
-  onChangeWorkHour: (val: string) => void;
-  onSaveWorkHour: () => void;
-  onStartEditWorkHour: () => void;
-  onCancelEditWorkHour: () => void;
   localReadMs?: number;
   onOpenAssignDesigner?: (target: RequestData) => void;
 }
@@ -42,11 +36,6 @@ export default function ManagerRequestItem({
   onUnassignDesigner,
   onSendToRequester,
   onDetailClick,
-  workHourValue,
-  onChangeWorkHour,
-  onSaveWorkHour,
-  onStartEditWorkHour,
-  onCancelEditWorkHour,
   localReadMs,
   onOpenAssignDesigner
 }: ManagerRequestItemProps) {
@@ -72,20 +61,7 @@ export default function ManagerRequestItem({
     onDetailClick(item);
   };
 
-  const isEditingWorkHour = !!item.work_hour_edit_state;
   const isDoneOrCanceled = item.status === "취소" || item.status === "완료";
-
-   // 스코프를 벗어나는 blur만 취소로 처리
-  const handleScopeBlur = useCallback(
-    (e: React.FocusEvent<HTMLDivElement>) => {
-      const next = e.relatedTarget as Node | null; // 포커스가 이동한 대상
-      // next가 없거나, 현재 스코프 밖이면 편집 취소
-      if (!next || !e.currentTarget.contains(next)) {
-        onCancelEditWorkHour();
-      }
-    },
-    [onCancelEditWorkHour]
-  );
 
   // ★ 변경: assigned_designers(객체/문자열) normalize
   const assignedRaw = (item as any).assigned_designers;
@@ -324,52 +300,7 @@ export default function ManagerRequestItem({
           ""
         )}
       </RequestListTableTd>
-      <RequestListTableTd>
-        {isEditingWorkHour ? (
-          <WorkHourScope tabIndex={-1} onBlur={handleScopeBlur}>
-            <WorkHourInput
-              type="text"
-              placeholder="공수 입력"
-              value={workHourValue}
-              onChange={(e) => onChangeWorkHour(e.target.value)}
-              onClick={(e) => e.stopPropagation()}
-              disabled={isDoneOrCanceled}
-              autoFocus
-            />
-            <WorkHourSaveButton
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (isDoneOrCanceled) return;
-                onSaveWorkHour();
-              }}
-              disabled={isDoneOrCanceled}
-            >
-              수정
-            </WorkHourSaveButton>
-          </WorkHourScope>
-        ) : (
-          item.out_work_hour != null ? (
-            <WorkHourReadOnly
-              tabIndex={0}
-              onClick={(e) => {
-                e.stopPropagation();
-                if (isDoneOrCanceled) return;
-                onStartEditWorkHour();
-              }}
-              onKeyDown={(e) => {
-                if (isDoneOrCanceled) return;
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  onStartEditWorkHour();
-                }
-              }}
-            >
-              {item.out_work_hour}
-            </WorkHourReadOnly>
-          ) : null
-        )}
-      </RequestListTableTd>
+      <RequestListTableTd>{item.out_work_hour ?? ""}</RequestListTableTd>
     </RequestListTableTr>
   )
 }
@@ -626,44 +557,6 @@ const CompletedText = styled.span`
   color: ${({ theme }) => theme.colors.gray05};
   font-size: 13px;
   font-weight: bold;
-`;
-
-const WorkHourInput = styled.input`
-  width: 40px;
-  font-family: 'Pretendard';
-  font-size: 16px;
-  font-weight: 500;
-
-  &::placeholder {
-    font-size: 11px;
-  }
-`;
-
-const WorkHourSaveButton = styled.button`
-  margin: 6px 0 0 10px;
-  padding: 4.5px 10px;
-  border-radius: 4px;
-  background-color: ${({ theme }) => theme.colors.black};
-  color: ${({ theme }) => theme.colors.white01};
-`;
-
-const WorkHourReadOnly = styled.span`
-  display: inline-block;
-  min-width: 24px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  cursor: pointer;
-  user-select: none;
-  &:hover {
-    text-decoration: underline;
-    font-weight: 600;
-  }
-`;
-
-const WorkHourScope = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
 `;
 
 const AssignedWrap = styled.div`

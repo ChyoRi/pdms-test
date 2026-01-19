@@ -12,24 +12,26 @@ type DesignerOpt = {
   name: string;
 };
 
-// ★ 추가: 내부용(정렬/표시용 __name 포함)
+// 내부용(정렬/표시용 __name 포함)
 type DesignerOptEx = DesignerOpt & { __name: string };
 
-// 타입: 한 줄(row)
-export type AssignRow = {
-  id: string;
-  task_form: string;
-  task_type: string;
+// ★ 변경: AssignRow 삭제 -> AssignedDesigner로 통일
+// - _rowId: UI 전용(렌더 key), DB 저장 X
+// - uid/name: 디자이너 식별
+// - requirement: 회사 공수 스펙의 “업무형태” 값(드롭다운)
+// - (작업항목은 문서 requirement를 별도로 표시)
+export type AssignedDesigner = {
+  _rowId: string; // ★ 추가: UI 전용 key
+  uid: string;
+  name: string;
 
-  // ★ 유지: 업무형태상세
+  task_form: string;
+  requirement: string; // ★ 변경: task_type -> requirement
   task_type_detail?: string;
 
-  task_detail: string; // 저장/전달용(= requirement 고정)
-  count: string; // 카운트
-  designer_uid: string;
-
-  out_work_hour?: number;
-  in_work_hour?: number;
+  count: string; // 편집용
+  out_work_hour: number;
+  in_work_hour: number;
 };
 
 interface AssignDesignerProps {
@@ -37,7 +39,7 @@ interface AssignDesignerProps {
   onClose: () => void;
 
   target?: RequestData | null;
-  onAssign?: (rows: AssignRow[]) => void;
+  onAssign?: (rows: AssignedDesigner[]) => void; // ★ 변경
 }
 
 // 값 정리
@@ -56,14 +58,22 @@ const toCount = (v: any) => {
   return Number.isFinite(n) && n > 0 ? n : 1;
 };
 
-// ★ 추가: 문자열 배열 보정
+// count 입력값(숫자만/빈값 허용)
+const normalizeCountInput = (v: string) => {
+  const s = String(v ?? "");
+  if (s === "") return "";
+  if (!/^\d+$/.test(s)) return s.replace(/[^\d]/g, "");
+  return s;
+};
+
+// 문자열 배열 보정
 const _toStrArray = (v: any): string[] => {
   if (!v) return [];
   if (Array.isArray(v)) return v.map(String).map((x) => x.trim()).filter(Boolean);
   return [];
 };
 
-// ★ 추가: RequestForm과 동일한 task_type 자동 파서
+// RequestForm과 동일한 task_type 자동 파서
 type TaskTypeParsed =
   | { mode: "flat"; allTypes: string[] }
   | { mode: "type_detail"; allTypes: string[]; detailsByType: Record<string, string[]> }
@@ -71,12 +81,10 @@ type TaskTypeParsed =
   | { mode: "form_type_detail"; spec: Record<string, Record<string, string[]>> };
 
 const parseTaskTypeSpec = (taskType: any, forms: string[]): TaskTypeParsed => {
-  // (A) string[]
   if (Array.isArray(taskType)) {
     return { mode: "flat", allTypes: _toStrArray(taskType) };
   }
 
-  // object
   if (taskType && typeof taskType === "object") {
     const keys = Object.keys(taskType || {});
     const vals = keys.map((k) => taskType[k]);
@@ -85,22 +93,18 @@ const parseTaskTypeSpec = (taskType: any, forms: string[]): TaskTypeParsed => {
     const allObjects =
       vals.length > 0 && vals.every((v) => v && typeof v === "object" && !Array.isArray(v));
 
-    // (B) or (C): { [k]: string[] }
     if (allArrays) {
       const map: Record<string, string[]> = {};
       keys.forEach((k) => (map[k] = _toStrArray(taskType[k])));
 
-      // keys가 forms와 전부 일치하면 (C) form -> types
       const keyMatchesForms = forms.length > 0 && keys.every((k) => forms.includes(k));
       if (keyMatchesForms) {
         return { mode: "form_type", typesByForm: map };
       }
 
-      // 아니면 (B) type -> details
       return { mode: "type_detail", allTypes: keys, detailsByType: map };
     }
 
-    // (D): { [form]: { [type]: string[] } }
     if (allObjects) {
       const spec: Record<string, Record<string, string[]>> = {};
       keys.forEach((form) => {
@@ -113,14 +117,12 @@ const parseTaskTypeSpec = (taskType: any, forms: string[]): TaskTypeParsed => {
       return { mode: "form_type_detail", spec };
     }
 
-    // 예외: keys를 types로 간주
     return { mode: "flat", allTypes: keys.map(String).map((x) => x.trim()).filter(Boolean) };
   }
 
   return { mode: "flat", allTypes: [] };
 };
 
-// ★ 추가: AssignDesigner에서도 RequestForm처럼 "form -> type -> detail"을 뽑기 위한 companyCfg
 type CompanyOptionsDoc = {
   task_form?: string[];
   task_type?: any;
@@ -132,12 +134,10 @@ type CompanyOptionsDoc = {
 const buildCompanyCfg = (docData: CompanyOptionsDoc | null, companyKey?: string) => {
   const isHomeplus = companyKey === "homeplus";
 
-  // forms
   const forms = _toStrArray(docData?.task_form);
   const formDefault = forms[0] ?? "";
 
   const rawTaskType = (docData as any)?.task_type ?? (docData as any)?.task_type_form ?? null;
-
   const parsed = parseTaskTypeSpec(rawTaskType, isHomeplus ? forms : []);
 
   const getTypes = (form?: string): string[] => {
@@ -176,7 +176,6 @@ const buildCompanyCfg = (docData: CompanyOptionsDoc | null, companyKey?: string)
   };
 };
 
-// ★ 추가: (form/type/detail) 기반으로 스펙 leaf 찾기 (공수 계산용)
 const getSpecNode = (spec: any, task_form: string, task_type: string, task_type_detail?: string) => {
   const f = norm(task_form);
   const t = norm(task_type);
@@ -184,19 +183,16 @@ const getSpecNode = (spec: any, task_form: string, task_type: string, task_type_
 
   if (!spec || typeof spec !== "object" || !t) return null;
 
-  // form 구조
   const byForm = f && spec?.[f] && typeof spec?.[f] === "object";
   const base = byForm ? spec?.[f]?.[t] : spec?.[t];
 
   if (!base || typeof base !== "object") return null;
 
-  // detail이 있으면 detail 먼저
   if (d && base?.[d] && typeof base?.[d] === "object") return base[d];
 
   return base;
 };
 
-// ★ 추가: leaf(out/in) 추출
 const getBaseHours = (spec: any, task_form: string, task_type: string, task_type_detail?: string) => {
   const node = getSpecNode(spec, task_form, task_type, task_type_detail);
   if (!node || typeof node !== "object") return { out: 0, in: 0 };
@@ -206,59 +202,116 @@ const getBaseHours = (spec: any, task_form: string, task_type: string, task_type
   return { out, in: inn };
 };
 
-// 허수계정 판별
 const isDummyByName = (name: string) => {
   const n = String(name ?? "").trim();
   return !!n && n.startsWith("★");
 };
 
-// ★ 추가: SelectBox 옵션 유틸
 const toSelectOptions = (arr: string[], placeholder = "선택"): SelectBoxOption[] => {
   const base = arr.map((x) => String(x).trim()).filter(Boolean);
   return [{ value: "", label: placeholder }, ...base.map((v) => ({ value: v, label: v }))];
+};
+
+// ★ 변경: 저장된 assigned_designers(row형) 복원 타입
+type SavedAssignedDesigner = {
+  uid?: string;
+  name?: string;
+  task_form?: string;
+  requirement?: string;
+  task_type?: string; // legacy fallback
+  task_type_detail?: string;
+  count?: number | string;
+  out_work_hour?: number;
+  in_work_hour?: number;
+};
+
+const normalizeSavedAssignedDesigners = (raw: any): AssignedDesigner[] => {
+  const arr: SavedAssignedDesigner[] = Array.isArray(raw) ? raw : [];
+
+  const rows = arr
+    .map((r) => {
+      const uid = norm(r.uid);
+      const name = norm(r.name);
+
+      const requirement = norm((r as any).requirement ?? (r as any).task_type);
+
+      const countNum = toCount(r.count ?? 1);
+
+      return {
+        _rowId: crypto.randomUUID(),
+        uid,
+        name,
+        task_form: norm(r.task_form),
+        requirement,
+        task_type_detail: norm(r.task_type_detail) || "",
+        count: String(countNum),
+        out_work_hour: typeof r.out_work_hour === "number" ? r.out_work_hour : 0,
+        in_work_hour: typeof r.in_work_hour === "number" ? r.in_work_hour : 0,
+      } as AssignedDesigner;
+    })
+    .filter((r) => !!r.task_form || !!r.requirement || !!r.uid);
+
+  return rows.length > 0
+    ? rows
+    : [
+        {
+          _rowId: crypto.randomUUID(),
+          uid: "",
+          name: "",
+          task_form: "",
+          requirement: "",
+          task_type_detail: "",
+          count: "1",
+          out_work_hour: 0,
+          in_work_hour: 0,
+        },
+      ];
 };
 
 export default function AssignDesigner({ isOpen, onClose, target, onAssign }: AssignDesignerProps) {
   const [designers, setDesigners] = useState<DesignerOpt[]>([]);
   const [loadingDesigners, setLoadingDesigners] = useState(false);
 
-  // ★ 변경: companySpec + companyDoc 보관
   const [companySpec, setCompanySpec] = useState<any>(null);
   const [companyDoc, setCompanyDoc] = useState<CompanyOptionsDoc | null>(null);
-
-  // ★ 추가: 회사키(홈플러스 판별 등)
   const [companyKey, setCompanyKey] = useState<string>("");
 
-  // 프리필
   const initialTaskForm = norm((target as any)?.task_form);
-  const initialTaskType = norm((target as any)?.task_type);
+  const initialRequirement = norm((target as any)?.task_type); // ★ 유지: 원천 데이터는 기존 task_type(업무형태)
   const initialTaskTypeDetail = norm((target as any)?.task_type_detail);
 
-  // 작업항목은 requirement 고정
-  const requirementText = norm((target as any)?.requirement);
+  const docRequirement = norm((target as any)?.requirement); // ★ 추가: 작업항목(해당 문서 requirement)
 
-  // ★ 추가: RequestForm처럼 회사 설정 생성
   const companyCfg = useMemo(() => buildCompanyCfg(companyDoc, companyKey), [companyDoc, companyKey]);
 
-  // ★ 변경: detail 컬럼 노출 조건
-  const showTypeDetailCol = !!initialTaskTypeDetail || !!companyCfg.isDetailMode;
+  // ★ 변경: "업무형태상세" 컬럼은 '문서에 task_type_detail이 있을 때만' 표시
+  const showTypeDetailCol = !!initialTaskTypeDetail;
 
-  // rows
-  const [rows, setRows] = useState<AssignRow[]>(() => [
+  // ★ 변경: rows 타입 AssignedDesigner[]
+  const [rows, setRows] = useState<AssignedDesigner[]>(() => [
     {
-      id: crypto.randomUUID(),
+      _rowId: crypto.randomUUID(),
+      uid: "",
+      name: "",
       task_form: "",
-      task_type: "",
+      requirement: "",
       task_type_detail: "",
-      task_detail: "",
       count: "1",
-      designer_uid: "",
       out_work_hour: 0,
       in_work_hour: 0,
     },
   ]);
 
-  // 디자이너 목록 그룹 분리
+  const designerNameByUid = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const d of designers ?? []) {
+      const uid = String(d.uid ?? "").trim();
+      const name = String(d.name ?? "").trim();
+      if (uid) m.set(uid, name);
+    }
+    return m;
+  }, [designers]);
+
   const { realDesigners, dummyDesigners } = useMemo(() => {
     const list: DesignerOptEx[] = (designers ?? []).map((d) => ({
       ...d,
@@ -276,23 +329,8 @@ export default function AssignDesigner({ isOpen, onClose, target, onAssign }: As
     return { realDesigners: real, dummyDesigners: dummy };
   }, [designers]);
 
-  // 모달 열릴 때: rows reset + 회사 스펙/옵션 로드
   useEffect(() => {
     if (!isOpen) return;
-
-    setRows([
-      {
-        id: crypto.randomUUID(),
-        task_form: initialTaskForm,
-        task_type: initialTaskType,
-        task_type_detail: initialTaskTypeDetail,
-        task_detail: requirementText,
-        count: "1",
-        designer_uid: "",
-        out_work_hour: 0,
-        in_work_hour: 0,
-      },
-    ]);
 
     (async () => {
       const companyRaw = (target as any)?.company;
@@ -300,13 +338,11 @@ export default function AssignDesigner({ isOpen, onClose, target, onAssign }: As
 
       let docData: any = null;
 
-      // 1) docId로 먼저 찾기
       if (key) {
         const snap = await getDoc(doc(db, "companies", key));
         if (snap.exists()) docData = snap.data();
       }
 
-      // 2) 없으면 company_name 매칭
       if (!docData && companyRaw) {
         const qRef = query(collection(db, "companies"), where("company_name", "==", companyRaw));
         const qs = await getDocs(qRef);
@@ -317,12 +353,44 @@ export default function AssignDesigner({ isOpen, onClose, target, onAssign }: As
 
       setCompanyDoc((docData ?? null) as CompanyOptionsDoc | null);
       setCompanySpec(spec);
-
       setCompanyKey(key || "");
-    })();
-  }, [isOpen, target, initialTaskForm, initialTaskType, initialTaskTypeDetail, requirementText]);
 
-  // 디자이너(role==2) 로드
+      const requestId = String((target as any)?.id ?? "").trim();
+      if (requestId) {
+        const reqSnap = await getDoc(doc(db, "design_request", requestId));
+        if (reqSnap.exists()) {
+          const reqData = reqSnap.data() as any;
+
+          // ★ 변경: assigned_designers(row형) 복원만 사용
+          const saved = reqData?.assigned_designers;
+          if (Array.isArray(saved) && saved.length > 0) {
+            // row형인지 최소 판별
+            const rowShape = saved[0]?.task_form || saved[0]?.requirement || saved[0]?.task_type;
+            if (rowShape) {
+              setRows(normalizeSavedAssignedDesigners(saved));
+              return;
+            }
+          }
+        }
+      }
+
+      // 기본 1행 생성
+      setRows([
+        {
+          _rowId: crypto.randomUUID(),
+          uid: "",
+          name: "",
+          task_form: initialTaskForm,
+          requirement: initialRequirement,
+          task_type_detail: initialTaskTypeDetail,
+          count: "1",
+          out_work_hour: 0,
+          in_work_hour: 0,
+        },
+      ]);
+    })();
+  }, [isOpen, target, initialTaskForm, initialRequirement, initialTaskTypeDetail]);
+
   useEffect(() => {
     if (!isOpen) return;
 
@@ -347,7 +415,6 @@ export default function AssignDesigner({ isOpen, onClose, target, onAssign }: As
     })();
   }, [isOpen]);
 
-  // 디자이너 옵션
   const designerOptions: SelectBoxOption[] = useMemo(() => {
     const base: SelectBoxOption[] = [];
 
@@ -363,74 +430,70 @@ export default function AssignDesigner({ isOpen, onClose, target, onAssign }: As
     return base;
   }, [realDesigners, dummyDesigners, loadingDesigners]);
 
-  // task_form 옵션
   const taskFormOptionsUI: SelectBoxOption[] = useMemo(() => {
     const forms = (companyCfg.forms ?? []).slice();
     if (initialTaskForm && !forms.includes(initialTaskForm)) forms.unshift(initialTaskForm);
     return toSelectOptions(forms);
   }, [companyCfg.forms, initialTaskForm]);
 
-  // 공수 계산(현재 row 기준)
   const calcHoursForRow = (
     task_form: string,
-    task_type: string,
+    requirement: string,
     task_type_detail: string | undefined,
     count: string
   ) => {
     const c = toCount(count);
-    const base = getBaseHours(companySpec, task_form, task_type, task_type_detail);
+    const base = getBaseHours(companySpec, task_form, requirement, task_type_detail);
     return {
       out_work_hour: base.out * c,
       in_work_hour: base.in * c,
     };
   };
 
-  // form/type 변경 시 종속 옵션 보정
-  const updateRow = (id: string, patch: Partial<AssignRow>) => {
+  const updateRow = (rowId: string, patch: Partial<AssignedDesigner>) => {
     setRows((prev) =>
       prev.map((r) => {
-        if (r.id !== id) return r;
+        if (r._rowId !== rowId) return r;
 
-        const next: AssignRow = { ...r, ...patch };
-        next.task_detail = requirementText;
+        const next: AssignedDesigner = { ...r, ...patch };
 
         if (patch.task_form !== undefined) {
           const newForm = String(patch.task_form ?? "").trim();
           const allowedTypes = companyCfg.getTypes(newForm);
 
-          const prevType = String(next.task_type ?? "").trim();
+          const prevType = String(next.requirement ?? "").trim();
           const nextType = allowedTypes.includes(prevType) ? prevType : (allowedTypes[0] ?? "");
 
           next.task_form = newForm;
-          next.task_type = nextType;
+          next.requirement = nextType;
           next.task_type_detail = "";
         }
 
-        if (patch.task_type !== undefined) {
-          next.task_type = String(patch.task_type ?? "").trim();
+        if (patch.requirement !== undefined) {
+          next.requirement = String(patch.requirement ?? "").trim();
           next.task_type_detail = "";
         }
 
+        // ★ 유지: 컬럼을 표시할 때만 디테일 리스트 정합성 체크
         if (showTypeDetailCol) {
           const f = String(next.task_form ?? "").trim();
-          const t = String(next.task_type ?? "").trim();
+          const t = String(next.requirement ?? "").trim();
+
           const details = companyCfg.getDetails(f, t);
           const curDetail = String(next.task_type_detail ?? "").trim();
 
           if (curDetail && details.length > 0 && !details.includes(curDetail)) {
             next.task_type_detail = "";
           }
-
-          if (
-            !String(next.task_type_detail ?? "").trim() &&
-            initialTaskTypeDetail &&
-            details.includes(initialTaskTypeDetail)
-          ) {
-            next.task_type_detail = initialTaskTypeDetail;
-          }
         }
 
-        const hours = calcHoursForRow(next.task_form, next.task_type, next.task_type_detail, next.count);
+        if (patch.uid !== undefined) {
+          const uid = String(patch.uid ?? "").trim();
+          next.uid = uid;
+          next.name = uid ? (designerNameByUid.get(uid) ?? next.name ?? "") : "";
+        }
+
+        const hours = calcHoursForRow(next.task_form, next.requirement, next.task_type_detail, next.count);
         next.out_work_hour = hours.out_work_hour;
         next.in_work_hour = hours.in_work_hour;
 
@@ -442,35 +505,35 @@ export default function AssignDesigner({ isOpen, onClose, target, onAssign }: As
   const handleAddRow = () => {
     const baseForm = initialTaskForm || companyCfg.formDefault || "";
     const allowedTypes = companyCfg.getTypes(baseForm);
-    const baseType = allowedTypes.includes(initialTaskType)
-      ? initialTaskType
-      : (allowedTypes[0] ?? initialTaskType ?? "");
+    const baseType = allowedTypes.includes(initialRequirement)
+      ? initialRequirement
+      : (allowedTypes[0] ?? initialRequirement ?? "");
 
     setRows((prev) => [
       ...prev,
       {
-        id: crypto.randomUUID(),
+        _rowId: crypto.randomUUID(),
+        uid: "",
+        name: "",
         task_form: baseForm,
-        task_type: baseType,
+        requirement: baseType,
         task_type_detail: initialTaskTypeDetail,
-        task_detail: requirementText,
         count: "1",
-        designer_uid: "",
         out_work_hour: 0,
         in_work_hour: 0,
       },
     ]);
   };
 
-  const handleRemoveRow = (id: string) => {
+  const handleRemoveRow = (rowId: string) => {
     setRows((prev) => {
       if (prev.length <= 1) return prev;
-      return prev.filter((r) => r.id !== id);
+      return prev.filter((r) => r._rowId !== rowId);
     });
   };
 
   const handleAssign = () => {
-    const validRows = rows.filter((r) => norm(r.task_form) && norm(r.task_type) && norm(r.designer_uid));
+    const validRows = rows.filter((r) => norm(r.task_form) && norm(r.requirement) && norm(r.uid));
     if (!validRows.length) {
       alert("업무부서/업무형태/디자이너를 선택하세요.");
       return;
@@ -478,14 +541,14 @@ export default function AssignDesigner({ isOpen, onClose, target, onAssign }: As
 
     const cleaned = validRows.map((r) => {
       const c = toCount(r.count);
-      const base = getBaseHours(companySpec, r.task_form, r.task_type, r.task_type_detail);
+      const base = getBaseHours(companySpec, r.task_form, r.requirement, r.task_type_detail);
 
       return {
         ...r,
-        task_detail: requirementText,
         count: String(c),
         out_work_hour: base.out * c,
         in_work_hour: base.in * c,
+        name: norm(r.name) || "(이름없음)",
       };
     });
 
@@ -513,7 +576,7 @@ export default function AssignDesigner({ isOpen, onClose, target, onAssign }: As
                 <col style={{ width: 150 }} />
                 <col style={{ width: 175 }} />
                 {showTypeDetailCol && <col style={{ width: 170 }} />}
-                <col />
+                <col style={{ width: "100%" }} />
                 <col style={{ width: 110 }} />
                 <col style={{ width: 155 }} />
               </colgroup>
@@ -524,7 +587,7 @@ export default function AssignDesigner({ isOpen, onClose, target, onAssign }: As
                   <th>업무부서</th>
                   <th>업무형태</th>
                   {showTypeDetailCol && <th>업무형태상세</th>}
-                  <th>작업항목</th>
+                  <th>작업항목</th> {/* ★ 추가 */}
                   <th>카운트</th>
                   <th>디자이너</th>
                 </tr>
@@ -535,27 +598,28 @@ export default function AssignDesigner({ isOpen, onClose, target, onAssign }: As
                   const formValue = r.task_form || initialTaskForm || companyCfg.formDefault || "";
                   const typeListRaw = companyCfg.getTypes(formValue);
                   const typeList = typeListRaw.slice();
-                  if (r.task_type && !typeList.includes(r.task_type)) typeList.unshift(r.task_type);
+                  if (r.requirement && !typeList.includes(r.requirement)) typeList.unshift(r.requirement);
                   const taskTypeOptionsUI = toSelectOptions(typeList);
 
-                  const detailListRaw = companyCfg.getDetails(formValue, r.task_type);
+                  // 디테일은 컬럼을 표시할 때만 의미 있음
+                  const detailListRaw = showTypeDetailCol ? companyCfg.getDetails(formValue, r.requirement) : [];
                   const detailList = detailListRaw.slice();
                   if (r.task_type_detail && detailListRaw.length > 0 && !detailList.includes(r.task_type_detail)) {
                     detailList.unshift(r.task_type_detail);
                   }
                   const typeDetailOptionsUI = toSelectOptions(detailList);
 
-                  const detailDisabled = !r.task_type || detailListRaw.length === 0;
+                  const detailDisabled = !showTypeDetailCol || !r.requirement || detailListRaw.length === 0;
 
                   return (
-                    <tr key={r.id}>
+                    <tr key={r._rowId}>
                       <td>
                         <RemoveBtn
                           type="button"
                           aria-label="행 삭제"
                           title="행 삭제"
                           disabled={rows.length <= 1}
-                          onClick={() => handleRemoveRow(r.id)}
+                          onClick={() => handleRemoveRow(r._rowId)}
                         >
                           −
                         </RemoveBtn>
@@ -567,17 +631,17 @@ export default function AssignDesigner({ isOpen, onClose, target, onAssign }: As
                           value={r.task_form}
                           placeholder="선택"
                           options={taskFormOptionsUI}
-                          onChange={(next) => updateRow(r.id, { task_form: next })}
+                          onChange={(next) => updateRow(r._rowId, { task_form: next })}
                         />
                       </td>
 
                       <td>
                         <SelectBox
                           full
-                          value={r.task_type}
+                          value={r.requirement}
                           placeholder="선택"
                           options={taskTypeOptionsUI}
-                          onChange={(next) => updateRow(r.id, { task_type: next })}
+                          onChange={(next) => updateRow(r._rowId, { requirement: next })}
                         />
                       </td>
 
@@ -589,24 +653,29 @@ export default function AssignDesigner({ isOpen, onClose, target, onAssign }: As
                             placeholder={detailDisabled ? "-" : "선택"}
                             options={typeDetailOptionsUI}
                             disabled={detailDisabled}
-                            onChange={(next) => updateRow(r.id, { task_type_detail: next })}
+                            onChange={(next) => updateRow(r._rowId, { task_type_detail: next })}
                           />
                         </td>
                       )}
 
-                      <td>
-                        <RequirementSpan title={requirementText}>{requirementText || "-"}</RequirementSpan>
-                      </td>
+                      <td>{docRequirement || "-"}</td> {/* ★ 추가: 작업항목(문서 requirement) */}
 
                       <td>
                         <CountInput
-                          inputMode="decimal"
+                          inputMode="numeric"
                           placeholder="예: 3"
                           value={r.count}
                           onChange={(e) => {
-                            const v = e.target.value;
-                            // ★ 추가: 완전 빈칸이면 1로 유지(원하면 blur에서만 처리해도 됨)
-                            updateRow(r.id, { count: v === "" ? "1" : v });
+                            const v = normalizeCountInput(e.target.value);
+                            updateRow(r._rowId, { count: v });
+                          }}
+                          onBlur={() => {
+                            if (String(r.count ?? "") === "") {
+                              updateRow(r._rowId, { count: "1" });
+                            } else {
+                              const c = toCount(r.count);
+                              updateRow(r._rowId, { count: String(c) });
+                            }
                           }}
                         />
                       </td>
@@ -614,11 +683,11 @@ export default function AssignDesigner({ isOpen, onClose, target, onAssign }: As
                       <td>
                         <SelectBox
                           full
-                          value={r.designer_uid}
+                          value={r.uid}
                           placeholder={loadingDesigners ? "불러오는 중…" : "선택"}
                           options={designerOptions}
                           disabled={loadingDesigners}
-                          onChange={(next) => updateRow(r.id, { designer_uid: next })}
+                          onChange={(next) => updateRow(r._rowId, { uid: next })}
                         />
                       </td>
                     </tr>
@@ -746,14 +815,6 @@ const RemoveBtn = styled.button`
     opacity: 0.25;
     cursor: default;
   }
-`;
-
-const RequirementSpan = styled.span`
-  display: block;
-  padding: 8px 10px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 `;
 
 const CountInput = styled.input`

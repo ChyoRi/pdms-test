@@ -436,7 +436,7 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
         prev.map((req) => (req.id === id ? { ...req, status: "취소" } : req))
       );
 
-      // ★ 히스토리 댓글
+      // undefined 방지
       if (designRequestId) {
         await addHistoryComment(
           designRequestId,
