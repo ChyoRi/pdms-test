@@ -5,20 +5,24 @@ import {
   collection,
   onSnapshot,
   query,
-  where, // ★ 추가
-  Timestamp, // ★ 추가
+  where,
+  Timestamp,
 } from "firebase/firestore";
 import { db } from "../firebaseconfig";
 import ChannelWorkHourFilter from "./ChannelWorkHourFilter";
 
 /** ───────── Types (UI only) ───────── */
-// ★ 변경: 주말/미래 날짜는 "값을 넣지마" => null 허용
-type DailyStat = { rate: number | null };
+// ★ 변경: 퍼센트(rate) + "당일 out 합계(dayOut)"를 함께 표시 (주말/미래는 null)
+type DailyStat = {
+  rate: number | null;     // 누적 퍼센트
+  dayOut: number | null;   // ★ 추가: 해당 request_date의 out_work_hour 합(누적X)
+};
 
 type ChannelRow = {
   channelKey: string; // companies doc id (예: homeplus, nsmall, ...)
   daily: DailyStat[]; // 1~31일
-  monthRate: number; // 우측 "월 누적" (오늘/표시컷오프 기준)
+  monthRate: number;  // 우측 "월 누적" 퍼센트(오늘/표시컷오프 기준)
+  monthOut: number;   // ★ 추가: 우측 "월 누적" out_work_hour 총합(KPI 총 사용공수)
 };
 
 type CompanyDoc = {
@@ -26,7 +30,7 @@ type CompanyDoc = {
   display_name?: string;
   company_name?: string;
 
-  // ★ 추가: 월 가용공수(분모)
+  // ★ 월 가용공수(분모)
   avail_hour?: number;
   available_hour?: number;
   work_hour?: number;
@@ -46,18 +50,15 @@ const addMonth = (year: number, monthIndex: number, delta: number) => {
   return { year: nextYear, month: nextMonth };
 };
 
-// ★ 추가: month key
 const monthKey = (year: number, monthIndex: number) =>
   `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
 
-// ★ 추가: 소수 1자리 반올림
 const round1 = (v: number) => Math.round(v * 10) / 10;
+const round2 = (v: number) => Math.round(v * 100) / 100;
 
-// ★ 추가: KPI와 동일한 키 정규화(공백 제거 + 소문자)
 const normalizeKey = (v: any) =>
   String(v ?? "").replace(/\s+/g, "").toLowerCase();
 
-// ★ 추가: Firestore 날짜 파서
 const parseDate = (v: any): Date | null => {
   if (!v) return null;
   if (v instanceof Date) return v;
@@ -70,7 +71,6 @@ const parseDate = (v: any): Date | null => {
   return null;
 };
 
-// ★ 추가: 월 기준 주말 플래그
 const buildWeekendFlags = (year: number, monthIndex: number, daysIn: number) =>
   Array.from({ length: daysIn }, (_, i) => {
     const d = new Date(year, monthIndex, i + 1);
@@ -78,22 +78,22 @@ const buildWeekendFlags = (year: number, monthIndex: number, daysIn: number) =>
     return dow === 0 || dow === 6;
   });
 
-// ★ 추가: "미래 수치 표시 금지" 컷오프(오늘 기준)
-// - 같은 달: 오늘까지
-// - 과거 달: 말일까지
-// - 미래 달: 0(전부 빈칸)
+// "미래 수치 표시 금지" 컷오프(오늘 기준)
 const getCutoffDay = (year: number, monthIndex: number) => {
   const today = toMidnight(new Date());
   const todayMonthStart = new Date(today.getFullYear(), today.getMonth(), 1).getTime();
   const tableMonthStart = new Date(year, monthIndex, 1).getTime();
 
-  if (tableMonthStart === todayMonthStart) return today.getDate();
-  if (tableMonthStart < todayMonthStart) return getDaysInMonth(year, monthIndex);
-  return 0;
+  if (tableMonthStart === todayMonthStart) return today.getDate();          // 이번달: 오늘까지
+  if (tableMonthStart < todayMonthStart) return getDaysInMonth(year, monthIndex); // 과거달: 말일까지
+  return 0; // 미래달: 전부 빈칸
 };
 
-// ★ 추가: cutoffDay(오늘) 자체가 주말이면, 직전 "표시 가능한(평일) 값"으로 월 누적 보정
-const getLastVisibleRate = (arr: Array<number | null> | undefined, cutoffDay: number) => {
+// 이번달 "월 누적 퍼센트" 표시용(오늘이 주말이어도 직전 표시 가능한 퍼센트)
+const getLastVisibleRate = (
+  arr: Array<number | null> | undefined,
+  cutoffDay: number
+) => {
   if (!arr || cutoffDay <= 0) return 0;
   for (let i = cutoffDay - 1; i >= 0; i--) {
     const v = arr[i];
@@ -102,10 +102,10 @@ const getLastVisibleRate = (arr: Array<number | null> | undefined, cutoffDay: nu
   return 0;
 };
 
-// ★ 추가: request 문서에서 channelKey 추출(회사 필드 우선)
+// request 문서에서 channelKey 추출
 const getChannelKeyFromRequest = (data: any): string | null => {
   const v =
-    data?.company ?? // ★ KPI와 동일하게 company 우선
+    data?.company ??
     data?.company_id ??
     data?.companyId ??
     data?.channel ??
@@ -114,23 +114,18 @@ const getChannelKeyFromRequest = (data: any): string | null => {
 
   const k = normalizeKey(v);
   if (!k) return null;
-
-  // n-small 같은 표기 통일
   if (k === "n-small") return "nsmall";
   return k;
 };
 
-// ★ 추가: 외부공수(out) 추출 - 신/구 구조 모두 지원
+// 외부공수(out) 추출 - 신/구 구조 모두 지원
 const getOutWorkHourFromRequest = (data: any): number => {
-  // 1) 최신 구조: total_out_work_hour
   const t = Number(data?.total_out_work_hour);
   if (!Number.isNaN(t) && t > 0) return t;
 
-  // 2) 구 구조: out_work_hour
   const o = Number(data?.out_work_hour);
   if (!Number.isNaN(o) && o > 0) return o;
 
-  // 3) 배열 기반: assigned_designers[].out_work_hour 합산
   const arr = Array.isArray(data?.assigned_designers) ? data.assigned_designers : [];
   const sum = arr.reduce((acc: number, it: any) => {
     const v = Number(it?.out_work_hour);
@@ -138,6 +133,33 @@ const getOutWorkHourFromRequest = (data: any): number => {
   }, 0);
 
   return sum;
+};
+
+// ★ 추가: 배정 디자이너 “실제 존재” 판별 (Dashboard KPI와 동일 기준)
+const hasAssignedDesigners = (data: any): boolean => {
+  const ads = data?.assigned_designers;
+  if (Array.isArray(ads)) {
+    return ads.some((x: any) => {
+      if (!x) return false;
+      if (typeof x === "string") return String(x).trim().length > 0;
+      const uidOk = String(x?.uid ?? "").trim().length > 0;
+      const nameOk = String(x?.name ?? "").trim().length > 0;
+      return uidOk || nameOk;
+    });
+  }
+
+  const uids = data?.assigned_designer_uids;
+  if (Array.isArray(uids)) return uids.filter(Boolean).length > 0;
+
+  return false;
+};
+
+// ★ 추가: dayOutSum 배열에서 cutoffDay까지 out 총합(주말 포함, 미래 제외)
+const sumOutUpTo = (arr: number[] | undefined, cutoffDay: number) => {
+  if (!arr || cutoffDay <= 0) return 0;
+  let s = 0;
+  for (let i = 0; i < Math.min(arr.length, cutoffDay); i++) s += arr[i];
+  return round2(s);
 };
 
 /** ───────── Component ───────── */
@@ -150,17 +172,23 @@ export default function ChannelWorkHour({ targetDate }: { targetDate?: Date }) {
   /** companies 채널 목록 (pushcomz 제외) */
   const [channels, setChannels] = useState<CompanyDoc[]>([]);
 
-  // ★ 추가: 채널별 월 가용공수(분모) 맵
+  /** 채널별 월 가용공수(분모) 맵 */
   const [availMap, setAvailMap] = useState<Record<string, number>>({});
 
-  // ★ 추가: 월별 통계(채널별 누적 퍼센트 배열)
+  /**
+   * ★ 변경: 월별 통계
+   * - dailyRate: 누적 퍼센트(주말 null)
+   * - dayOutSum: "당일 out 합계"(누적X)
+   */
   type MonthStats = Record<
     string,
     Record<
       string,
       {
-        dailyRate: Array<number | null>; // ★ 변경: 주말/미래 표시는 null 가능
-        monthRate: number; // total/avail *100 (계산값)
+        dailyRate: Array<number | null>;
+        dayOutSum: number[];
+        monthRate: number; // 월 전체 퍼센트(계산값)
+        monthOut: number;  // 월 전체 out 합(계산값)
       }
     >
   >;
@@ -171,12 +199,11 @@ export default function ChannelWorkHour({ targetDate }: { targetDate?: Date }) {
     const unSub = onSnapshot(qRef, (snap) => {
       const list = snap.docs
         .map((d) => ({ id: d.id, ...(d.data() as any) }))
-        .filter((c) => normalizeKey(c.id) !== "pushcomz"); // ★ pushcomz 제외
+        .filter((c) => normalizeKey(c.id) !== "pushcomz");
 
       list.sort((a, b) => String(a.id).localeCompare(String(b.id), "ko"));
       setChannels(list);
 
-      // ★ 추가: 가용공수 맵 생성
       const nextAvail: Record<string, number> = {};
       list.forEach((c: any) => {
         const key = normalizeKey(c.id);
@@ -199,7 +226,7 @@ export default function ChannelWorkHour({ targetDate }: { targetDate?: Date }) {
     [selectedYear, selectedMonth]
   );
 
-  // ★ 선택 월 + 다음 월 2개를 실시간 구독해서 monthStats 업데이트
+  /** 선택 월 + 다음 월 2개를 실시간 구독해서 monthStats 업데이트 */
   useEffect(() => {
     if (channels.length === 0) return;
 
@@ -212,7 +239,6 @@ export default function ChannelWorkHour({ targetDate }: { targetDate?: Date }) {
       const daysIn = getDaysInMonth(year, monthIndex);
       const weekendFlags = buildWeekendFlags(year, monthIndex, daysIn);
 
-      // ★ 변경: request_date 월 범위로만 쿼리 (채널 필터는 메모리에서 처리)
       const qRef = query(
         collection(db, "design_request"),
         where("request_date", ">=", start),
@@ -220,25 +246,29 @@ export default function ChannelWorkHour({ targetDate }: { targetDate?: Date }) {
       );
 
       const unSub = onSnapshot(qRef, (snap) => {
-        // 채널별 day별 외부공수 합 (1~daysIn)
-        const byChannelDay: Record<string, number[]> = {};
+        // 채널별 day별 "당일 out 합계" (1~daysIn)
+        const byChannelDayOut: Record<string, number[]> = {};
+        // 채널별 월 total out
         const totalByChannel: Record<string, number> = {};
 
         channels.forEach((c) => {
           const k = normalizeKey(c.id);
-          byChannelDay[k] = Array.from({ length: daysIn }, () => 0);
+          byChannelDayOut[k] = Array.from({ length: daysIn }, () => 0);
           totalByChannel[k] = 0;
         });
 
         snap.docs.forEach((docSnap) => {
           const data = docSnap.data() as any;
 
-          // 취소 제외
-          if (String(data?.status || "") === "취소") return;
+          // ★ 변경: 취소 여부로 제외하지 않음 (Dashboard KPI와 동일하게 "배정 유무"로만 필터)
+          // if (String(data?.status || "") === "취소") return;
+
+          // ★ 추가: 배정 디자이너가 없는 문서는 제외
+          if (!hasAssignedDesigners(data)) return;
 
           const ck = getChannelKeyFromRequest(data);
           if (!ck) return;
-          if (!byChannelDay[ck]) return;
+          if (!byChannelDayOut[ck]) return;
 
           const rd = parseDate(data?.request_date);
           if (!rd) return;
@@ -248,35 +278,39 @@ export default function ChannelWorkHour({ targetDate }: { targetDate?: Date }) {
           const out = getOutWorkHourFromRequest(data);
           if (!out) return;
 
-          byChannelDay[ck][d - 1] += out;
+          // ★ 핵심: 해당 날짜 "당일 합계"로만 누적
+          byChannelDayOut[ck][d - 1] += out;
           totalByChannel[ck] += out;
         });
 
-        // 채널별 누적 퍼센트 계산(계산은 말일까지 만들어 둠)
+        // 채널별 "누적 퍼센트"는 dayOut을 누적합한 값으로 계산
         const nextStatsForMonth: Record<
           string,
-          { dailyRate: Array<number | null>; monthRate: number }
+          { dailyRate: Array<number | null>; dayOutSum: number[]; monthRate: number; monthOut: number }
         > = {};
 
         channels.forEach((c) => {
           const ck = normalizeKey(c.id);
           const avail = Number(availMap?.[ck] ?? 0);
 
+          // ★ 당일 out 합계 배열 (표시는 평일/컷오프에서만)
+          const dayOutSum = byChannelDayOut[ck].map((v) => round2(v));
+
+          // ★ 누적 퍼센트
           let cum = 0;
-          const dailyRate: Array<number | null> = byChannelDay[ck].map((daySum, idx) => {
+          const dailyRate: Array<number | null> = dayOutSum.map((daySum, idx) => {
             cum += daySum;
 
-            // ★ 유지: 주말은 표시값 null
-            if (weekendFlags[idx]) return null;
-
+            if (weekendFlags[idx]) return null; // 주말 표시는 비움(누적에는 반영됨)
             if (!avail) return 0;
+
             return round1((cum / avail) * 100);
           });
 
-          const total = totalByChannel[ck] || 0;
-          const mRate = !avail ? 0 : round1((total / avail) * 100);
+          const monthOut = round2(totalByChannel[ck] || 0);
+          const monthRate = !avail ? 0 : round1((monthOut / avail) * 100);
 
-          nextStatsForMonth[ck] = { dailyRate, monthRate: mRate };
+          nextStatsForMonth[ck] = { dailyRate, dayOutSum, monthRate, monthOut };
         });
 
         setMonthStats((prev) => ({
@@ -298,14 +332,15 @@ export default function ChannelWorkHour({ targetDate }: { targetDate?: Date }) {
   const buildMonthUI = (
     year: number,
     monthIndex: number,
-    statForMonth?: Record<string, { dailyRate: Array<number | null>; monthRate: number }>
+    statForMonth?: Record<
+      string,
+      { dailyRate: Array<number | null>; dayOutSum: number[]; monthRate: number; monthOut: number }
+    >
   ) => {
     const daysIn = getDaysInMonth(year, monthIndex);
     const todayMidnight = toMidnight(new Date());
 
     const weekendFlags = buildWeekendFlags(year, monthIndex, daysIn);
-
-    // ★ 추가: 미래 날짜 표시 차단(오늘이면 오늘까지만)
     const cutoffDay = getCutoffDay(year, monthIndex); // 0~daysIn
 
     const todayFlags = (() => {
@@ -323,21 +358,30 @@ export default function ChannelWorkHour({ targetDate }: { targetDate?: Date }) {
       const ck = normalizeKey(c.id);
       const stat = statForMonth?.[ck];
 
-      // ★ 변경: cutoffDay 이후는 무조건 null(빈칸), 주말도 null(빈칸)
+      // ★ 일자 셀:
+      // - 위: 누적 퍼센트
+      // - 아래: "당일 out 합계"(누적 X)
+      // - 주말/미래: 빈칸
       const daily: DailyStat[] = Array.from({ length: daysIn }, (_, i) => {
         const dayNum = i + 1;
 
-        if (dayNum > cutoffDay) return { rate: null }; // ★ 추가: 미래 차단
-        if (weekendFlags[i]) return { rate: null }; // ★ 유지: 주말은 빈칸
+        if (dayNum > cutoffDay) return { rate: null, dayOut: null }; // 미래 차단
+        if (weekendFlags[i]) return { rate: null, dayOut: null };    // 주말 비움
 
-        return { rate: stat?.dailyRate?.[i] ?? 0 };
+        return {
+          rate: stat?.dailyRate?.[i] ?? 0,
+          dayOut: stat?.dayOutSum?.[i] ?? 0,
+        };
       });
 
-      // ★ 변경: 우측 "월 누적"도 미래가 섞이지 않게 cutoffDay 기준으로 표시
-      // - 미래월(cutoffDay=0): 0
-      // - 이번달: cutoffDay까지의 "표시 가능한 마지막 값"(오늘이 주말이어도 직전 평일 값)
-      // - 과거월: 기존 monthRate(월 전체)
-      const todayMonthStart = new Date(todayMidnight.getFullYear(), todayMidnight.getMonth(), 1).getTime();
+      // ★ 우측 "월 누적"
+      // - 퍼센트: 이번달은 cutoff 기준(직전 표시 가능한 퍼센트), 과거달은 월 전체
+      // - out 합: 이번달/과거달 모두 cutoff 기준 합(미래 포함 금지) -> KPI 총 사용공수(오늘까지)
+      const todayMonthStart = new Date(
+        todayMidnight.getFullYear(),
+        todayMidnight.getMonth(),
+        1
+      ).getTime();
       const tableMonthStart = new Date(year, monthIndex, 1).getTime();
 
       let monthRate = 0;
@@ -349,10 +393,14 @@ export default function ChannelWorkHour({ targetDate }: { targetDate?: Date }) {
         monthRate = stat?.monthRate ?? 0;
       }
 
+      // ★ 핵심: 월 누적 out(아래 숫자)은 "해당 월 out_work_hour 총합" (오늘까지)
+      const monthOut = sumOutUpTo(stat?.dayOutSum, cutoffDay);
+
       return {
         channelKey: c.id,
         daily,
         monthRate,
+        monthOut,
       };
     });
 
@@ -392,7 +440,7 @@ export default function ChannelWorkHour({ targetDate }: { targetDate?: Date }) {
     rows,
   }: {
     titleYear: number;
-    titleMonthIndex: number;
+    titleMonthIndex: number; // 0~11
     daysIn: number;
     weekendFlags: boolean[];
     todayFlags: boolean[];
@@ -411,7 +459,7 @@ export default function ChannelWorkHour({ targetDate }: { targetDate?: Date }) {
             {Array.from({ length: daysIn }).map((_, i) => (
               <col key={i} />
             ))}
-            <col style={{ width: "5%" }} />
+            <col style={{ width: "6%" }} /> {/* 월 누적 */}
           </colgroup>
 
           <thead>
@@ -423,7 +471,6 @@ export default function ChannelWorkHour({ targetDate }: { targetDate?: Date }) {
                 일별 진행현황(공수달성율)
               </ChannelWorkHourTableTh>
 
-              {/* ★ 변경: "월 평균" -> "월 누적" */}
               <ChannelWorkHourTableTh rowSpan={2}>월 누적</ChannelWorkHourTableTh>
             </tr>
 
@@ -453,13 +500,24 @@ export default function ChannelWorkHour({ targetDate }: { targetDate?: Date }) {
                     $isWeekend={weekendFlags[i]}
                     $isToday={todayFlags[i]}
                   >
-                    {/* ★ 변경: null(주말/미래)은 빈칸 */}
-                    {d.rate === null ? "" : `${Number(d.rate).toFixed(1)}%`}
+                    {d.rate === null ? (
+                      ""
+                    ) : (
+                      <CellStack>
+                        <CellTop>{Number(d.rate).toFixed(1)}%</CellTop>
+                        {/* ★ 핵심: "당일 out 합계" (누적 아님) */}
+                        <CellBottom>{Number(d.dayOut ?? 0).toFixed(2)}</CellBottom>
+                      </CellStack>
+                    )}
                   </ChannelWorkHourTableTd>
                 ))}
 
                 <ChannelWorkHourTableTd>
-                  {Number(r.monthRate).toFixed(1)}%
+                  <CellStack>
+                    <CellTop>{Number(r.monthRate).toFixed(1)}%</CellTop>
+                    {/* ★ 핵심: "월 out 총합(오늘까지)" */}
+                    <CellBottom>{Number(r.monthOut).toFixed(2)}</CellBottom>
+                  </CellStack>
                 </ChannelWorkHourTableTd>
               </tr>
             ))}
@@ -550,6 +608,7 @@ const ChannelWorkHourTable = styled.table`
     font-size: 14px;
     border-right: none;
     border-bottom: none;
+    vertical-align: middle;
   }
 
   thead {
@@ -613,4 +672,24 @@ const ChannelWorkHourTableTd = styled.td<{
   &:last-of-type {
     border-right: none;
   }
+`;
+
+/** 셀 2줄(퍼센트 위 / 당일 out 합계 아래) */
+const CellStack = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.1;
+  gap: 4px;
+`;
+
+const CellTop = styled.div`
+  font-size: 14px;
+  font-weight: 700;
+`;
+
+const CellBottom = styled.div`
+  font-size: 12px;
+  font-weight: 600;
+  color: #444;
 `;

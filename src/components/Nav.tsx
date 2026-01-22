@@ -107,7 +107,7 @@ export default function Nav({ userRole, onResetFilters }: NavProps) {
               onClick={() => go("channelworkhour")}
               $active={view === "channelworkhour"}
             >
-              채널별 공수
+              채널별 외부 공수
             </MainMenuItemButton>
           </MainMenuItem>
         )}

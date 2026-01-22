@@ -84,6 +84,26 @@ function countWorkingDays(start: number, end: number) {
   return cnt;
 }
 
+// ★ 추가: 배정 디자이너 “실제 존재” 판별 (빈배열/더미 제거)
+function hasAssignedDesigners(r: RD): boolean {
+  const ads = (r as any).assigned_designers;
+  if (Array.isArray(ads)) {
+    // assigned_designers가 string 배열이든, object 배열이든 둘 다 커버
+    return ads.some((x: any) => {
+      if (!x) return false;
+      if (typeof x === "string") return String(x).trim().length > 0;
+      const uidOk = String(x?.uid ?? "").trim().length > 0;
+      const nameOk = String(x?.name ?? "").trim().length > 0;
+      return uidOk || nameOk;
+    });
+  }
+  // 혹시 uids만 있는 경우(스키마 변동 대비)
+  const uids = (r as any).assigned_designer_uids;
+  if (Array.isArray(uids)) return uids.filter(Boolean).length > 0;
+
+  return false;
+}
+
 export default function DashBoard() {
   // ───────── 기존: 년/월 셀렉트(HP/NS 유지)
   const now = new Date();
@@ -242,12 +262,28 @@ export default function DashBoard() {
     });
   }, [rows, monthRange, effectiveMode, isOpsAllMode, isRequester, requesterCompanyKey]);
 
+  // KPI용 “취소 제외” rows
+  const monthRowsNoCancel = useMemo(() => {
+    if (isOpsAllMode) return [];
+    return monthRows.filter((r) => normalizeStatus(r.status) !== "취소");
+  }, [monthRows, isOpsAllMode]);
+
   const kpiMonth = useMemo(() => {
     if (isOpsAllMode) return null;
 
-    const totalRequests = monthRows.length;
-    const producedCount = monthRows.filter((r) => normalizeStatus(r.status) === "완료").length;
-    const usedHours = sum(monthRows.map((r) => Number((r as any).out_work_hour) || 0));
+    // ★ 변경: 총 요청건수는 취소 제외
+    const totalRequests = monthRowsNoCancel.length;
+
+    // ★ 변경: 실 제작건수(완료)도 취소 제외 집합에서 계산(안전)
+    const producedCount = monthRowsNoCancel.filter((r) => normalizeStatus(r.status) === "완료").length;
+
+    // ★ 변경: 사용공수는 “배정 디자이너가 실제 존재”하는 문서만 합산
+    // - 취소여도 배정이 있으면 포함 / 배정이 없으면 제외
+    const usedHours = sum(
+      monthRows
+        .filter((r) => hasAssignedDesigners(r)) // ★ 변경
+        .map((r) => Number((r as any).out_work_hour) || 0)
+    );
 
     // 회사 KPI 가용공수는 companies.avail_hour만 사용 (없으면 0)
     const targetCompanyId = isRequester ? requesterCompanyKey : effectiveMode;
@@ -265,6 +301,7 @@ export default function DashBoard() {
     };
   }, [
     monthRows,
+    monthRowsNoCancel, // ★ 추가
     effectiveMode,
     isOpsAllMode,
     isRequester,
@@ -322,11 +359,28 @@ export default function DashBoard() {
     });
   }, [rows, periodInfo, isOpsAllMode, userRole, requesterCompanyKey]);
 
+  // 전체 KPI용 “취소 제외” rows
+  const allFilteredRowsNoCancel = useMemo(() => {
+    if (!isOpsAllMode || !periodInfo) return [];
+    return allFilteredRows.filter((r) => normalizeStatus(r.status) !== "취소");
+  }, [allFilteredRows, isOpsAllMode, periodInfo]);
+
   const kpiAll = useMemo(() => {
     if (!isOpsAllMode || !periodInfo) return null;
-    const totalRequests = allFilteredRows.length;
-    const producedCount = allFilteredRows.filter(r => normalizeStatus(r.status) === "완료").length;
-    const usedHours = sum(allFilteredRows.map(r => Number((r as any).in_work_hour) || 0)); // in_work_hour 사용
+
+    // ★ 변경: 총 요청건수는 취소 제외
+    const totalRequests = allFilteredRowsNoCancel.length;
+
+    // ★ 변경: 실 제작건수(완료)도 취소 제외 집합에서 계산
+    const producedCount = allFilteredRowsNoCancel.filter(r => normalizeStatus(r.status) === "완료").length;
+
+    // ★ 변경: 사용공수는 “배정 디자이너가 실제 존재”하는 문서만 합산 (in_work_hour 기준 유지)
+    const usedHours = sum(
+      allFilteredRows
+        .filter((r) => hasAssignedDesigners(r)) // ★ 변경
+        .map(r => Number((r as any).in_work_hour) || 0)
+    );
+
     const people = designers.length;
     const workingDaysForCapacity = period === "month" ? 20.3 : periodInfo.workingDays; // 월은 20.3 고정
     const rawAvailHours = people * workingDaysForCapacity * 8;
@@ -339,7 +393,7 @@ export default function DashBoard() {
       usedHoursDisplay: usedHours.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}),
       availHours, usedRatio
     };
-  }, [allFilteredRows, designers, periodInfo, isOpsAllMode, period]);
+  }, [allFilteredRows, allFilteredRowsNoCancel, designers, periodInfo, isOpsAllMode, period]);
 
   // ‘전체’ 도넛: 회사별 문서 수
   const doughnutCompany = useMemo(() => {
@@ -517,7 +571,7 @@ export default function DashBoard() {
   const isAll = isOpsAllMode;
 
   // KPI 퍼센트 표시 문자열(항상 소수 1자리)
-  const usedRatioText = useMemo(() => { // ★ 추가
+  const usedRatioText = useMemo(() => {
     const v = KPI?.usedRatio;
     return typeof v === "number" ? `${v.toFixed(1)}%` : "0.0%";
   }, [KPI?.usedRatio]);

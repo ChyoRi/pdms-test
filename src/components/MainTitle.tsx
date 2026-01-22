@@ -19,7 +19,7 @@ export default function MainTitle({ userRole }: MainTitleProps) {
     const common = {
       dashboard: "전체 현황",
       inworkhour: "내부 공수",
-      channelworkhour: "채널별 공수",
+      channelworkhour: "채널별 외부 공수",
     } as const;
 
     if (role === 2) {
