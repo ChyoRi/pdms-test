@@ -5,7 +5,8 @@ import { db } from "../firebaseconfig";
 import InWorkHourFilter from "./InWorkHourFilter";
 
 /** ───────── Types ───────── */
-type DailyStat = { rate: number; count: number };
+// ★ 변경: 제작건수(count) 제거 → 해당일 내부공수(inHour)로 교체
+type DailyStat = { rate: number; inHour: number };
 
 type DesignerRow = {
   name: string;
@@ -15,7 +16,7 @@ type DesignerRow = {
   usedHours: number;
   daily: DailyStat[];   // 1~31일
   monthRate: number;    // 선택 월 공수달성율
-  monthCount: number;   // 선택 월 총 건수
+  monthInHour: number;  // 선택 월 누적 in_work_hour 합
 };
 
 type AssignedDesignerObj = {
@@ -26,7 +27,7 @@ type AssignedDesignerObj = {
   designer_name?: string;
   designer?: string;
 
-  // ★ 추가: 스키마 최신(문서에 실제 존재)
+  // 스키마 최신(문서에 실제 존재)
   in_work_hour?: number | string;
   out_work_hour?: number | string;
 };
@@ -34,7 +35,7 @@ type AssignedDesignerObj = {
 type RequestDoc = {
   id: string;
 
-  // ★ 변경: assigned_designers가 string[] 뿐 아니라 object[]로도 올 수 있음
+  // assigned_designers가 string[] 뿐 아니라 object[]로도 올 수 있음
   assigned_designers?: Array<string | AssignedDesignerObj>;
 
   assigned_designer?: string;
@@ -96,10 +97,8 @@ const parseLoose = (v: any): Date | null => {
   return null;
 };
 
-const anchorDate = (r: RequestDoc): Date | null =>
-  parseLoose(r.request_date) ??
-  parseLoose((r as any).open_date) ??
-  parseLoose((r as any).created_date);
+// 일/월 “집계 기준”을 request_date로 고정(채널별 out_work_hour와 동일한 기준)
+const requestDateOnly = (r: RequestDoc): Date | null => parseLoose(r.request_date);
 
 const getDaysInMonth = (year: number, monthIndex: number) =>
   new Date(year, monthIndex + 1, 0).getDate();
@@ -255,11 +254,11 @@ export default function InWorkHour({
     return [];
   };
 
-  // ★ 추가: doc에서 "공수 근거"로 잡을 디자이너 식별자들(이름/uid)을 모두 끌어오기
+  // doc에서 "공수 근거"로 잡을 디자이너 식별자들(이름/uid)을 모두 끌어오기
   const getAssigneeKeysFromHours = (r: RequestDoc): string[] => {
     const keys = new Set<string>();
 
-    // 0) ★ 추가: assigned_designers 객체(최신 스키마)에도 uid/name이 있음
+    // assigned_designers 객체(최신 스키마)에도 uid/name이 있음
     const ad = (r as any)?.assigned_designers;
     if (Array.isArray(ad)) {
       ad.forEach((x: any) => {
@@ -321,7 +320,7 @@ export default function InWorkHour({
     return cleaned;
   };
 
-  // ★ 변경: 내부공수는 "균등분배" 금지.
+  // 내부공수는 "균등분배" 금지.
   // (1) assigned_designers[].in_work_hour
   // (2) in_work_hour_by_designer
   // (3) assign_rows
@@ -332,7 +331,7 @@ export default function InWorkHour({
 
     const whoUid = uidByName[who];
 
-    // 0) ★ 추가: assigned_designers(객체배열)에서 직접 내부공수 합산
+    // assigned_designers(객체배열)에서 직접 내부공수 합산
     const ad = (r as any)?.assigned_designers;
     if (Array.isArray(ad) && ad.length) {
       const sumFromAssigned = ad
@@ -405,45 +404,51 @@ export default function InWorkHour({
     return designers.map((name) => {
       const mine = docs.filter((d) => getEffectiveAssignees(d).includes(name));
 
+      // ★ 유지: 월/일 집계는 request_date 기준
       const monthDocs = mine.filter((d) => {
-        const dt = anchorDate(d);
+        const dt = requestDateOnly(d);
         return dt && dt.getFullYear() === targetYear && dt.getMonth() === targetMonth;
       });
 
       const dayDocs = mine.filter((d) => {
-        const dt = anchorDate(d);
+        const dt = requestDateOnly(d);
         return sameDay(dt, day);
       });
 
       const wait = mine.filter((d) => isWait(d.status)).length;
       const progress = mine.filter((d) => isProgress(d.status)).length;
-      const done = monthDocs.filter((d) => isDone(d.status)).length;
+
+      // 완료는 “해당 day(오늘) 완료”
+      const done = dayDocs.filter((d) => isDone(d.status)).length;
 
       const usedHoursRaw = dayDocs.reduce((s, d) => s + shareHourFor(d, name), 0);
       const usedHours = floorTo(usedHoursRaw, 2);
 
-      const dailyHoursArr = Array(daysInMonth).fill(0);
-      const dailyCountsArr = Array(daysInMonth).fill(0);
+      // 일별 셀의 하단 값 = 해당일 in_work_hour 합
+      const dailyInArr = Array(daysInMonth).fill(0);
 
       monthDocs.forEach((d) => {
-        const dt = anchorDate(d);
+        const dt = requestDateOnly(d);
         if (!dt) return;
         const idx = dt.getDate() - 1;
         if (idx < 0 || idx >= daysInMonth) return;
 
-        dailyHoursArr[idx] += shareHourFor(d, name);
-        dailyCountsArr[idx] += 1;
+        // ★ 핵심: 해당 request_date에 속한 문서들의 in_work_hour(디자이너별) 합
+        // (필요 시 '취소' 제외하려면 여기에서 조건 추가)
+        // if (d.status === "취소") return; // ★ 옵션
+        dailyInArr[idx] += shareHourFor(d, name);
       });
 
-      const daily: DailyStat[] = dailyHoursArr.map((h, idx) => ({
+      const daily: DailyStat[] = dailyInArr.map((h) => ({
         rate: Math.round((h / dailyHours) * 100),
-        count: dailyCountsArr[idx],
+        inHour: floorTo(h, 2), // 표시 안정화
       }));
 
-      const monthHours = dailyHoursArr.reduce((s, h) => s + h, 0);
-      const monthCount = dailyCountsArr.reduce((s, c) => s + c, 0);
+      const monthInRaw = dailyInArr.reduce((s, h) => s + h, 0);
+      const monthInHour = floorTo(monthInRaw, 2);
+
       const monthRate =
-        monthHours > 0 ? Math.round((monthHours / MONTHLY_TARGET_HOURS) * 100) : 0;
+        monthInRaw > 0 ? Math.round((monthInRaw / MONTHLY_TARGET_HOURS) * 100) : 0;
 
       return {
         name,
@@ -453,7 +458,7 @@ export default function InWorkHour({
         usedHours,
         daily,
         monthRate,
-        monthCount,
+        monthInHour,
       };
     });
   }, [
@@ -504,7 +509,8 @@ export default function InWorkHour({
                 현재현황(일공수 : {dailyHours}h)
               </InWorkHourTableTh>
               <InWorkHourTableTh colSpan={daysInSelectedMonth}>
-                일별 진행현황(공수달성율 / 제작건수)
+                {/* ★ 변경: 제작건수 제거 → 내부공수 표시 */}
+                일별 진행현황(공수달성율 / 내부공수h)
               </InWorkHourTableTh>
               <InWorkHourTableTh rowSpan={2}>월 평균</InWorkHourTableTh>
             </tr>
@@ -544,13 +550,15 @@ export default function InWorkHour({
                     $isToday={todayFlags[i]}
                   >
                     <div>{d.rate}%</div>
-                    <div>{d.count}</div>
+                    {/* 내부공수(inHour) */}
+                    <div>{formatMax2(d.inHour)}</div>
                   </InWorkHourTableTd>
                 ))}
 
                 <InWorkHourTableTd>
                   <div>{r.monthRate.toFixed(0)}%</div>
-                  <div>{r.monthCount}</div>
+                  {/* 월 평균 하단 = 월 누적 in_work_hour 합 */}
+                  <div>{formatMax2(r.monthInHour)}</div>
                 </InWorkHourTableTd>
               </tr>
             ))}
