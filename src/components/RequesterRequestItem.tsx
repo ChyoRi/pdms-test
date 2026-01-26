@@ -116,13 +116,37 @@ export default function RequesterRequestItem({ item, index, disableActions, user
     return [];
   };
 
+  // 요청자 화면에서만 허수계정 끝의 '.' 제거
+  const displayNameForRequester = (raw: any): string => {
+    const s = String(raw ?? "").trim();
+    if (!s) return "";
+    return s.replace(/^★+/, "");
+  };
+
+  // ★ 추가: 디자이너 이름 "정리 + 중복제거" (DB는 그대로)
+  // - Set은 동일값을 1개만 유지하고, 삽입 순서(최초 등장 순서)를 보존합니다. :contentReference[oaicite:1]{index=1}
   const designers = (() => {
     const norm = normalizeAssignedDesigners(item.assigned_designers);
-    if (norm.length) return norm.map(d => String(d.name ?? "").trim()).filter(Boolean);
+
+    // 1) name 정리(★ 제거 + trim)
+    const cleanedNames = norm
+      .map(d => displayNameForRequester(d.name))
+      .map(s => String(s ?? "").trim())
+      .filter(Boolean);
+
+    // 2) 중복 제거(표시용) — "홍길동, 홍길동, ..." → "홍길동"
+    const uniqNames = Array.from(new Set(cleanedNames)); // ★ 변경
+
+    if (uniqNames.length) return uniqNames;
+
     // 레거시 단일 필드 fallback
-    if ((item as any).assigned_designer) return [String((item as any).assigned_designer).trim()];
+    if ((item as any).assigned_designer) {
+      const legacy = displayNameForRequester((item as any).assigned_designer);
+      return legacy ? [legacy] : [];
+    }
     return [];
   })();
+
   const urls = normalizeUrlArray((item as any)?.url);
   const hasUrl = urls.length > 0;
   const urlHref = hasUrl ? getPrimaryUrl(urls) : undefined;
@@ -185,13 +209,6 @@ export default function RequesterRequestItem({ item, index, disableActions, user
 
   // 완료 또는 취소 공통 플래그
   const isEnded = item.status === "완료" || item.status === "취소";
-
-  // 요청자 화면에서만 허수계정 끝의 '.' 제거
-  const displayNameForRequester = (raw: any): string => {
-    const s = String(raw ?? "").trim();
-    if (!s) return "";
-    return s.replace(/^★+/, "");
-  };
 
   return (
     <RequestListTableTr isCanceled={item.status === "취소" || item.status === "완료"}>

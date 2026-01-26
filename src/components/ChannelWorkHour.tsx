@@ -135,25 +135,6 @@ const getOutWorkHourFromRequest = (data: any): number => {
   return sum;
 };
 
-// ★ 추가: 배정 디자이너 “실제 존재” 판별 (Dashboard KPI와 동일 기준)
-const hasAssignedDesigners = (data: any): boolean => {
-  const ads = data?.assigned_designers;
-  if (Array.isArray(ads)) {
-    return ads.some((x: any) => {
-      if (!x) return false;
-      if (typeof x === "string") return String(x).trim().length > 0;
-      const uidOk = String(x?.uid ?? "").trim().length > 0;
-      const nameOk = String(x?.name ?? "").trim().length > 0;
-      return uidOk || nameOk;
-    });
-  }
-
-  const uids = data?.assigned_designer_uids;
-  if (Array.isArray(uids)) return uids.filter(Boolean).length > 0;
-
-  return false;
-};
-
 // ★ 추가: dayOutSum 배열에서 cutoffDay까지 out 총합(주말 포함, 미래 제외)
 const sumOutUpTo = (arr: number[] | undefined, cutoffDay: number) => {
   if (!arr || cutoffDay <= 0) return 0;
@@ -262,9 +243,6 @@ export default function ChannelWorkHour({ targetDate }: { targetDate?: Date }) {
 
           // ★ 변경: 취소 여부로 제외하지 않음 (Dashboard KPI와 동일하게 "배정 유무"로만 필터)
           // if (String(data?.status || "") === "취소") return;
-
-          // ★ 추가: 배정 디자이너가 없는 문서는 제외
-          if (!hasAssignedDesigners(data)) return;
 
           const ck = getChannelKeyFromRequest(data);
           if (!ck) return;

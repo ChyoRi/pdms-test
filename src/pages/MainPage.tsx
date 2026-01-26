@@ -34,10 +34,12 @@ interface RequestLite {
 // 값 정리
 const norm = (v: any) => String(v ?? "").trim();
 
-// count 파싱
+// count 파싱(0 허용, 빈값/비정상은 0)
 const toCount = (v: any) => {
-  const n = Number(String(v ?? "").trim());
-  return Number.isFinite(n) && n > 0 ? n : 1;
+  const s = String(v ?? "").trim();
+  if (s === "") return 0;
+  const n = Number(s);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
 };
 
 // 소수 오차 방지
@@ -225,9 +227,11 @@ export default function MainPage() {
   const saveAssignDesignerToFirestore = async (target: RequestData, rows: AssignedDesigner[]) => {
     if (!target?.id) return;
 
-    // ★ 변경: uid/requirement 기준 유효성
+    const docRequirement = norm((target as any)?.requirement); // ★ 추가: 문서 작업항목
+
+    // ★ 변경: uid/task_form/task_type 기준 유효성
     const cleaned = rows.filter(
-      (r) => norm(r.task_form) && norm((r as any).requirement) && norm(r.uid)
+      (r) => norm((r as any).task_form) && norm((r as any).task_type) && norm(r.uid)
     );
 
     if (!cleaned.length) {
@@ -245,8 +249,11 @@ export default function MainPage() {
 
         task_form: norm((r as any).task_form),
 
-        // ★ 변경: task_type -> requirement
-        requirement: norm((r as any).requirement),
+        // ★ 핵심 변경 1) 업무형태 → task_type
+        task_type: norm((r as any).task_type),
+
+        // ★ 핵심 변경 2) 작업항목(외부공수 등) → requirement
+        requirement: norm((r as any).requirement) || docRequirement || "",
 
         task_type_detail: norm((r as any).task_type_detail) || "",
 
@@ -268,18 +275,11 @@ export default function MainPage() {
     );
 
     const payload = sanitizeForFirestore({
-      // 문서 총합
       out_work_hour: totalOut,
       in_work_hour: totalIn,
 
-      // ★ 변경: 이제 assigned_designers가 row형 본체
       assigned_designers,
-
-      // 디자이너 화면 쿼리 인덱스용
       assigned_designer_uids: uidsFromRows,
-
-      // ★ 삭제: assigned_rows 저장 제거
-      // assigned_rows,
     });
 
     await updateDoc(doc(db, "design_request", target.id), payload);

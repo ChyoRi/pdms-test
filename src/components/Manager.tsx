@@ -108,12 +108,12 @@ export default function Manager({
     const unsub = onAuthStateChanged(auth, (user) => {
       if (!user) {
         setUserUid("");
-        setManagerName(""); // ★ 추가
+        setManagerName("");
         return;
       }
       setUserUid(user.uid);
       if (user.displayName) {
-        setManagerName(user.displayName); // ★ 추가
+        setManagerName(user.displayName);
       }
     });
     return () => unsub();
@@ -429,29 +429,34 @@ export default function Manager({
     return `${y}-${m}-${day}`;
   };
 
+  // 공수 숫자 안전 파서(문서별 내부/외부공수 CSV용)
+  const toHourNum = (v: any): number => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  };
+
   const handleExportCSV = async () => {
     setExporting(true);
     try {
-      // CSV 컬럼 순서(요구사항 그대로)
+      // CSV 컬럼 순서(요구사항 반영)
       const fields = [
-        "design_request_id", // 문서번호
-        "request_date", // 요청일
-        "completion_date", // 완료요청일
-        "open_date", // 오픈일
-        "merchandiser", // 담당MD
-        "requester", // 요청자
-        "task_form", // 업무부서
-        "task_type", // 업무형태
-        "task_type_detail", // 업무형태상세
-        "requirement", // 작업항목
-        "url", // 요청서URL
-        "note", // 메모
-        "status", // 진행상태
-        "result_url", // 산출물URL
-        "designer_start_date", // 디자인 시작일
-        "designer_end_date", // 디자인 종료일
-        "assigned_designers", // 디자이너
-        "work_hour", // 공수 (단일)
+        "design_request_id",
+        "request_date",
+        "completion_date",
+        "open_date",
+        "merchandiser",
+        "requester",
+        "task_form",
+        "task_type",
+        "task_type_detail",
+        "requirement",
+        "status",
+        "result_url",
+        "designer_start_date",
+        "designer_end_date",
+        "assigned_designers",
+        "in_work_hour",
+        "out_work_hour",
       ] as const;
 
       const headers: Record<(typeof fields)[number], string> = {
@@ -465,19 +470,37 @@ export default function Manager({
         task_type: "업무형태",
         task_type_detail: "업무형태상세",
         requirement: "작업항목",
-        url: "요청서URL",
-        note: "메모",
         status: "진행상태",
         result_url: "산출물URL",
         designer_start_date: "디자인 시작일",
         designer_end_date: "디자인 종료일",
         assigned_designers: "디자이너",
-        work_hour: "공수",
+        in_work_hour: "내부공수",
+        out_work_hour: "외부공수",
       };
 
-      // viewList -> CSV용 매핑(키 맞춤 + 날짜 포맷 + 공수 단일화)
       const rowsForCsv = (viewList as any[]).map((r) => {
-        const assigned = getAssignedNames((r as any).assigned_designers).join(", ");
+        const status = String(r.status ?? "").trim();
+
+        const names = getAssignedNames((r as any).assigned_designers);
+        const single = String((r as any).assigned_designer ?? "").trim();
+        const hasAssignees = names.length > 0 || !!single;
+        const assigned = [...names, ...(single ? [single] : [])].join(", ");
+
+        // ★ 변경: raw를 먼저 잡고, null/undefined면 ""(빈칸)로 출력
+        const rawIn = (r as any).in_work_hour;   // total_* 없음 전제
+        const rawOut = (r as any).out_work_hour;
+
+        const inHourNum  = rawIn  == null ? "" : round3(toHourNum(rawIn));   // ★ 변경
+        const outHourNum = rawOut == null ? "" : round3(toHourNum(rawOut));  // ★ 변경
+
+        // ★ 변경: 취소 + 배정없음이면 내부/외부 모두 빈칸
+        const inHourCsv =
+          status === "취소" && !hasAssignees ? "" : inHourNum;   // ★ 추가
+
+        const outHourCsv =
+          status === "취소" && !hasAssignees ? "" : outHourNum;  // ★ 유지(내부 로직만 대칭)
+
         return {
           design_request_id: r.design_request_id ?? "",
           request_date: toYmd(r.request_date ?? r.requested_at ?? r.requestDate),
@@ -489,14 +512,15 @@ export default function Manager({
           task_type: r.task_type ?? "",
           task_type_detail: r.task_type_detail ?? "",
           requirement: r.requirement ?? "",
-          url: r.url ?? "",
-          note: r.note ?? "",
           status: r.status ?? "",
           result_url: r.result_url ?? "",
           designer_start_date: toYmd(r.designer_start_date),
           designer_end_date: toYmd(r.designer_end_date),
           assigned_designers: assigned,
-          work_hour: (r.in_work_hour ?? r.out_work_hour ?? "") + "",
+
+          // ★ 변경: 내부/외부 공수 출력
+          in_work_hour: inHourCsv,
+          out_work_hour: outHourCsv,
         };
       });
 

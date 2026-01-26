@@ -38,6 +38,22 @@ const companyVariants = (raw: string) => {
   return Array.from(new Set([t, lower, upper, cap]));
 };
 
+// 회사 키 정규화 (homeplus 판정용)
+const normalizeCompanyKey = (v: any) =>
+  String(v ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "");
+
+// 공수 숫자 안전 파서
+const toHourNum = (v: any): number => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+};
+
+// 소수 3자리 반올림(기존 흐름과 동일하게 쓰기 좋음)
+const round3 = (n: number) => Math.round((Number(n) || 0) * 1000) / 1000;
+
 // 이번 달 판정 헬퍼
 const isSameMonth = (d: Date, base = new Date()) =>
   d.getFullYear() === base.getFullYear() && d.getMonth() === base.getMonth();
@@ -311,7 +327,7 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
   const reviewComplete = async (id: string) => {
     if (!canMutate(id, "review")) return;
 
-    // ★ 추가: 이전 상태/문서번호 조회
+    // 이전 상태/문서번호 조회
     const ref = doc(db, "design_request", id);
     const snap = await getDoc(ref);
     if (!snap.exists()) return;
@@ -392,18 +408,18 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
 
   // ✅ 메모/작업항목 클릭 → 디테일 모드
   const openDetail = async (item: RequestData) => {
-    // ★ 추가: 낙관적 읽음 처리 (로컬 캐시 즉시 갱신) — 메모 + 문서수정 공용
+    // 낙관적 읽음 처리 (로컬 캐시 즉시 갱신) — 메모 + 문서수정 공용
     if (userUid) {
       const now = Date.now();
       setReadLocal(prev => ({ ...prev, [item.id]: now }));
 
-      // ★ 변경: 메모 읽음 + 문서 수정 읽음 둘 다 서버에 기록
+      // 메모 읽음 + 문서 수정 읽음 둘 다 서버에 기록
       try {
         await updateDoc(doc(db, "design_request", item.id), {
           // 메모 Talk 읽음
           [`comment_read_by.${userUid}`]: serverTimestamp(),
           [`comment_read_by_client.${userUid}`]: now,
-          // ★ 추가: 문서 수정 읽음
+          // 문서 수정 읽음
           [`requester_edit_read_by.${userUid}`]: serverTimestamp(),
           [`requester_edit_read_by_client.${userUid}`]: now,
         });
@@ -419,35 +435,82 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
 
   // ✅ 취소 처리
   const cancelRequest = async (id: string) => {
-    if (!canMutate(id, "cancel")) return;
+  if (!canMutate(id, "cancel")) return;
 
-    const row = requests.find((r) => r.id === id);
-    const prevStatus = row?.status || "대기";
-    const designRequestId = row?.design_request_id;
+  const row = requests.find((r) => r.id === id);
+  const prevStatus = row?.status || "대기";
+  const designRequestId = row?.design_request_id;
 
-    const ok = window.confirm(
-      `문서번호 ${designRequestId ?? ""} 요청을 취소하시겠습니까?`
-    );
-    if (!ok) return;
+  const ok = window.confirm(`문서번호 ${designRequestId ?? ""} 요청을 취소하시겠습니까?`);
+  if (!ok) return;
 
-    try {
-      await updateDoc(doc(db, "design_request", id), { status: "취소" });
-      setRequests((prev) =>
-        prev.map((req) => (req.id === id ? { ...req, status: "취소" } : req))
-      );
+  try {
+    const docRef = doc(db, "design_request", id);
 
-      // undefined 방지
-      if (designRequestId) {
-        await addHistoryComment(
-          designRequestId,
-          `${userName} 님이 요청을 취소했습니다. (상태: '${prevStatus}' → '취소')`
-        );
+    // ★ 추가: 최신 문서 기준으로 assigned 존재 여부 판정
+    const snap = await getDoc(docRef);
+    if (!snap.exists()) return;
+    const data = snap.data() as any;
+
+    const hasAssigned = (() => {
+      const ad = data?.assigned_designers;
+
+      if (Array.isArray(ad)) {
+        const nonEmpty = ad
+          .map((v: any) => {
+            if (typeof v === "string") return v.trim();
+            if (typeof v === "object" && v) return String(v?.name ?? "").trim();
+            return "";
+          })
+          .filter(Boolean);
+        if (nonEmpty.length > 0) return true;
       }
-    } catch (e) {
-      console.error(e);
-      alert("취소 처리 중 오류가 발생했습니다. 다시 시도해 주세요.");
+
+      if (typeof ad === "string" && ad.trim()) return true;
+
+      const legacy = String(data?.assigned_designer ?? "").trim();
+      if (legacy) return true;
+
+      return false;
+    })();
+
+    // ★ 변경: assigned 없으면 공수값만 "비움(null)" 처리
+    const updatePayload: any = { status: "취소" };
+
+    if (!hasAssigned) {
+      updatePayload.out_work_hour = null; // ★ 변경
+      updatePayload.in_work_hour = null;  // ★ 변경
     }
-  };
+
+    await updateDoc(docRef, updatePayload);
+
+    // 로컬 상태 동기화도 동일하게
+    setRequests((prev) =>
+      prev.map((req) => {
+        if (req.id !== id) return req;
+        const next: any = { ...(req as any), status: "취소" };
+        if (!hasAssigned) {
+          next.out_work_hour = null; // ★ 변경
+          next.in_work_hour  = null; // ★ 변경
+        }
+        return next;
+      })
+    );
+
+    const finalDesignRequestId = designRequestId ?? data?.design_request_id;
+    const finalPrevStatus = row?.status ?? data?.status ?? prevStatus;
+
+    if (finalDesignRequestId) {
+      await addHistoryComment(
+        finalDesignRequestId,
+        `${userName} 님이 요청을 취소했습니다. (상태: '${finalPrevStatus}' → '취소')`
+      );
+    }
+  } catch (e) {
+    console.error(e);
+    alert("취소 처리 중 오류가 발생했습니다. 다시 시도해 주세요.");
+  }
+};
 
   const toYmd = (v: any): string => {
     if (!v) return "";
@@ -463,8 +526,19 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
   const handleExportCSV = async () => {
     setExporting(true);
     try {
-      // CSV 컬럼 순서(요구사항 그대로)
-      const fields = [
+      // homeplus면 task_type_detail 컬럼을 CSV에서 "제외"
+      // - userCompany 기준 우선 판정
+      // - 혹시 혼합 데이터면 viewList 전체가 homeplus인 경우에만 제외
+      const userIsHomeplus = normalizeCompanyKey(userCompany) === "homeplus"; // ★ 추가
+      const listAllHomeplus =
+        viewList.length > 0 &&
+        (viewList as any[]).every((r) => normalizeCompanyKey((r as any).company) === "homeplus"); // ★ 추가
+      const omitTaskTypeDetail = userIsHomeplus || listAllHomeplus; // ★ 추가
+
+      // CSV 컬럼 순서(요구사항 반영)
+      // 문서번호, 요청일, 완료요청일, 오픈일, 담당MD, 요청자, 업무부서, 업무형태, 업무형태상세(단 homeplus면 제외),
+      // 작업항목, 요청서URL, 진행상태, 산출물URL, 외부공수
+      const fields: string[] = [
         "design_request_id",   // 문서번호
         "request_date",        // 요청일
         "completion_date",     // 완료요청일
@@ -473,17 +547,16 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
         "requester",           // 요청자
         "task_form",           // 업무부서
         "task_type",           // 업무형태
-        "task_type_detail",    // 업무형태상세
+        ...(omitTaskTypeDetail ? [] : ["task_type_detail"]), // homeplus면 컬럼 제외
         "requirement",         // 작업항목
         "url",                 // 요청서URL
         "status",              // 진행상태
         "result_url",          // 산출물URL
-        "designer_start_date", // 디자인 시작일
-        "designer_end_date",   // 디자인 종료일
-        "assigned_designers",   // 디자이너
-      ] as const;
+        "out_work_hour",       // 외부공수
+      ];
 
-      const headers: Record<(typeof fields)[number], string> = {
+      // 헤더도 동일하게 동기화
+      const headers: Record<string, string> = {
         design_request_id: "문서번호",
         request_date: "요청일",
         completion_date: "완료요청일",
@@ -497,16 +570,18 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
         url: "요청서URL",
         status: "진행상태",
         result_url: "산출물URL",
-        designer_start_date: "디자인 시작일",
-        designer_end_date: "디자인 종료일",
-        assigned_designers: "디자이너",
+        out_work_hour: "외부공수",
       };
 
-      // viewList -> CSV용 매핑(키 맞춤 + 날짜 포맷 + 공수 단일화)
+      // viewList -> CSV용 매핑(키 맞춤 + 날짜 포맷 + 외부공수)
       const rowsForCsv = (viewList as any[]).map((r) => {
-        const assigned = Array.isArray(r.assigned_designers)
-          ? r.assigned_designers.join(", ")
-          : "";
+        const statusForCsv = r.displayStatus ?? mapStatusForRequester(String(r.status ?? ""));
+
+        // ★ 변경: out_work_hour 값이 "없으면(null/undefined/빈문자열)" CSV에 빈칸 출력
+        // - 값이 실제 0이면 0 유지
+        const rawOut = (r as any).out_work_hour; // ★ 추가
+        const outHour = (rawOut == null || rawOut === "") ? "" : round3(toHourNum(rawOut)); // ★ 변경
+
         return {
           design_request_id: r.design_request_id ?? "",
           request_date: toYmd(r.request_date ?? r.requested_at ?? r.requestDate),
@@ -519,19 +594,15 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
           task_type_detail: r.task_type_detail ?? "",
           requirement: r.requirement ?? "",
           url: r.url ?? "",
-          note: r.note ?? "",
-          status: r.status ?? "",
+          status: statusForCsv,
           result_url: r.result_url ?? "",
-          designer_start_date: toYmd(r.designer_start_date),
-          designer_end_date: toYmd(r.designer_end_date),
-          assigned_designers: assigned,
-          work_hour: (r.in_work_hour ?? r.out_work_hour ?? "") + "",
+          out_work_hour: outHour, // ★ 변경
         };
       });
 
       downloadArrayToCSV({
         rows: rowsForCsv,
-        fields: fields as unknown as string[],
+        fields,
         headers,
         filename: "design_request_current_view.csv",
       });
@@ -561,6 +632,7 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
             deptOptions={deptOptions}
             onApplyDept={applyDept} 
           />
+          <ExportCSV onClick={handleExportCSV} loading={exporting} />
           <RequesterRequestList
             data={viewList}
             disableActions={false}

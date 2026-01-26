@@ -24,12 +24,11 @@ export type AssignedDesigner = {
   _rowId: string; // ★ 추가: UI 전용 key
   uid: string;
   name: string;
-
   task_form: string;
+  task_type: string;      // ★ 추가: 업무형태
   requirement: string; // ★ 변경: task_type -> requirement
   task_type_detail?: string;
-
-  count: string; // 편집용
+  count: string;
   out_work_hour: number;
   in_work_hour: number;
 };
@@ -52,10 +51,12 @@ const normalizeCompanyKey = (v: any) =>
     .toLowerCase()
     .replace(/\s+/g, "");
 
-// count 파싱
+// count 파싱(0 허용, 빈값/비정상은 0)
 const toCount = (v: any) => {
-  const n = Number(String(v ?? "").trim());
-  return Number.isFinite(n) && n > 0 ? n : 1;
+  const s = String(v ?? "").trim();
+  if (s === "") return 0;
+  const n = Number(s);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
 };
 
 // count 입력값(숫자만/빈값 허용)
@@ -217,15 +218,16 @@ type SavedAssignedDesigner = {
   uid?: string;
   name?: string;
   task_form?: string;
-  requirement?: string;
-  task_type?: string; // legacy fallback
+  task_type?: string;         // ★ 추가: 신규
+  requirement?: string;       // 신규에서는 작업항목, 레거시에서는 업무형태였을 수 있음
+  task_type_legacy?: string;  // ★ 추가: 혹시 모를 백업 키
   task_type_detail?: string;
   count?: number | string;
   out_work_hour?: number;
   in_work_hour?: number;
 };
 
-const normalizeSavedAssignedDesigners = (raw: any): AssignedDesigner[] => {
+const normalizeSavedAssignedDesigners = (raw: any, fallbackDocRequirement: string): AssignedDesigner[] => {
   const arr: SavedAssignedDesigner[] = Array.isArray(raw) ? raw : [];
 
   const rows = arr
@@ -233,23 +235,34 @@ const normalizeSavedAssignedDesigners = (raw: any): AssignedDesigner[] => {
       const uid = norm(r.uid);
       const name = norm(r.name);
 
-      const requirement = norm((r as any).requirement ?? (r as any).task_type);
+      const savedTaskType = norm((r as any).task_type);
+      const legacyTypeFromRequirement = norm((r as any).requirement); // 레거시에서 업무형태가 들어있던 자리
 
-      const countNum = toCount(r.count ?? 1);
+      // 신규면 task_type를 신뢰, 레거시면 requirement를 task_type로 승격
+      const task_type = savedTaskType || legacyTypeFromRequirement || norm((r as any).task_type_legacy);
+
+      // 신규면 requirement가 작업항목, 레거시면 문서 requirement로 채움
+      const requirement =
+        savedTaskType ? (norm((r as any).requirement) || fallbackDocRequirement) : fallbackDocRequirement;
+
+      const countNum = toCount(r.count ?? 0);
 
       return {
         _rowId: crypto.randomUUID(),
         uid,
         name,
-        task_form: norm(r.task_form),
+        task_form: norm((r as any).task_form),
+
+        task_type,
         requirement,
-        task_type_detail: norm(r.task_type_detail) || "",
+
+        task_type_detail: norm((r as any).task_type_detail) || "",
         count: String(countNum),
-        out_work_hour: typeof r.out_work_hour === "number" ? r.out_work_hour : 0,
-        in_work_hour: typeof r.in_work_hour === "number" ? r.in_work_hour : 0,
+        out_work_hour: typeof (r as any).out_work_hour === "number" ? (r as any).out_work_hour : 0,
+        in_work_hour: typeof (r as any).in_work_hour === "number" ? (r as any).in_work_hour : 0,
       } as AssignedDesigner;
     })
-    .filter((r) => !!r.task_form || !!r.requirement || !!r.uid);
+    .filter((r) => !!r.task_form || !!r.task_type || !!r.uid);
 
   return rows.length > 0
     ? rows
@@ -259,9 +272,10 @@ const normalizeSavedAssignedDesigners = (raw: any): AssignedDesigner[] => {
           uid: "",
           name: "",
           task_form: "",
-          requirement: "",
+          task_type: "",
+          requirement: fallbackDocRequirement || "",
           task_type_detail: "",
-          count: "1",
+          count: "0",
           out_work_hour: 0,
           in_work_hour: 0,
         },
@@ -277,14 +291,15 @@ export default function AssignDesigner({ isOpen, onClose, target, onAssign }: As
   const [companyKey, setCompanyKey] = useState<string>("");
 
   const initialTaskForm = norm((target as any)?.task_form);
-  const initialRequirement = norm((target as any)?.task_type); // ★ 유지: 원천 데이터는 기존 task_type(업무형태)
+  const initialTaskType = norm((target as any)?.task_type);
   const initialTaskTypeDetail = norm((target as any)?.task_type_detail);
+  const initialRequirement = norm((target as any)?.task_type); // ★ 유지: 원천 데이터는 기존 task_type(업무형태)
 
   const docRequirement = norm((target as any)?.requirement); // ★ 추가: 작업항목(해당 문서 requirement)
 
   const companyCfg = useMemo(() => buildCompanyCfg(companyDoc, companyKey), [companyDoc, companyKey]);
 
-  // ★ 변경: "업무형태상세" 컬럼은 '문서에 task_type_detail이 있을 때만' 표시
+  // "업무형태상세" 컬럼은 '문서에 task_type_detail이 있을 때만' 표시
   const showTypeDetailCol = !!initialTaskTypeDetail;
 
   // ★ 변경: rows 타입 AssignedDesigner[]
@@ -294,9 +309,10 @@ export default function AssignDesigner({ isOpen, onClose, target, onAssign }: As
       uid: "",
       name: "",
       task_form: "",
+      task_type: "",
       requirement: "",
       task_type_detail: "",
-      count: "1",
+      count: "0",
       out_work_hour: 0,
       in_work_hour: 0,
     },
@@ -367,7 +383,7 @@ export default function AssignDesigner({ isOpen, onClose, target, onAssign }: As
             // row형인지 최소 판별
             const rowShape = saved[0]?.task_form || saved[0]?.requirement || saved[0]?.task_type;
             if (rowShape) {
-              setRows(normalizeSavedAssignedDesigners(saved));
+              setRows(normalizeSavedAssignedDesigners(saved, docRequirement));
               return;
             }
           }
@@ -381,15 +397,18 @@ export default function AssignDesigner({ isOpen, onClose, target, onAssign }: As
           uid: "",
           name: "",
           task_form: initialTaskForm,
-          requirement: initialRequirement,
+          // ★ 변경: 업무형태는 task_type
+          task_type: initialTaskType,
+          // ★ 변경: 작업항목은 requirement(문서 requirement)
+          requirement: docRequirement,
           task_type_detail: initialTaskTypeDetail,
-          count: "1",
+          count: "0",
           out_work_hour: 0,
           in_work_hour: 0,
         },
       ]);
     })();
-  }, [isOpen, target, initialTaskForm, initialRequirement, initialTaskTypeDetail]);
+  }, [isOpen, target, initialTaskForm, initialTaskType, initialTaskTypeDetail, docRequirement]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -438,12 +457,12 @@ export default function AssignDesigner({ isOpen, onClose, target, onAssign }: As
 
   const calcHoursForRow = (
     task_form: string,
-    requirement: string,
+    task_type: string,
     task_type_detail: string | undefined,
     count: string
   ) => {
     const c = toCount(count);
-    const base = getBaseHours(companySpec, task_form, requirement, task_type_detail);
+    const base = getBaseHours(companySpec, task_form, task_type, task_type_detail);
     return {
       out_work_hour: base.out * c,
       in_work_hour: base.in * c,
@@ -461,23 +480,24 @@ export default function AssignDesigner({ isOpen, onClose, target, onAssign }: As
           const newForm = String(patch.task_form ?? "").trim();
           const allowedTypes = companyCfg.getTypes(newForm);
 
-          const prevType = String(next.requirement ?? "").trim();
+          const prevType = String(next.task_type ?? "").trim();
           const nextType = allowedTypes.includes(prevType) ? prevType : (allowedTypes[0] ?? "");
 
           next.task_form = newForm;
-          next.requirement = nextType;
+          next.task_type = nextType; // ★ 변경
           next.task_type_detail = "";
         }
 
-        if (patch.requirement !== undefined) {
-          next.requirement = String(patch.requirement ?? "").trim();
+        // ★ 변경: 업무형태 변경
+        if ((patch as any).task_type !== undefined) {
+          next.task_type = String((patch as any).task_type ?? "").trim();
           next.task_type_detail = "";
         }
 
         // ★ 유지: 컬럼을 표시할 때만 디테일 리스트 정합성 체크
         if (showTypeDetailCol) {
           const f = String(next.task_form ?? "").trim();
-          const t = String(next.requirement ?? "").trim();
+          const t = String(next.task_type ?? "").trim();
 
           const details = companyCfg.getDetails(f, t);
           const curDetail = String(next.task_type_detail ?? "").trim();
@@ -493,7 +513,7 @@ export default function AssignDesigner({ isOpen, onClose, target, onAssign }: As
           next.name = uid ? (designerNameByUid.get(uid) ?? next.name ?? "") : "";
         }
 
-        const hours = calcHoursForRow(next.task_form, next.requirement, next.task_type_detail, next.count);
+        const hours = calcHoursForRow(next.task_form, next.task_type, next.task_type_detail, next.count);
         next.out_work_hour = hours.out_work_hour;
         next.in_work_hour = hours.in_work_hour;
 
@@ -505,9 +525,10 @@ export default function AssignDesigner({ isOpen, onClose, target, onAssign }: As
   const handleAddRow = () => {
     const baseForm = initialTaskForm || companyCfg.formDefault || "";
     const allowedTypes = companyCfg.getTypes(baseForm);
-    const baseType = allowedTypes.includes(initialRequirement)
-      ? initialRequirement
-      : (allowedTypes[0] ?? initialRequirement ?? "");
+
+    const baseType = allowedTypes.includes(initialTaskType)
+      ? initialTaskType
+      : (allowedTypes[0] ?? initialTaskType ?? "");
 
     setRows((prev) => [
       ...prev,
@@ -516,9 +537,12 @@ export default function AssignDesigner({ isOpen, onClose, target, onAssign }: As
         uid: "",
         name: "",
         task_form: baseForm,
-        requirement: baseType,
+
+        task_type: baseType,         // ★ 변경
+        requirement: docRequirement, // ★ 변경
+
         task_type_detail: initialTaskTypeDetail,
-        count: "1",
+        count: "0",
         out_work_hour: 0,
         in_work_hour: 0,
       },
@@ -533,7 +557,8 @@ export default function AssignDesigner({ isOpen, onClose, target, onAssign }: As
   };
 
   const handleAssign = () => {
-    const validRows = rows.filter((r) => norm(r.task_form) && norm(r.requirement) && norm(r.uid));
+    // ★ 변경: 유효성은 task_form + task_type + uid 기준
+    const validRows = rows.filter((r) => norm(r.task_form) && norm(r.task_type) && norm(r.uid));
     if (!validRows.length) {
       alert("업무부서/업무형태/디자이너를 선택하세요.");
       return;
@@ -541,10 +566,13 @@ export default function AssignDesigner({ isOpen, onClose, target, onAssign }: As
 
     const cleaned = validRows.map((r) => {
       const c = toCount(r.count);
-      const base = getBaseHours(companySpec, r.task_form, r.requirement, r.task_type_detail);
+      const base = getBaseHours(companySpec, r.task_form, r.task_type, r.task_type_detail);
 
       return {
         ...r,
+        // ★ 변경: 작업항목은 문서 requirement를 강제로 주입(빈 값 방지)
+        requirement: norm(r.requirement) || docRequirement || "",
+
         count: String(c),
         out_work_hour: base.out * c,
         in_work_hour: base.in * c,
@@ -636,12 +664,13 @@ export default function AssignDesigner({ isOpen, onClose, target, onAssign }: As
                       </td>
 
                       <td>
+                        {/* ★ 변경: 업무형태 = task_type */}
                         <SelectBox
                           full
-                          value={r.requirement}
+                          value={r.task_type}
                           placeholder="선택"
                           options={taskTypeOptionsUI}
-                          onChange={(next) => updateRow(r._rowId, { requirement: next })}
+                          onChange={(next) => updateRow(r._rowId, { task_type: next } as any)}
                         />
                       </td>
 
@@ -658,7 +687,7 @@ export default function AssignDesigner({ isOpen, onClose, target, onAssign }: As
                         </td>
                       )}
 
-                      <td>{docRequirement || "-"}</td> {/* ★ 추가: 작업항목(문서 requirement) */}
+                      <td>{r.requirement || docRequirement || "-"}</td> {/* ★ 추가: 작업항목(문서 requirement) */}
 
                       <td>
                         <CountInput
@@ -670,8 +699,9 @@ export default function AssignDesigner({ isOpen, onClose, target, onAssign }: As
                             updateRow(r._rowId, { count: v });
                           }}
                           onBlur={() => {
+                            // ★ 변경: 빈값이면 0으로 복구, 그 외는 0 이상 정수로 정규화
                             if (String(r.count ?? "") === "") {
-                              updateRow(r._rowId, { count: "1" });
+                              updateRow(r._rowId, { count: "0" });
                             } else {
                               const c = toCount(r.count);
                               updateRow(r._rowId, { count: String(c) });
