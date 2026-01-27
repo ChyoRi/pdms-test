@@ -455,8 +455,8 @@ export default function Manager({
         "designer_start_date",
         "designer_end_date",
         "assigned_designers",
-        "in_work_hour",
         "out_work_hour",
+        "in_work_hour",
       ] as const;
 
       const headers: Record<(typeof fields)[number], string> = {
@@ -475,8 +475,8 @@ export default function Manager({
         designer_start_date: "디자인 시작일",
         designer_end_date: "디자인 종료일",
         assigned_designers: "디자이너",
-        in_work_hour: "내부공수",
         out_work_hour: "외부공수",
+        in_work_hour: "내부공수",
       };
 
       const rowsForCsv = (viewList as any[]).map((r) => {
@@ -519,8 +519,8 @@ export default function Manager({
           assigned_designers: assigned,
 
           // ★ 변경: 내부/외부 공수 출력
-          in_work_hour: inHourCsv,
           out_work_hour: outHourCsv,
+          in_work_hour: inHourCsv,
         };
       });
 
