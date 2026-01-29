@@ -20,6 +20,7 @@ import {
 } from "firebase/firestore";
 import AssignDesigner from "../components/AssignDesigner";
 import type { AssignedDesigner } from "../components/AssignDesigner";
+import SwitchRole from "../components/SwitchRole";
 
 // ✅ Drawer 콘텐츠 모드 타입
 type DrawerMode = "create" | "edit" | "detail" | null;
@@ -88,6 +89,12 @@ export default function MainPage() {
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignTarget, setAssignTarget] = useState<RequestData | null>(null);
 
+  // SwitchAccount 모달 상태
+  const [switchOpen, setSwitchOpen] = useState(false);
+
+  // MainPage 상단 state
+  const [canSwitchAccount, setCanSwitchAccount] = useState(false); // ★ 추가
+
   // 자식(ManagerRequestItem)에서 호출할 “모달 열기”
   const openAssignDesigner = (target: RequestData) => {
     setAssignTarget(target);
@@ -100,12 +107,20 @@ export default function MainPage() {
     setAssignTarget(null);
   };
 
+  // SwitchAccount 열기/닫기
+  const openSwitchAccount = () => {
+    if (!canSwitchAccount) return; // ★ 추가
+    setSwitchOpen(true);
+  };
+  const closeSwitchAccount = () => setSwitchOpen(false);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) {
         setUserRole(0);
         setUserName("");
         setRequests([]);
+        setCanSwitchAccount(false);
         return;
       }
 
@@ -118,6 +133,7 @@ export default function MainPage() {
       const data = userDoc.data() as any;
       const role: number = data.role;
       setUserRole(role);
+      setCanSwitchAccount(!!data.can_switch_account);
 
       let qRef: any;
 
@@ -227,9 +243,9 @@ export default function MainPage() {
   const saveAssignDesignerToFirestore = async (target: RequestData, rows: AssignedDesigner[]) => {
     if (!target?.id) return;
 
-    const docRequirement = norm((target as any)?.requirement); // ★ 추가: 문서 작업항목
+    const docRequirement = norm((target as any)?.requirement); // 문서 작업항목
 
-    // ★ 변경: uid/task_form/task_type 기준 유효성
+    // uid/task_form/task_type 기준 유효성
     const cleaned = rows.filter((r) => norm((r as any).task_form) && norm((r as any).task_type) && norm(r.uid));
 
     if (!cleaned.length) {
@@ -237,7 +253,7 @@ export default function MainPage() {
       return;
     }
 
-    // ★ 변경: assigned_designers row에 price도 저장
+    // assigned_designers row에 price도 저장
     const assigned_designers = cleaned.map((r) => {
       const c = toCount((r as any).count);
 
@@ -256,16 +272,16 @@ export default function MainPage() {
         out_work_hour: Number((r as any).out_work_hour ?? 0) || 0,
         in_work_hour: Number((r as any).in_work_hour ?? 0) || 0,
 
-        out_work_price: Number((r as any).out_work_price ?? 0) || 0, // ★ 추가
-        in_work_price: Number((r as any).in_work_price ?? 0) || 0,   // ★ 추가
+        out_work_price: Number((r as any).out_work_price ?? 0) || 0,
+        in_work_price: Number((r as any).in_work_price ?? 0) || 0,
       });
     });
 
-    // ★ 변경: totals / uids는 assigned_designers(row형)에서 직접 산출
+    // totals / uids는 assigned_designers(row형)에서 직접 산출
     const totalOut = round3(assigned_designers.reduce((s: number, r: any) => s + Number(r.out_work_hour ?? 0), 0));
     const totalIn = round3(assigned_designers.reduce((s: number, r: any) => s + Number(r.in_work_hour ?? 0), 0));
 
-    // ★ 추가: price totals
+    // price totals
     const totalOutPrice = round3(
       assigned_designers.reduce((s: number, r: any) => s + Number(r.out_work_price ?? 0), 0)
     );
@@ -278,10 +294,8 @@ export default function MainPage() {
     const payload = sanitizeForFirestore({
       out_work_hour: totalOut,
       in_work_hour: totalIn,
-
-      out_work_price: totalOutPrice, // ★ 추가
-      in_work_price: totalInPrice,   // ★ 추가
-
+      out_work_price: totalOutPrice,
+      in_work_price: totalInPrice,
       assigned_designers,
       assigned_designer_uids: uidsFromRows,
     });
@@ -302,7 +316,7 @@ export default function MainPage() {
       />
 
       <DashBoardFrame>
-        <Header onResetFilters={handleResetAllFilters} />
+        <Header onResetFilters={handleResetAllFilters} onOpenSwitchAccount={openSwitchAccount} />
 
         <Main
           userRole={userRole}
@@ -359,6 +373,9 @@ export default function MainPage() {
           await saveAssignDesignerToFirestore(assignTarget, rows); // ★ rows: AssignedDesigner[]
         }}
       />
+
+      {/* ★ 추가: 계정전환 모달 (MainPage에서 렌더) */}
+      <SwitchRole isOpen={switchOpen} onClose={closeSwitchAccount} />
     </Container>
   );
 }

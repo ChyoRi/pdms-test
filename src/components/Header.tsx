@@ -6,9 +6,11 @@ import { doc, getDoc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import Nav from "./Nav";
 import { logoutAll } from "../utils/authClient";
+import switchAccountIcon from "../assets/switch-account.png";
 
 interface HeaderProps {
   onResetFilters?: () => void;
+  onOpenSwitchAccount?: () => void;
 }
 
 type CompanyDoc = {
@@ -16,11 +18,13 @@ type CompanyDoc = {
   company_name?: string;
 };
 
-export default function Header({ onResetFilters }: HeaderProps) {
+export default function Header({ onResetFilters, onOpenSwitchAccount }: HeaderProps) {
   const [userName, setUserName] = useState("");
   const [userCompany, setUserCompany] = useState("");
   const [userRole, setUserRole] = useState<number | null>(null); // ✅ role 상태
   const [companyLogoUrl, setCompanyLogoUrl] = useState("");
+  // 계정전환 권한 플래그
+  const [canSwitchAccount, setCanSwitchAccount] = useState<boolean>(false);
   const navigate = useNavigate();
 
    // users.company(표시명) -> companies 문서 id로 변환
@@ -58,6 +62,9 @@ export default function Header({ onResetFilters }: HeaderProps) {
       const company = userData.company ?? ""; // 예: "HomePlus"
       setUserRole(role);
       setUserCompany(company);
+
+      // can_switch_account
+      setCanSwitchAccount(!!userData.can_switch_account);
 
       // companyKey 필드 안 쓰고 users.company로 companies 문서 찾기
       const companyKey = normalizeCompanyKey(company); // "HomePlus" -> "homeplus"
@@ -111,6 +118,17 @@ export default function Header({ onResetFilters }: HeaderProps) {
       </LogoFrame>
       <UtilWrap>
         <UserNameWrap><UserName>{userName}</UserName>님({getRoleName(userRole)}) {userCompany}환영합니다.</UserNameWrap>
+        {/* ★ 추가: 계정 전환 버튼 (로그아웃 왼쪽) */}
+        {canSwitchAccount && (
+          <SwitchAccountButton
+            type="button"
+            onClick={() => onOpenSwitchAccount?.()}
+            title="권한 변경"
+          >
+            <SwitchIcon src={switchAccountIcon} alt="" />
+            <span>권한 변경</span>
+          </SwitchAccountButton>
+        )}
         <LogoutButton onClick={logout}>로그아웃</LogoutButton>
         <Lole></Lole>
       </UtilWrap>
@@ -140,16 +158,41 @@ const Logo = styled.img`
   vertical-align: sub;
 `;
 
-const UtilWrap = styled.div``;
+const UtilWrap = styled.div`
+  ${({ theme }) => theme.mixin.flex('center')};
+  gap: 0 10px;
+`;
 
 const UserNameWrap = styled.span`
-  margin-right: 24px;
   color: ${({ theme }) => theme.colors.white01};
   font-size: 16px;
 `;
 
 const UserName = styled.span`
   font-weight: 700;
+`;
+
+// 계정 전환 버튼 스타일
+const SwitchAccountButton = styled.button`
+  ${({ theme }) => theme.mixin.flex("center")};
+  gap: 8px;
+  padding: 5px 10px;
+  border: 1px solid ${({ theme }) => theme.colors.white01};
+  border-radius: 4px;
+  color: ${({ theme }) => theme.colors.white01};
+  font-size: 16px;
+  background: transparent;
+  cursor: pointer;
+
+  &:hover {
+    opacity: 0.9;
+  }
+`;
+
+const SwitchIcon = styled.img`
+  width: 18px;
+  height: 18px;
+  vertical-align: middle;
 `;
 
 const LogoutButton = styled.button`

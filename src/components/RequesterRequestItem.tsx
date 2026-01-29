@@ -428,9 +428,7 @@ const RequestListTaskTypeWrap = styled.div`
   flex-direction: column;
 `;
 
-const RequestListTaskType = styled.span`
-  white-space: nowrap;
-`;
+const RequestListTaskType = styled.span``;
 
 const RequestListTaskTypeDetail = styled.span`
   
