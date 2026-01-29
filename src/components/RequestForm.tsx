@@ -37,6 +37,7 @@ type CompanyOptionsDoc = {
   type_select_mode?: "native" | "custom";
   task_type_detail_required?: boolean;
   task_work_hour_form?: any;
+  task_work_price_form?: any;
 };
 
 type TaskTypeParsed =
@@ -67,20 +68,19 @@ const parseTaskTypeSpec = (taskType: any, forms: string[]): TaskTypeParsed => {
     const vals = keys.map((k) => taskType[k]);
 
     const allArrays = vals.length > 0 && vals.every((v) => Array.isArray(v));
-    const allObjects =
-      vals.length > 0 &&
-      vals.every((v) => v && typeof v === "object" && !Array.isArray(v));
+    const allObjects = vals.length > 0 && vals.every((v) => v && typeof v === "object" && !Array.isArray(v));
 
     // (B) or (C): { [k]: string[] }
     if (allArrays) {
       const map: Record<string, string[]> = {};
       keys.forEach((k) => (map[k] = _toStrArray(taskType[k])));
 
-      // keys가 forms와 전부 일치하면 (C) form -> types 로 판단
-      const keyMatchesForms =
-        forms.length > 0 && keys.every((k) => forms.includes(k));
+      // ★ 변경: forms와 key가 일부라도 겹치면 "form -> types"로 판단
+      // - 경동(GHS)처럼 task_form 기반으로 task_type만 노출되어야 하는 회사 대응
+      const overlapCount = forms.length > 0 ? keys.filter((k) => forms.includes(k)).length : 0;
+      const looksLikeFormType = forms.length > 0 && overlapCount > 0;
 
-      if (keyMatchesForms) {
+      if (looksLikeFormType) {
         return { mode: "form_type", typesByForm: map };
       }
 
@@ -156,64 +156,43 @@ const getWorkHourFromCompanySpec = (
   return { out: null, in: null };
 };
 
-// task_work_hour_form 기반 옵션 파싱 유틸
-/* const _isLeafHourNode = (node: any) =>
-  node &&
-  typeof node === "object" &&
-  typeof node.hour === "number" &&
-  typeof node.times === "number"; */
+// companies.task_work_price_form 스펙에서 (form/type/detail)로 공수 금액(out/in) 조회
+const getWorkPriceFromCompanySpec = (
+  spec: any,
+  task_form?: string,
+  task_type?: string,
+  task_type_detail?: string
+): { out: number | null; in: number | null } => {
+  const f = (task_form ?? "").trim();
+  const t = (task_type ?? "").trim();
+  const d = (task_type_detail ?? "").trim();
 
-// task_work_hour_form -> { forms, typesByForm, detailsByFormType, isDetailMode }
-/* const parseWorkHourSpec = (workSpec: any) => {
-  const forms: string[] = [];
-  const typesByForm: Record<string, string[]> = {};
-  const detailsByFormType: Record<string, Record<string, string[]>> = {};
+  if (!spec || typeof spec !== "object" || !t) return { out: null, in: null };
 
-  let isDetailMode = false;
+  // homeplus처럼 form이 1차키인 구조 지원
+  const looksLikeFormSpec = !!(f && spec[f] && typeof spec[f] === "object");
+  const baseNode = looksLikeFormSpec ? spec[f]?.[t] : spec[t];
 
-  if (!workSpec || typeof workSpec !== "object") {
-    return { forms, typesByForm, detailsByFormType, isDetailMode };
+  if (!baseNode || typeof baseNode !== "object") return { out: null, in: null };
+
+  // leaf 읽기 함수 (out/in 전용)
+  const readLeaf = (node: any) => {
+    const out = _toNum(node?.out_work_price);
+    const inn = _toNum(node?.in_work_price);
+    return { out, in: inn };
+  };
+
+  // (A) leaf: { out_work_price, in_work_price }
+  const leafA = readLeaf(baseNode);
+  if (leafA.out != null || leafA.in != null) return leafA;
+
+  // (B) detail: { [detail]: { out_work_price, in_work_price } }
+  if (d && baseNode[d] && typeof baseNode[d] === "object") {
+    return readLeaf(baseNode[d]);
   }
 
-  for (const form of Object.keys(workSpec)) {
-    const byForm = workSpec[form];
-    if (!byForm || typeof byForm !== "object") continue;
-
-    forms.push(form);
-
-    const types: string[] = [];
-    const detailsMap: Record<string, string[]> = {};
-
-    for (const type of Object.keys(byForm)) {
-      const node = byForm[type];
-      if (!node || typeof node !== "object") continue;
-
-      types.push(type);
-
-      // leaf면 상세 없음
-      if (_isLeafHourNode(node)) {
-        detailsMap[type] = [];
-        continue;
-      }
-
-      // detail map 형태면 상세 존재
-      const details = Object.keys(node).filter((d) => _isLeafHourNode(node[d]));
-      if (details.length > 0) {
-        isDetailMode = true;
-        detailsMap[type] = details;
-      } else {
-        // 혹시 detail이 leaf 판별이 안 되는 예외 구조라도 안전 처리
-        detailsMap[type] = Object.keys(node);
-        if (detailsMap[type].length > 0) isDetailMode = true;
-      }
-    }
-
-    typesByForm[form] = types;
-    detailsByFormType[form] = detailsMap;
-  }
-
-  return { forms, typesByForm, detailsByFormType, isDetailMode };
-}; */
+  return { out: null, in: null };
+};
 
 // 회사 설정 빌더
 const buildCompanyCfg = (docData: CompanyOptionsDoc | null, companyKey?: string) => {
@@ -222,12 +201,10 @@ const buildCompanyCfg = (docData: CompanyOptionsDoc | null, companyKey?: string)
   const forms = _toStrArray(docData?.task_form);
   const formDefault = forms[0] ?? "";
 
-  const rawTaskType =
-    (docData as any)?.task_type ??
-    (docData as any)?.task_type_form ??
-    null;
+  const rawTaskType = (docData as any)?.task_type ?? (docData as any)?.task_type_form ?? null;
 
-  const parsed = parseTaskTypeSpec(rawTaskType, isHomeplus ? forms : []);
+  // ★ 변경: forms는 homeplus만이 아니라 "모든 회사"에 전달해야 form->types 오판이 안남
+  const parsed = parseTaskTypeSpec(rawTaskType, forms);
 
   const typeSelectMode: "native" | "custom" =
     docData?.type_select_mode === "custom" ? "custom" : "native";
@@ -237,7 +214,7 @@ const buildCompanyCfg = (docData: CompanyOptionsDoc | null, companyKey?: string)
 
     if (parsed.mode === "flat") return [...parsed.allTypes];
     if (parsed.mode === "type_detail") return [...parsed.allTypes];
-    if (parsed.mode === "form_type") return [...(_toStrArray(parsed.typesByForm[f] ?? []))];
+    if (parsed.mode === "form_type") return [..._toStrArray(parsed.typesByForm[f] ?? [])];
     if (parsed.mode === "form_type_detail") {
       const inner = parsed.spec[f] || {};
       return Object.keys(inner);
@@ -265,11 +242,15 @@ const buildCompanyCfg = (docData: CompanyOptionsDoc | null, companyKey?: string)
   const isDetailMode = parsed.mode === "type_detail" || parsed.mode === "form_type_detail";
   const detailRequiredFlag = !!docData?.task_type_detail_required;
 
-  // 공수 조회 시 homeplus만 task_form을 사용, 그 외는 formKey를 "공통"으로 고정해서 계산만 통일
+  // 공수 조회
   const getWorkHour = (form?: string, type?: string, detail?: string) => {
+    return getWorkHourFromCompanySpec(docData?.task_work_hour_form, form, type, detail);
+  };
 
-  return getWorkHourFromCompanySpec(docData?.task_work_hour_form, form, type, detail);
-};
+  // 공수 금액 조회
+  const getWorkPrice = (form?: string, type?: string, detail?: string) => {
+    return getWorkPriceFromCompanySpec(docData?.task_work_price_form, form, type, detail);
+  };
 
   return {
     isHomeplus,
@@ -280,7 +261,8 @@ const buildCompanyCfg = (docData: CompanyOptionsDoc | null, companyKey?: string)
     getDetails,
     isDetailMode,
     detailRequiredFlag,
-    getWorkHour
+    getWorkHour,
+    getWorkPrice,
   };
 };
 
@@ -454,7 +436,7 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
     if (isEmpty(f.task_form)) return { message: "업무 부서를 선택하세요.", fieldId: "task_form" };
     if (isEmpty(f.task_type)) return { message: "업무 유형을 선택하세요.", fieldId: "task_type" };
 
-    // ★ 변경: 메인/isDetailRequired가 아니라 "해당 폼의 form/type 기준"으로 필수 판단
+    // 메인/isDetailRequired가 아니라 "해당 폼의 form/type 기준"으로 필수 판단
     const needDetail = isDetailRequiredFor(f.task_form as string, f.task_type as string);
     if (needDetail && isEmpty(f.task_type_detail))
       return { message: "업무 유형 상세를 선택하세요.", fieldId: "task_type_detail" };
@@ -709,6 +691,18 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
     return { out, in: inn };
   };
 
+  // 회사별 공수 금액(out/in) 프리셋 조회
+  const fetchWorkPricePreset = async (
+    task_form?: string,
+    task_type?: string,
+    task_type_detail?: string
+  ): Promise<{ out: number | null; in: number | null }> => {
+    if (!companyDoc) return { out: null, in: null };
+    const { out, in: inn } = companyCfg.getWorkPrice(task_form, task_type, task_type_detail);
+    return { out, in: inn };
+  };
+
+
   // textarea의 raw 문자열 -> string[] URL 리스트
   const parseUrls = (raw?: any): string[] => {
     if (raw == null) return [];
@@ -735,9 +729,9 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
         return;
       }
     }
-    
-    const uid = auth.currentUser?.uid || userUid || ""; // 문서 수정자 uid
-    
+
+    const uid = auth.currentUser?.uid || userUid || "";
+
     if (isEdit && editData?.id) {
       const patch: any = {
         completion_date: toTimestamp(requestData.completion_date),
@@ -757,20 +751,25 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
         updated_date: serverTimestamp(),
       };
 
-      // 공수 재계산 조건: form/type/detail 변경 감지
+      // 공수/금액 재계산 조건: form/type/detail 변경 감지
       const formChanged = (requestData.task_form || "") !== (editData.task_form || "");
       const typeChanged = (requestData.task_type || "") !== (editData.task_type || "");
       const detailChanged =
         (requestData.task_type_detail || "") !== ((editData as any).task_type_detail || "");
 
       if (formChanged || typeChanged || detailChanged) {
-        const { out, in: inn } = await fetchWorkHourPreset(
+        const { out, in: inn } = await fetchWorkHourPreset(patch.task_form, patch.task_type, patch.task_type_detail);
+        patch.out_work_hour = out;
+        patch.in_work_hour = inn;
+
+        const { out: outP, in: inP } = await fetchWorkPricePreset( // 금액도 같이 갱신
           patch.task_form,
           patch.task_type,
           patch.task_type_detail
         );
-        patch.out_work_hour = out;
-        patch.in_work_hour = inn;
+        patch.out_work_price = outP;
+        patch.in_work_price = inP;
+
         patch.work_hour_edit_state = false;
       }
 
@@ -813,7 +812,7 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
     // 등록 모드 유효성 검사 (메인 + 추가폼)
     for (let i = 0; i < forms.length; i++) {
       const f = forms[i];
-      const err = validateDesignForm(f); // ★ 변경
+      const err = validateDesignForm(f);
       if (err) {
         const prefix = i === 0 ? "메인 폼" : `추가 요청 ${i}`;
         alert(`${prefix} ${err.message}`);
@@ -838,9 +837,11 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
       // task_type 기본값도 회사 DB 기반으로 안전 보정
       const allowedTypes = companyCfg.getTypes(formValue);
       const rawType = (f.task_type as string) || "";
-      const typeValue = allowedTypes.includes(rawType) ? rawType : (allowedTypes[0] ?? rawType);
+      const typeValue = allowedTypes.includes(rawType) ? rawType : allowedTypes[0] ?? rawType;
 
-      const { out, in: inn } = await fetchWorkHourPreset(
+      const { out, in: inn } = await fetchWorkHourPreset(formValue, typeValue, f.task_type_detail as string);
+
+      const { out: outP, in: inP } = await fetchWorkPricePreset( // ★ 추가
         formValue,
         typeValue,
         f.task_type_detail as string
@@ -882,6 +883,8 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
         comment_new_state: false,
         in_work_hour: inn,
         out_work_hour: out,
+        in_work_price: inP,   // ★ 추가: DB 필드 저장
+        out_work_price: outP, // ★ 추가: DB 필드 저장
         work_hour_edit_state: false,
         created_date: serverTimestamp(),
         updated_date: null,

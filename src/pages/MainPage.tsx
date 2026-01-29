@@ -19,7 +19,7 @@ import {
   onSnapshot,
 } from "firebase/firestore";
 import AssignDesigner from "../components/AssignDesigner";
-import type { AssignedDesigner } from "../components/AssignDesigner"; // ★ 변경
+import type { AssignedDesigner } from "../components/AssignDesigner";
 
 // ✅ Drawer 콘텐츠 모드 타입
 type DrawerMode = "create" | "edit" | "detail" | null;
@@ -45,7 +45,7 @@ const toCount = (v: any) => {
 // 소수 오차 방지
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
 
-// ★ 추가: Firestore 저장 전 undefined 제거(깊은 구조 포함)
+// Firestore 저장 전 undefined 제거(깊은 구조 포함)
 const sanitizeForFirestore = (v: any): any => {
   if (v === undefined) return undefined;
 
@@ -230,16 +230,14 @@ export default function MainPage() {
     const docRequirement = norm((target as any)?.requirement); // ★ 추가: 문서 작업항목
 
     // ★ 변경: uid/task_form/task_type 기준 유효성
-    const cleaned = rows.filter(
-      (r) => norm((r as any).task_form) && norm((r as any).task_type) && norm(r.uid)
-    );
+    const cleaned = rows.filter((r) => norm((r as any).task_form) && norm((r as any).task_type) && norm(r.uid));
 
     if (!cleaned.length) {
       alert("저장할 배정 행이 없습니다.");
       return;
     }
 
-    // ★ 변경: DB 저장용으로 _rowId 제거 + count 숫자 보정
+    // ★ 변경: assigned_designers row에 price도 저장
     const assigned_designers = cleaned.map((r) => {
       const c = toCount((r as any).count);
 
@@ -248,35 +246,41 @@ export default function MainPage() {
         name: norm(r.name) || "(이름없음)",
 
         task_form: norm((r as any).task_form),
-
-        // ★ 핵심 변경 1) 업무형태 → task_type
         task_type: norm((r as any).task_type),
 
-        // ★ 핵심 변경 2) 작업항목(외부공수 등) → requirement
         requirement: norm((r as any).requirement) || docRequirement || "",
-
         task_type_detail: norm((r as any).task_type_detail) || "",
 
         count: c,
+
         out_work_hour: Number((r as any).out_work_hour ?? 0) || 0,
         in_work_hour: Number((r as any).in_work_hour ?? 0) || 0,
+
+        out_work_price: Number((r as any).out_work_price ?? 0) || 0, // ★ 추가
+        in_work_price: Number((r as any).in_work_price ?? 0) || 0,   // ★ 추가
       });
     });
 
     // ★ 변경: totals / uids는 assigned_designers(row형)에서 직접 산출
-    const totalOut = round3(
-      assigned_designers.reduce((s: number, r: any) => s + Number(r.out_work_hour ?? 0), 0)
+    const totalOut = round3(assigned_designers.reduce((s: number, r: any) => s + Number(r.out_work_hour ?? 0), 0));
+    const totalIn = round3(assigned_designers.reduce((s: number, r: any) => s + Number(r.in_work_hour ?? 0), 0));
+
+    // ★ 추가: price totals
+    const totalOutPrice = round3(
+      assigned_designers.reduce((s: number, r: any) => s + Number(r.out_work_price ?? 0), 0)
     );
-    const totalIn = round3(
-      assigned_designers.reduce((s: number, r: any) => s + Number(r.in_work_hour ?? 0), 0)
+    const totalInPrice = round3(
+      assigned_designers.reduce((s: number, r: any) => s + Number(r.in_work_price ?? 0), 0)
     );
-    const uidsFromRows = Array.from(
-      new Set(assigned_designers.map((r: any) => norm(r.uid)).filter(Boolean))
-    );
+
+    const uidsFromRows = Array.from(new Set(assigned_designers.map((r: any) => norm(r.uid)).filter(Boolean)));
 
     const payload = sanitizeForFirestore({
       out_work_hour: totalOut,
       in_work_hour: totalIn,
+
+      out_work_price: totalOutPrice, // ★ 추가
+      in_work_price: totalInPrice,   // ★ 추가
 
       assigned_designers,
       assigned_designer_uids: uidsFromRows,
