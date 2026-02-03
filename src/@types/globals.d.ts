@@ -24,7 +24,7 @@ declare global {
     requester_review_status?: string; // 요청자 검수 상태
     manager_review_status?: string; // 매니저 검수 상태
     requester_edit_state?: boolean; // 요청자 수정 상태
-    designer_edit_state? : boolean; // 디자이너 수정 상태
+
     requester_design_edit_state?: boolean; // 요청자 디자인 수청 요청 상태
     in_work_hour?: number | ""; // 내부공수
     out_work_hour?: number | ""; // 외부공수

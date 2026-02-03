@@ -45,6 +45,9 @@ const normalizeCompanyKey = (v: any) =>
     .toLowerCase()
     .replace(/\s+/g, "");
 
+// 회사 동일 판정 헬퍼
+const isSameCompany = (a: any, b: any) => normalizeCompanyKey(a) === normalizeCompanyKey(b);
+
 // 공수 숫자 안전 파서
 const toHourNum = (v: any): number => {
   const n = Number(v);
@@ -146,18 +149,30 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
     // myrequestlist: 본인이 요청한 것
     if (view === "myrequestlist") {
       if (!userName) return;
+
       const qRef = query(
         collection(db, "design_request"),
         where("requester", "==", userName),
         orderBy("design_request_id", "desc")
       );
+
       const unsubscribe = onSnapshot(qRef, (snapshot) => {
-        const data = snapshot.docs.map((d) => ({
+        const all = snapshot.docs.map((d) => ({
           id: d.id,
           ...(d.data() as Omit<RequestData, "id">),
-        }));
-        setRequests(data);
+        })) as any[];
+
+        // 현재 로그인 유저의 company 컨텍스트로 필터링
+        // - userCompany가 있으면 같은 회사만 노출
+        // - userCompany가 비어있으면(예외) 기존처럼 전체 노출
+        const filtered =
+          userCompany && userCompany.trim()
+            ? all.filter((r) => isSameCompany((r as any).company, userCompany))
+            : all;
+
+        setRequests(filtered as any);
       });
+
       return () => unsubscribe();
     }
 
@@ -182,11 +197,7 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
       };
 
       variants.forEach((v) => {
-        const qRef = query(
-          col,
-          where("company", "==", v),
-          orderBy("design_request_id", "desc")
-        );
+        const qRef = query(col, where("company", "==", v), orderBy("design_request_id", "desc"));
         const unsub = onSnapshot(qRef, (snap) => {
           snap.docs.forEach((d) => {
             seen.set(d.id, { id: d.id, ...(d.data() as Omit<RequestData, "id">) });
@@ -417,10 +428,8 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
       try {
         await updateDoc(doc(db, "design_request", item.id), {
           // 메모 Talk 읽음
-          [`comment_read_by.${userUid}`]: serverTimestamp(),
           [`comment_read_by_client.${userUid}`]: now,
           // 문서 수정 읽음
-          [`requester_edit_read_by.${userUid}`]: serverTimestamp(),
           [`requester_edit_read_by_client.${userUid}`]: now,
         });
       } catch (e) {
@@ -447,7 +456,7 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
   try {
     const docRef = doc(db, "design_request", id);
 
-    // ★ 추가: 최신 문서 기준으로 assigned 존재 여부 판정
+    // 최신 문서 기준으로 assigned 존재 여부 판정
     const snap = await getDoc(docRef);
     if (!snap.exists()) return;
     const data = snap.data() as any;
@@ -474,12 +483,12 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
       return false;
     })();
 
-    // ★ 변경: assigned 없으면 공수값만 "비움(null)" 처리
+    // assigned 없으면 공수값만 "비움(null)" 처리
     const updatePayload: any = { status: "취소" };
 
     if (!hasAssigned) {
-      updatePayload.out_work_hour = null; // ★ 변경
-      updatePayload.in_work_hour = null;  // ★ 변경
+      updatePayload.out_work_hour = null;
+      updatePayload.in_work_hour = null;
     }
 
     await updateDoc(docRef, updatePayload);
@@ -490,8 +499,8 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
         if (req.id !== id) return req;
         const next: any = { ...(req as any), status: "취소" };
         if (!hasAssigned) {
-          next.out_work_hour = null; // ★ 변경
-          next.in_work_hour  = null; // ★ 변경
+          next.out_work_hour = null;
+          next.in_work_hour  = null;
         }
         return next;
       })
@@ -529,11 +538,11 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
       // homeplus면 task_type_detail 컬럼을 CSV에서 "제외"
       // - userCompany 기준 우선 판정
       // - 혹시 혼합 데이터면 viewList 전체가 homeplus인 경우에만 제외
-      const userIsHomeplus = normalizeCompanyKey(userCompany) === "homeplus"; // ★ 추가
+      const userIsHomeplus = normalizeCompanyKey(userCompany) === "homeplus";
       const listAllHomeplus =
         viewList.length > 0 &&
-        (viewList as any[]).every((r) => normalizeCompanyKey((r as any).company) === "homeplus"); // ★ 추가
-      const omitTaskTypeDetail = userIsHomeplus || listAllHomeplus; // ★ 추가
+        (viewList as any[]).every((r) => normalizeCompanyKey((r as any).company) === "homeplus");
+      const omitTaskTypeDetail = userIsHomeplus || listAllHomeplus;
 
       // CSV 컬럼 순서(요구사항 반영)
       // 문서번호, 요청일, 완료요청일, 오픈일, 담당MD, 요청자, 업무부서, 업무형태, 업무형태상세(단 homeplus면 제외),
@@ -577,10 +586,10 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
       const rowsForCsv = (viewList as any[]).map((r) => {
         const statusForCsv = r.displayStatus ?? mapStatusForRequester(String(r.status ?? ""));
 
-        // ★ 변경: out_work_hour 값이 "없으면(null/undefined/빈문자열)" CSV에 빈칸 출력
+        // out_work_hour 값이 "없으면(null/undefined/빈문자열)" CSV에 빈칸 출력
         // - 값이 실제 0이면 0 유지
-        const rawOut = (r as any).out_work_hour; // ★ 추가
-        const outHour = (rawOut == null || rawOut === "") ? "" : round3(toHourNum(rawOut)); // ★ 변경
+        const rawOut = (r as any).out_work_hour;
+        const outHour = (rawOut == null || rawOut === "") ? "" : round3(toHourNum(rawOut));
 
         return {
           design_request_id: r.design_request_id ?? "",
@@ -596,7 +605,7 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
           url: r.url ?? "",
           status: statusForCsv,
           result_url: r.result_url ?? "",
-          out_work_hour: outHour, // ★ 변경
+          out_work_hour: outHour,
         };
       });
 

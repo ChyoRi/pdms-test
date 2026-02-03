@@ -745,8 +745,7 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
         emergency: requestData.emergency,
         requester_edit_state: true,
         requester_edit_last_uid: uid || null,
-        requester_edit_last_at: serverTimestamp(),
-        [`requester_edit_read_by.${uid}`]: serverTimestamp(),
+        requester_edit_last_date: serverTimestamp(),
         [`requester_edit_read_by_client.${uid}`]: Date.now(),
         updated_date: serverTimestamp(),
       };
@@ -769,8 +768,6 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
         );
         patch.out_work_price = outP;
         patch.in_work_price = inP;
-
-        patch.work_hour_edit_state = false;
       }
 
       const logBody = buildEditLogBody(editData, patch);
@@ -874,7 +871,6 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
         requester_edit_last_uid: null,
         requester_edit_read_by: {},
         requester_edit_read_by_client: {},
-        designer_edit_state: false,
         requester_design_edit_state: false,
         comments_count: 0,
         comments_last_date: null,
@@ -883,9 +879,8 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
         comment_new_state: false,
         in_work_hour: inn,
         out_work_hour: out,
-        in_work_price: inP,   // ★ 추가: DB 필드 저장
-        out_work_price: outP, // ★ 추가: DB 필드 저장
-        work_hour_edit_state: false,
+        in_work_price: inP,
+        out_work_price: outP,
         created_date: serverTimestamp(),
         updated_date: null,
         delete_date: null,
