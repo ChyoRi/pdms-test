@@ -1,4 +1,3 @@
-// MainPage.tsx
 import styled from "styled-components";
 import Header from "../components/Header";
 import Main from "../components/Main";
@@ -30,6 +29,7 @@ interface RequestLite {
   id: string;
   status?: RequestData["status"];
   completion_date?: any; // Firestore Timestamp | string | Date | undefined
+  company?: string;
 }
 
 // 값 정리
@@ -67,11 +67,24 @@ const sanitizeForFirestore = (v: any): any => {
   return v;
 };
 
+// 회사 비교(공백/대소문자 방어)
+const normalizeCompanyKey = (v: any) =>
+  String(v ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "");
+
+const isSameCompany = (a: any, b: any) =>
+  normalizeCompanyKey(a) === normalizeCompanyKey(b);
+
 export default function MainPage() {
   const [userRole, setUserRole] = useState<number>(0);
   const [requests, setRequests] = useState<RequestLite[]>([]);
   const [userName, setUserName] = useState<string>("");
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
+
+  // 현재 로그인 유저 회사(Aside 카운트/필터 기준)
+  const [userCompany, setUserCompany] = useState<string>("");
 
   // ✅ 선택된 요청 데이터(수정/상세 공용)
   const [selectedData, setSelectedData] = useState<RequestData | undefined>(undefined);
@@ -93,7 +106,7 @@ export default function MainPage() {
   const [switchOpen, setSwitchOpen] = useState(false);
 
   // MainPage 상단 state
-  const [canSwitchAccount, setCanSwitchAccount] = useState(false); // ★ 추가
+  const [canSwitchAccount, setCanSwitchAccount] = useState(false);
 
   // 자식(ManagerRequestItem)에서 호출할 “모달 열기”
   const openAssignDesigner = (target: RequestData) => {
@@ -109,7 +122,7 @@ export default function MainPage() {
 
   // SwitchAccount 열기/닫기
   const openSwitchAccount = () => {
-    if (!canSwitchAccount) return; // ★ 추가
+    if (!canSwitchAccount) return;
     setSwitchOpen(true);
   };
   const closeSwitchAccount = () => setSwitchOpen(false);
@@ -121,6 +134,7 @@ export default function MainPage() {
         setUserName("");
         setRequests([]);
         setCanSwitchAccount(false);
+        setUserCompany("");
         return;
       }
 
@@ -131,9 +145,15 @@ export default function MainPage() {
       if (!userDoc.exists()) return;
 
       const data = userDoc.data() as any;
+
       const role: number = data.role;
       setUserRole(role);
+
       setCanSwitchAccount(!!data.can_switch_account);
+
+      // 현재 회사(권한 변경 반영) 확보
+      const curCompany = norm(data.company);
+      setUserCompany(curCompany);
 
       let qRef: any;
 
@@ -143,7 +163,7 @@ export default function MainPage() {
           where("requester", "==", displayName)
         );
       } else if (role === 2) {
-        // ★ 유지: 디자이너는 인덱스용 필드로 조회
+        // 디자이너는 인덱스용 필드로 조회
         qRef = query(
           collection(db, "design_request"),
           where("assigned_designer_uids", "array-contains", user.uid)
@@ -165,8 +185,20 @@ export default function MainPage() {
               d.completion_dt ??
               d.completed_at ??
               null,
+            company: norm(d.company ?? ""),
           };
         });
+
+        // 요청자(role=1)는 "현재 회사 컨텍스트" 기준으로만 Aside 카운트 반영
+        if (role === 1) {
+          const filtered =
+            curCompany
+              ? listAll.filter((r) => isSameCompany(r.company, curCompany))
+              : listAll;
+
+          setRequests(filtered);
+          return;
+        }
 
         if (role !== 2) {
           setRequests(listAll);
@@ -198,6 +230,7 @@ export default function MainPage() {
                 d.completion_dt ??
                 d.completed_at ??
                 null,
+              company: norm(d.company ?? ""),
             } as RequestLite;
           });
 
@@ -370,11 +403,11 @@ export default function MainPage() {
         target={assignTarget}
         onAssign={async (rows) => {
           if (!assignTarget) return;
-          await saveAssignDesignerToFirestore(assignTarget, rows); // ★ rows: AssignedDesigner[]
+          await saveAssignDesignerToFirestore(assignTarget, rows); // AssignedDesigner[]
         }}
       />
 
-      {/* ★ 추가: 계정전환 모달 (MainPage에서 렌더) */}
+      {/* 계정전환 모달 (MainPage에서 렌더) */}
       <SwitchRole isOpen={switchOpen} onClose={closeSwitchAccount} />
     </Container>
   );
