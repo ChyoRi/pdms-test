@@ -468,6 +468,33 @@ export default function AssignDesigner({ isOpen, onClose, target, onAssign }: As
     })();
   }, [isOpen]);
 
+  // ★ 추가: rows에 있는 uid가 designers 옵션에 없을 경우(계정 삭제/role변경 등)에도
+  // SelectBox가 "이름"으로 라벨 표시할 수 있도록 "비활성(삭제됨)" 옵션을 임시로 주입
+  const missingDesignerOptions: SelectBoxOption[] = useMemo(() => {
+    const known = new Set<string>((designers ?? []).map((d) => String(d.uid ?? "").trim()).filter(Boolean));
+    const out: SelectBoxOption[] = [];
+    const seen = new Set<string>();
+
+    for (const r of rows ?? []) {
+      const uid = String(r.uid ?? "").trim();
+      if (!uid) continue;
+      if (known.has(uid)) continue;
+      if (seen.has(uid)) continue;
+
+      const savedName = String(r.name ?? "").trim();
+      const labelBase = savedName || uid;
+
+      out.push({
+        value: uid,
+        label: `${labelBase}`,
+      });
+
+      seen.add(uid);
+    }
+
+    return out;
+  }, [rows, designers]);
+
   const designerOptions: SelectBoxOption[] = useMemo(() => {
     const base: SelectBoxOption[] = [];
 
@@ -480,8 +507,11 @@ export default function AssignDesigner({ isOpen, onClose, target, onAssign }: As
     for (const d of realDesigners) base.push({ value: d.uid, label: d.__name, group: "디자이너" });
     for (const d of dummyDesigners) base.push({ value: d.uid, label: d.__name, group: "허수계정" });
 
+    // ★ 추가: 옵션에 없는 uid(삭제/비활성)도 라벨로 표시되도록 주입
+    for (const opt of missingDesignerOptions) base.push(opt);
+
     return base;
-  }, [realDesigners, dummyDesigners, loadingDesigners]);
+  }, [realDesigners, dummyDesigners, loadingDesigners, missingDesignerOptions]);
 
   const taskFormOptionsUI: SelectBoxOption[] = useMemo(() => {
     const forms = (companyCfg.forms ?? []).slice();
@@ -550,7 +580,11 @@ export default function AssignDesigner({ isOpen, onClose, target, onAssign }: As
         if (patch.uid !== undefined) {
           const uid = String(patch.uid ?? "").trim();
           next.uid = uid;
-          next.name = uid ? (designerNameByUid.get(uid) ?? next.name ?? "") : "";
+
+          // ★ 변경: users 목록에 없더라도 기존 저장 name을 최대한 유지
+          // - options에 없는 UID라서도, name이 유지되면 "비활성(삭제됨)" 옵션 라벨로 표시 가능
+          const resolvedName = uid ? (designerNameByUid.get(uid) ?? next.name ?? "") : "";
+          next.name = resolvedName;
         }
 
         const computed = calcForRow(next.task_form, next.task_type, next.task_type_detail, next.count);
@@ -626,6 +660,7 @@ export default function AssignDesigner({ isOpen, onClose, target, onAssign }: As
         out_work_price: baseP.out * c, // ★ 추가
         in_work_price: baseP.in * c,   // ★ 추가
 
+        // ★ 유지: name은 저장된 값 우선(삭제 계정도 표시 목적)
         name: norm(r.name) || "(이름없음)",
       };
     });
@@ -665,7 +700,7 @@ export default function AssignDesigner({ isOpen, onClose, target, onAssign }: As
                   <th>업무부서</th>
                   <th>업무형태</th>
                   {showTypeDetailCol && <th>업무형태상세</th>}
-                  <th>작업항목</th> {/* ★ 추가 */}
+                  <th>작업항목</th>
                   <th>카운트</th>
                   <th>디자이너</th>
                 </tr>
@@ -714,7 +749,6 @@ export default function AssignDesigner({ isOpen, onClose, target, onAssign }: As
                       </td>
 
                       <td>
-                        {/* ★ 변경: 업무형태 = task_type */}
                         <SelectBox
                           full
                           value={r.task_type}
@@ -737,7 +771,7 @@ export default function AssignDesigner({ isOpen, onClose, target, onAssign }: As
                         </td>
                       )}
 
-                      <td>{r.requirement || docRequirement || "-"}</td> {/* ★ 추가: 작업항목(문서 requirement) */}
+                      <td>{r.requirement || docRequirement || "-"}</td>
 
                       <td>
                         <CountInput
@@ -749,7 +783,6 @@ export default function AssignDesigner({ isOpen, onClose, target, onAssign }: As
                             updateRow(r._rowId, { count: v });
                           }}
                           onBlur={() => {
-                            // ★ 변경: 빈값이면 0으로 복구, 그 외는 0 이상 정수로 정규화
                             if (String(r.count ?? "") === "") {
                               updateRow(r._rowId, { count: "0" });
                             } else {

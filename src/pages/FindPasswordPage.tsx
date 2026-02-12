@@ -14,7 +14,7 @@ export default function FindPasswordPage() {
 
     try {
       const BASE = "/pdms";
-      await sendPasswordResetEmail(auth, email, {
+      await sendPasswordResetEmail(auth, email, { 
         url: `${window.location.origin}${BASE}`,
         handleCodeInApp: true,
       });
