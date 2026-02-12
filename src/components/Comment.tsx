@@ -69,7 +69,7 @@ export default function Comment({ designRequestId, currentUserName, status }: Co
   // 스크롤 제어용 ref/상태
   const listRef = useRef<HTMLDivElement | null>(null);     // 스크롤 컨테이너
   const endRef  = useRef<HTMLDivElement | null>(null);     // 맨 아래 앵커
-  const mountedRef = useRef(false);                     // ★ 추가: 최초 로딩 여부
+  const mountedRef = useRef(false);                        // 최초 로딩 여부
   const [justAdded, setJustAdded] = useState(false);       // 내가 방금 등록했는가
 
   // textarea / 이모지
@@ -194,8 +194,8 @@ export default function Comment({ designRequestId, currentUserName, status }: Co
       // ★ 마지막 댓글 메타 갱신
       await updateDoc(doc(db, "design_request", parentDocId), {
         comments_count: increment(1),
-        comments_last_date: serverTimestamp(),       // ★ 추가
-        comments_last_author_uid: uid,             // ★ 추가
+        comments_last_date: serverTimestamp(),
+        comments_last_author_uid: uid,
       });
 
       setBody("");
@@ -314,7 +314,7 @@ export default function Comment({ designRequestId, currentUserName, status }: Co
     return `${mm}/${dd} ${hh}:${mi}`;
   };
 
-  // ★ 추가: URL을 <a>로 변환 (dangerouslySetInnerHTML 없이 안전하게)
+  // URL을 <a>로 변환 (dangerouslySetInnerHTML 없이 안전하게)
   const URL_RE =
     /https?:\/\/[^\s<>"']+|www\.[^\s<>"']+|(?:docs|drive)\.google\.com\/[^\s<>"']+|figma\.com\/[^\s<>"']+/gi;
 
@@ -407,7 +407,7 @@ export default function Comment({ designRequestId, currentUserName, status }: Co
   };
 
   // 이모지 버튼 토글 핸들러 (완료/취소면 토글 불가)
-  const handleToggleEmoji = () => { // ★ 추가
+  const handleToggleEmoji = () => {
     if (isEnded) return;
     setEmojiOpen(v => !v);
   };

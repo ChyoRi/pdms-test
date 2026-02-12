@@ -84,7 +84,7 @@ export default function MainPage() {
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
 
   // 현재 로그인 유저 회사(Aside 카운트/필터 기준)
-  const [userCompany, setUserCompany] = useState<string>("");
+  const [/*userCompany*/, setUserCompany] = useState<string>("");
 
   // ✅ 선택된 요청 데이터(수정/상세 공용)
   const [selectedData, setSelectedData] = useState<RequestData | undefined>(undefined);
