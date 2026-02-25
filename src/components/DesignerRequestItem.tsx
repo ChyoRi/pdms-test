@@ -421,7 +421,7 @@ export default function DesignerRequestItem({
       <AssignDesignerModal
         open={assignModalOpen}
         anchorRect={anchorRect}
-        list={assignedDetailList}
+        list={myAssignedDetails}
         onClose={closeAssignModal}
       />
     </>
