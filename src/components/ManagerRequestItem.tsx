@@ -439,7 +439,7 @@ const RequestListTaskTypeDetail = styled.span``;
 
 const RequestListEmergencyWrap = styled.div`
   ${({ theme }) => theme.mixin.flex('center')};
-  padding: 0 12px;
+  padding: 0 8px;
 `;
 
 const RequestListMerchandiser = styled.span`
@@ -528,7 +528,6 @@ const StautsBadge = styled.span<{ status: string }>`
 `;
 
 const AssignButton = styled.button`
-  margin-left:10px;
   padding: 4.5px 10px;
   border-radius: 4px;
   background-color: ${({ theme }) => theme.colors.black};

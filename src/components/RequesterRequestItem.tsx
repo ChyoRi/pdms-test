@@ -436,7 +436,7 @@ const RequestListTaskTypeDetail = styled.span`
 
 const RequestListEmergencyWrap = styled.div`
   ${({ theme }) => theme.mixin.flex('center')};
-  padding: 0 12px;
+  padding: 0 8px;
 `;
 
 const RequestListRequirementText = styled.span`

@@ -26,10 +26,10 @@ type AssignedDesignerObj = {
   designer_uid?: string;
   designer_name?: string;
   designer?: string;
-
   // 스키마 최신(문서에 실제 존재)
   in_work_hour?: number | string;
   out_work_hour?: number | string;
+  assigned_date?: any;
 };
 
 type RequestDoc = {
@@ -320,6 +320,36 @@ export default function InWorkHour({
     return cleaned;
   };
 
+  // "디자이너별 배정일" 가져오기 (없으면 request_date fallback)
+  const getAssignedDateFor = (r: RequestDoc, whoName: string): Date | null => {
+    const who = String(whoName ?? "").trim();
+    if (!who) return null;
+
+    const whoUid = uidByName[who];
+    const ad = (r as any)?.assigned_designers;
+    if (!Array.isArray(ad) || ad.length === 0) {
+      // 레거시 fallback
+      return requestDateOnly(r);
+    }
+
+    // assigned_designers가 string[]인 경우도 있으니 object만 대상으로 찾기
+    const hit = ad
+      .filter((x: any) => x && typeof x === "object")
+      .find((x: any) => {
+        const u = String(x?.uid ?? x?.designer_uid ?? "").trim();
+        const n = String(x?.name ?? x?.displayName ?? x?.designer_name ?? x?.designer ?? "").trim();
+
+        if (whoUid && u) return u === whoUid;
+        if (n) return n === who;
+        // 레거시: uid가 name 칸에 들어간 경우
+        if (whoUid && n) return n === whoUid;
+        return false;
+      });
+
+    const dt = parseLoose(hit?.assigned_date);
+    return dt || requestDateOnly(r); // ★ 추가: assigned_date 없으면 request_date로 fallback
+  };
+
   // 내부공수는 "균등분배" 금지.
   // (1) assigned_designers[].in_work_hour
   // (2) in_work_hour_by_designer
@@ -404,51 +434,42 @@ export default function InWorkHour({
     return designers.map((name) => {
       const mine = docs.filter((d) => getEffectiveAssignees(d).includes(name));
 
-      // ★ 유지: 월/일 집계는 request_date 기준
-      const monthDocs = mine.filter((d) => {
-        const dt = requestDateOnly(d);
-        return dt && dt.getFullYear() === targetYear && dt.getMonth() === targetMonth;
-      });
-
-      const dayDocs = mine.filter((d) => {
-        const dt = requestDateOnly(d);
-        return sameDay(dt, day);
-      });
-
       const wait = mine.filter((d) => isWait(d.status)).length;
       const progress = mine.filter((d) => isProgress(d.status)).length;
 
-      // 완료는 “해당 day(오늘) 완료”
+      // ★ 변경: "오늘" 기준도 assigned_date(없으면 request_date fallback)
+      const dayDocs = mine.filter((d) => sameDay(getAssignedDateFor(d, name), day));
       const done = dayDocs.filter((d) => isDone(d.status)).length;
 
+      // ★ 변경: usedHours = 오늘(배정일 기준)의 내부공수 합
       const usedHoursRaw = dayDocs.reduce((s, d) => s + shareHourFor(d, name), 0);
       const usedHours = floorTo(usedHoursRaw, 2);
 
-      // 일별 셀의 하단 값 = 해당일 in_work_hour 합
+      // 일별 셀의 하단 값 = 해당일 in_work_hour 합 (배정일 기준)
       const dailyInArr = Array(daysInMonth).fill(0);
 
-      monthDocs.forEach((d) => {
-        const dt = requestDateOnly(d);
+      // ★ 변경: monthDocs 대신, mine 전체를 돌면서 assigned_date가 선택월이면 해당 날짜칸에 더함
+      mine.forEach((d) => {
+        const dt = getAssignedDateFor(d, name);
         if (!dt) return;
+
+        if (dt.getFullYear() !== targetYear || dt.getMonth() !== targetMonth) return;
+
         const idx = dt.getDate() - 1;
         if (idx < 0 || idx >= daysInMonth) return;
 
-        // ★ 핵심: 해당 request_date에 속한 문서들의 in_work_hour(디자이너별) 합
-        // (필요 시 '취소' 제외하려면 여기에서 조건 추가)
-        // if (d.status === "취소") return; // ★ 옵션
         dailyInArr[idx] += shareHourFor(d, name);
       });
 
       const daily: DailyStat[] = dailyInArr.map((h) => ({
         rate: Math.round((h / dailyHours) * 100),
-        inHour: floorTo(h, 2), // 표시 안정화
+        inHour: floorTo(h, 2),
       }));
 
       const monthInRaw = dailyInArr.reduce((s, h) => s + h, 0);
       const monthInHour = floorTo(monthInRaw, 2);
 
-      const monthRate =
-        monthInRaw > 0 ? Math.round((monthInRaw / MONTHLY_TARGET_HOURS) * 100) : 0;
+      const monthRate = monthInRaw > 0 ? Math.round((monthInRaw / MONTHLY_TARGET_HOURS) * 100) : 0;
 
       return {
         name,

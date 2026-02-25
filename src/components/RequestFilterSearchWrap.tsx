@@ -20,7 +20,9 @@ export default function RequestFilterSearchWrap({
   onResetFilters,
   resetKey,
   deptOptions = [],
-  onApplyDept
+  onApplyDept,
+  onApplyCompletionSort,
+  completionSort,
 }: {
   onApplyStatus: (status: string) => void;
   onApplyRange: (range: { start: Date | null; end: Date | null }) => void;
@@ -39,6 +41,8 @@ export default function RequestFilterSearchWrap({
   resetKey?: number;
   deptOptions?: string[];
   onApplyDept?: (dept: string) => void;
+  onApplyCompletionSort?: (sort: CompletionSortKey) => void;
+  completionSort?: CompletionSortKey;
 }) {
   return (
     <Container>
@@ -57,11 +61,16 @@ export default function RequestFilterSearchWrap({
         resetKey={resetKey}
         deptOptions={deptOptions}
         onApplyDept={onApplyDept}
+        onApplyCompletionSort={onApplyCompletionSort}
+        completionSort={completionSort}
       />
       <RequestSearch keyword={keyword} onKeywordChange={onKeywordChange} onSearch={onSearch} />
     </Container>
   )
 }
+
+// 정렬 키 타입 export (다른 파일에서 재사용)
+export type CompletionSortKey = "none" | "completion_asc" | "completion_desc";
 
 const Container = styled.div`
   ${({ theme }) => theme.mixin.flex('center', 'space-between')};

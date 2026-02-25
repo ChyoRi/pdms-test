@@ -5,7 +5,7 @@ import { auth, db } from "../firebaseconfig";
 import { query, where, collection, onSnapshot, doc, updateDoc, Timestamp, orderBy, serverTimestamp } from "firebase/firestore";
 import DesignerRequestList from "./DesignerRequestList";
 import MainTitle from "./MainTitle";
-import RequestFilterSearchWrap from "./RequestFilterSearchWrap";
+import RequestFilterSearchWrap, { type CompletionSortKey } from "./RequestFilterSearchWrap";
 import DashBoard from "./DashBoard";
 import { makeSearchIndex, matchesQuery } from "../utils/search";
 
@@ -111,6 +111,9 @@ export default function Designer({ view, userRole, setIsDrawerOpen, setDetailDat
   const [keywordInput, setKeywordInput] = useState<string>(""); // 인풋 바인딩(타이핑용)
   const [keyword, setKeyword] = useState<string>("");           // 검색 버튼 클릭 시에만 적용
 
+  // ★ 추가: 완료요청일 정렬
+  const [completionSort, setCompletionSort] = useState<CompletionSortKey>("none");
+
   // 항목별 내가 마지막으로 읽은 시간(ms) 로컬 캐시
   const [readLocal, setReadLocal] = useState<{ [id: string]: number }>({});
 
@@ -191,6 +194,7 @@ export default function Designer({ view, userRole, setIsDrawerOpen, setDetailDat
   const applyRange  = (r: { start: Date | null; end: Date | null }) => setDateRange(r); // ⬅️ 추가
   const applyStatus = (status: string) => setStatusFilter(status);
   const applyCompany = (name: string) => setCompanyFilter(name);
+  const applyCompletionSort = (sort: CompletionSortKey) => setCompletionSort(sort);
 
   // ▼ 헬퍼: 요청일 가져오기 (Timestamp | string | Date 모두 대응)
   const toMidnight = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -288,6 +292,33 @@ export default function Designer({ view, userRole, setIsDrawerOpen, setDetailDat
     return assignees.includes(SPECIAL_SOLO_NAME) && assignees.length === 1;
   };
 
+  const sortByCompletion = (list: any[], sort: CompletionSortKey) => {
+    if (sort === "none") return list;
+
+    const dir = sort === "completion_asc" ? 1 : -1;
+
+    const getTime = (r: any) => {
+      const cd =
+        parseLoose((r as any).completion_date) ||
+        parseLoose((r as any).complete_date) ||
+        null;
+      return cd ? cd.getTime() : null;
+    };
+
+    const copied = [...list];
+    copied.sort((a, b) => {
+      const ta = getTime(a);
+      const tb = getTime(b);
+
+      if (ta == null && tb == null) return 0;
+      if (ta == null) return 1;   // a가 null이면 뒤로
+      if (tb == null) return -1;  // b가 null이면 뒤로
+      return (ta - tb) * dir;
+    });
+
+    return copied;
+  };
+
   // 최종 표시 리스트 (상태 + 회사 + 기간 + 검색)
   const viewList = useMemo(() => {
     const s = dateRange.start ? toMidnight(dateRange.start) : null;
@@ -297,13 +328,12 @@ export default function Designer({ view, userRole, setIsDrawerOpen, setDetailDat
     const q = keyword.trim();
     const searchOn = !!q;
 
-    return preparedNormalized.filter((r: any) => {
+    const filtered = preparedNormalized.filter((r: any) => {
       const statusRaw = String(r.status ?? "").trim();
       const isDone = statusRaw === "완료" || statusRaw === "취소";
 
       if (!isVisibleForDesigner(r, designerName, view)) return false;
 
-      // ── A) 요청 기간 선택된 경우: request_date 기준, 상태/완료월 무시
       if (dateFilterOn) {
         const rd =
           parseLoose(r.request_date) ||
@@ -311,7 +341,6 @@ export default function Designer({ view, userRole, setIsDrawerOpen, setDetailDat
           parseLoose(r.requestDate);
         if (!rd || rd < s! || rd > e!) return false;
       } else {
-        // ── B) completion_date 월 필터(검색 없을 때만 적용)
         const cd =
           parseLoose((r as any).completion_date) ||
           parseLoose((r as any).complete_date) ||
@@ -320,26 +349,32 @@ export default function Designer({ view, userRole, setIsDrawerOpen, setDetailDat
 
         if (!searchOn && !completedThisMonth && isDone) return false;
 
-        // 상태 필터 (기간 미선택일 때만)
-        if (
-          statusFilter !== DEFAULT_STATUS &&
-          r.displayStatus !== statusFilter
-        ) {
+        if (statusFilter !== DEFAULT_STATUS && r.displayStatus !== statusFilter) {
           return false;
         }
       }
 
-      // 회사 필터 비교를 정규화해서 매칭(예: "NSmall" vs "nsmall")
       if (companyFilter !== DEFAULT_COMPANY) {
         if (companyKey(r.company) !== companyKey(companyFilter)) return false;
       }
 
-      // 검색어는 항상 AND, 대신 위에서 과거 완료/취소는 searchOn일 때 열어 둠
       if (q && !matchesQuery(r, q)) return false;
 
       return true;
     });
-  }, [ preparedNormalized, statusFilter, companyFilter, dateRange, keyword, view, designerName ]);
+
+    // ★ 추가: 필터링 끝난 뒤 정렬 적용
+    return sortByCompletion(filtered, completionSort);
+  }, [
+    preparedNormalized,
+    statusFilter,
+    companyFilter,
+    dateRange,
+    keyword,
+    view,
+    designerName,
+    completionSort, // ★ 추가
+  ]);
 
   // 🔍 검색 버튼 클릭 시 적용
   const applySearch = (kw: string) => setKeyword(kw);
@@ -450,13 +485,13 @@ export default function Designer({ view, userRole, setIsDrawerOpen, setDetailDat
       <MainTitle userRole={userRole} />
       {view === "allrequestlist" && (
         <MainContentWrap>
-          <RequestFilterSearchWrap roleNumber={2} onApplyStatus={applyStatus} onApplyRange={applyRange} onSearch={applySearch} keyword={keywordInput} onKeywordChange={setKeywordInput} companyOptions={companyOptions} onApplyCompany={applyCompany} />
+          <RequestFilterSearchWrap roleNumber={2} onApplyStatus={applyStatus} onApplyRange={applyRange} onSearch={applySearch} keyword={keywordInput} onKeywordChange={setKeywordInput} companyOptions={companyOptions} onApplyCompany={applyCompany} completionSort={completionSort} onApplyCompletionSort={applyCompletionSort} />
           <DesignerRequestList requests={viewList} formData={formData} currentUid={userUid} readLocal={readLocal} onChange={handleChange} onSave={saveResponse} onDetailClick={openDetail} disableActions={false} lockOthers={lockOthers} currentDesignerName={designerName} />
         </MainContentWrap>
       )}
       {view === "myrequestlist" && (
         <MainContentWrap>
-          <RequestFilterSearchWrap roleNumber={2} onApplyStatus={applyStatus} onApplyRange={applyRange} onSearch={applySearch} keyword={keywordInput} onKeywordChange={setKeywordInput} companyOptions={companyOptions} onApplyCompany={applyCompany} onResetFilters={clearStatusFromAside} resetKey={filterResetKey} />
+          <RequestFilterSearchWrap roleNumber={2} onApplyStatus={applyStatus} onApplyRange={applyRange} onSearch={applySearch} keyword={keywordInput} onKeywordChange={setKeywordInput} companyOptions={companyOptions} onApplyCompany={applyCompany} onResetFilters={clearStatusFromAside} resetKey={filterResetKey} completionSort={completionSort} onApplyCompletionSort={applyCompletionSort}/>
           <DesignerRequestList requests={viewList} formData={formData} currentUid={userUid} readLocal={readLocal} onChange={handleChange} onSave={saveResponse} onDetailClick={openDetail} disableActions={false}/>
         </MainContentWrap>
       )}

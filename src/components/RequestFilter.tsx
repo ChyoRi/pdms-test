@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import styled from "styled-components"
 import selectBoxArrow from "../assets/selectbox-arrow.svg";
 import DateCalendar from "./DateCalendar";
+import type { CompletionSortKey } from "./RequestFilterSearchWrap";
 
 const DEFAULT_STATUS = "진행 상태 선택";
 const DEFAULT_REQUESTER = "요청자 선택";
@@ -10,6 +11,7 @@ const DEFAULT_COMPANY = "회사 선택";
 const DEFAULT_DEPT = "부서 선택";
 const EXCLUDED_COMPANIES = new Set(["PushComz"].map(s => s.toLowerCase()));
 const EMPTY_RANGE = { start: null, end: null };
+const DEFAULT_COMPLETION_SORT_LABEL = "완료요청일 정렬";
 
 type RoleKey = "requester" | "designer" | "manager";
 
@@ -53,7 +55,9 @@ export default function RequestFilter({
   onResetFilters,
   resetKey,
   deptOptions = [],
-  onApplyDept
+  onApplyDept,
+  onApplyCompletionSort,
+  completionSort = "none",
 }: {
   onApplyStatus: (status: string) => void;
   onApplyRange: (range: { start: Date | null; end: Date | null }) => void;
@@ -69,6 +73,8 @@ export default function RequestFilter({
   resetKey?: number;
   deptOptions?: string[];
   onApplyDept?: (dept: string) => void;
+  onApplyCompletionSort?: (sort: CompletionSortKey) => void;
+  completionSort?: CompletionSortKey;
 }) {
   const [range, setRange] = useState<{ start: Date | null; end: Date | null }>(EMPTY_RANGE);
   const [status, setStatus] = useState(DEFAULT_STATUS);
@@ -76,6 +82,12 @@ export default function RequestFilter({
   const [designer, setDesigner] = useState(DEFAULT_DESIGNER);
   const [company, setCompany]   = useState(DEFAULT_COMPANY);
   const [dept, setDept]         = useState(DEFAULT_DEPT);
+  // ★ 추가: 정렬 UI용 로컬 state (라벨 표시)
+  const [completionSortUi, setCompletionSortUi] = useState<string>(() => {
+    if (completionSort === "completion_asc") return "완료요청일 오름차순";
+    if (completionSort === "completion_desc") return "완료요청일 내림차순";
+    return DEFAULT_COMPLETION_SORT_LABEL;
+  });
 
   const roleKey = toRoleKey(roleNumber);
   const visibleStatuses = STATUS_OPTIONS[roleKey];
@@ -124,6 +136,8 @@ export default function RequestFilter({
     setDesigner(DEFAULT_DESIGNER);
     setCompany(DEFAULT_COMPANY);
     setDept(DEFAULT_DEPT);
+    setCompletionSortUi(DEFAULT_COMPLETION_SORT_LABEL);
+    onApplyCompletionSort?.("none");
 
     // 2) 부모 필터 상태도 같이 초기화
     onApplyStatus(DEFAULT_STATUS);
@@ -141,6 +155,8 @@ export default function RequestFilter({
     setDesigner(DEFAULT_DESIGNER);
     setCompany(DEFAULT_COMPANY);
     setDept(DEFAULT_DEPT);
+    setCompletionSortUi(DEFAULT_COMPLETION_SORT_LABEL);
+    onApplyCompletionSort?.("none");
     onApplyStatus(DEFAULT_STATUS);
     onApplyRange(EMPTY_RANGE);
     onApplyRequester?.(DEFAULT_REQUESTER);
@@ -196,6 +212,29 @@ export default function RequestFilter({
             .map((name) => (
               <option key={name} value={name}>{name}</option>
             ))}
+        </SelectBox>
+      )}
+
+      {/* ★ 추가: 디자이너(role=2) 전용 완료요청일 정렬 */}
+      {roleKey === "designer" && (
+        <SelectBox
+          aria-label="완료요청일 정렬"
+          value={completionSortUi}
+          onChange={(e) => {
+            const ui = e.target.value;
+            setCompletionSortUi(ui);
+
+            // UI 라벨 → sort key
+            let key: CompletionSortKey = "none";
+            if (ui === "완료요청일 오름차순") key = "completion_asc";
+            if (ui === "완료요청일 내림차순") key = "completion_desc";
+
+            onApplyCompletionSort?.(key);
+          }}
+        >
+          <option value={DEFAULT_COMPLETION_SORT_LABEL}>{DEFAULT_COMPLETION_SORT_LABEL}</option>
+          <option value="완료요청일 오름차순">완료요청일 오름차순</option>
+          <option value="완료요청일 내림차순">완료요청일 내림차순</option>
         </SelectBox>
       )}
 
@@ -265,7 +304,7 @@ const SelectBox = styled.select`
   -webkit-appearance: none;
   -moz-appearance: none;
 
-  width: 135px;
+  width: 160px;
   height: 48px;
   margin-right: 8px;
   padding: 0 12px;

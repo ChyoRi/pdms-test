@@ -16,6 +16,8 @@ import {
   query,
   where,
   onSnapshot,
+  serverTimestamp,
+  Timestamp
 } from "firebase/firestore";
 import AssignDesigner from "../components/AssignDesigner";
 import type { AssignedDesigner } from "../components/AssignDesigner";
@@ -49,6 +51,16 @@ const round3 = (n: number) => Math.round(n * 1000) / 1000;
 // Firestore 저장 전 undefined 제거(깊은 구조 포함)
 const sanitizeForFirestore = (v: any): any => {
   if (v === undefined) return undefined;
+
+  // ★ 추가: Firestore Timestamp (toDate 존재) 그대로 유지
+  if (v && typeof v === "object" && typeof v.toDate === "function") {
+    return v;
+  }
+
+  // ★ 추가: serverTimestamp() 같은 FieldValue는 내부에 _methodName이 있음 (분해 금지)
+  if (v && typeof v === "object" && typeof (v as any)._methodName === "string") {
+    return v;
+  }
 
   if (Array.isArray(v)) {
     return v.map(sanitizeForFirestore).filter((x) => x !== undefined);
@@ -286,6 +298,9 @@ export default function MainPage() {
       return;
     }
 
+    // 배정일(귀속일) - 이번 저장(배정) 시점으로 찍음
+    const assignedNow = Timestamp.fromDate(new Date());
+
     // assigned_designers row에 price도 저장
     const assigned_designers = cleaned.map((r) => {
       const c = toCount((r as any).count);
@@ -307,6 +322,8 @@ export default function MainPage() {
 
         out_work_price: Number((r as any).out_work_price ?? 0) || 0,
         in_work_price: Number((r as any).in_work_price ?? 0) || 0,
+
+        assigned_date: assignedNow, // 배정일(집계 기준일)
       });
     });
 

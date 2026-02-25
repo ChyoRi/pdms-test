@@ -473,6 +473,8 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
     }
   }, [isDrawerOpen]);
 
+  // ★ 추가: 사용자가 입력한 원문(텍스트+URL)을 “그대로” 저장할 값 (CR만 제거 + 끝 공백 정리)
+  const normalizeUrlText = (s: any) => String(s ?? "").replace(/\r/g, "").trimEnd();
 
   // 추가 폼 세트
   const addExtra = () => {
@@ -597,7 +599,7 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
       { key: "task_type", label: "업무 유형", type: "text" },
       { key: "task_type_detail", label: "업무 유형 상세", type: "text" },
       { key: "requirement", label: "작업 항목", type: "text" },
-      { key: "url", label: "요청서 URL", type: "text" },
+      { key: "url_text", label: "요청서 URL", type: "text" },
       { key: "emergency", label: "긴급 일정", type: "bool" },
     ];
 
@@ -702,18 +704,21 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
     return { out, in: inn };
   };
 
-
   // textarea의 raw 문자열 -> string[] URL 리스트
   const parseUrls = (raw?: any): string[] => {
     if (raw == null) return [];
-    if (Array.isArray(raw)) {
-      return raw.map(String).map((s) => s.replace(/\r/g, "").trim()).filter(Boolean);
-    }
-    return String(raw)
-      .replace(/\r/g, "")
-      .split("\n")
-      .map((s) => s.trim())
-      .filter(Boolean);
+
+    // 1) 라인 단위로 자르기
+    const lines = Array.isArray(raw)
+      ? raw.map(String).map((s) => s.replace(/\r/g, "").trim()).filter(Boolean)
+      : String(raw)
+          .replace(/\r/g, "")
+          .split("\n")
+          .map((s) => s.trim())
+          .filter(Boolean);
+
+    // 2) ★ 추가: http(s) URL만 DB에 저장 (텍스트 라벨은 제외)
+    return lines.filter((s) => /^https?:\/\//i.test(s));
   };
 
   // 등록/수정 submit
@@ -741,7 +746,8 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
         task_type: requestData.task_type ?? "",
         task_type_detail: requestData.task_type_detail ?? "",
         requirement: requestData.requirement,
-        url: parseUrls(requestData.url),
+        url: parseUrls(requestData.url), // 기존: URL만
+        url_text: normalizeUrlText(requestData.url), // ★ 추가: 원문 저장
         emergency: requestData.emergency,
         requester_edit_state: true,
         requester_edit_last_uid: uid || null,
@@ -857,7 +863,8 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
         task_type: typeValue,
         task_type_detail: f.task_type_detail ?? "",
         requirement: f.requirement,
-        url: parseUrls(f.url),
+        url: parseUrls(f.url), // 기존: URL만
+        url_text: normalizeUrlText(f.url), // ★ 추가: 원문 저장
         status: "대기",
         assigned_designers: [],
         requester_review_status: "검수대기",
@@ -907,7 +914,7 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
         task_type: editData.task_type ?? "",
         task_type_detail: (editData as any).task_type_detail ?? "",
         requirement: editData.requirement ?? "",
-        url: parseUrls((editData as any).url).join("\n"),
+        url: (editData as any)?.url_text ? String((editData as any).url_text) : parseUrls((editData as any).url).join("\n"),
         emergency: editData.emergency ?? false,
       });
     }

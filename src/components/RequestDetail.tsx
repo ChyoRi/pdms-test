@@ -22,57 +22,83 @@ export default function RequestDetail({ data, onClose, currentUserName, currentU
     return timestamp;
   };
 
-  const parseUrls = (raw?: any): string[] => {
-    if (!raw) return [];
+  // ★ 추가: url_text 우선, 없으면 url 배열 fallback해서 "원문"을 만든다
+  const urlTextForView = useMemo(() => {
+    const t = (data as any)?.url_text;
+    if (t && String(t).trim()) return String(t);
 
-    // 이미 배열로 저장되어 있는 경우까지 커버
-    if (Array.isArray(raw)) {
-      return Array.from(
-        new Set(
-          raw
-            .map(String)
-            .map((s) => s.trim())
-            .filter(Boolean)
-        )
+    const arr = (data as any)?.url;
+    if (Array.isArray(arr) && arr.length) return arr.map(String).join("\n");
+
+    // 혹시 url이 string으로 들어오는 케이스까지
+    if (typeof arr === "string" && arr.trim()) return arr;
+
+    return "";
+  }, [data]);
+
+  // ★ 추가: URL만 <a>, 나머지는 텍스트(span)로 렌더
+  const URL_RE =
+    /https?:\/\/[^\s<>"']+|www\.[^\s<>"']+|(?:docs|drive)\.google\.com\/[^\s<>"']+|figma\.com\/[^\s<>"']+/gi;
+
+  const cleanUrl = (u: string) =>
+    u
+      .trim()
+      .replace(/^[(\[{"'`]+/g, "")
+      .replace(/[)\]}>"'`’‘,.;:!?]+$/g, "");
+
+  const toHref = (u: string) => {
+    const x = cleanUrl(u);
+    if (!x) return "";
+    if (/^https?:\/\//i.test(x)) return x;
+    if (/^www\./i.test(x)) return `https://${x}`;
+    return `https://${x}`;
+  };
+
+  const renderBodyWithLinks = (text: any) => {
+    const lines = String(text ?? "").replace(/\r/g, "").split("\n");
+
+    return lines.map((line, lineIdx) => {
+      const nodes: React.ReactNode[] = [];
+      let last = 0;
+
+      for (const m of line.matchAll(URL_RE)) {
+        const raw = m[0];
+        const start = m.index ?? 0;
+        const end = start + raw.length;
+
+        if (start > last) nodes.push(line.slice(last, start));
+
+        const href = toHref(raw);
+        const label = cleanUrl(raw);
+
+        if (href) {
+          nodes.push(
+            <UrlLink
+              key={`url-${lineIdx}-${start}`}
+              className="urlLink"
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {label}
+            </UrlLink>
+          );
+        } else {
+          nodes.push(raw);
+        }
+
+        last = end;
+      }
+
+      if (last < line.length) nodes.push(line.slice(last));
+
+      return (
+        <span key={`line-${lineIdx}`}>
+          {nodes}
+          {lineIdx < lines.length - 1 ? <br /> : null}
+        </span>
       );
-    }
-
-    const text = String(raw);
-
-    // 1) 가장 정확: http/https URL을 정규식으로 직접 추출
-    const httpMatches = text.match(/https?:\/\/[^\s<>"']+/g) || [];
-
-    const clean = (u: string) =>
-      u
-        .trim()
-        // 뒤에 붙는 흔한 문장부호 제거
-        .replace(/[)\]}>,.;:!?]+$/g, "");
-
-    let urls = httpMatches.map(clean).filter(Boolean);
-
-    // 2) http URL이 하나도 없으면, 줄바꿈/공백/쉼표로 토큰 분리 후 보정
-    // (예: drive.google.com/... 처럼 프로토콜 없이 붙여넣은 경우)
-    if (urls.length === 0) {
-      const tokens = text
-        .split(/[\n\r\t ]+|,+/g)
-        .map((t) => t.trim())
-        .filter(Boolean);
-
-      urls = tokens
-        .map(clean)
-        .map((t) => {
-          // 프로토콜 없는 대표 케이스들만 보정 (과잉 매칭 방지)
-          if (/^https?:\/\//i.test(t)) return t;
-          if (/^(www\.)/i.test(t)) return `https://${t}`;
-          if (/^drive\.google\.com\//i.test(t)) return `https://${t}`;
-          if (/^docs\.google\.com\//i.test(t)) return `https://${t}`;
-          return ""; // URL 확신 없으면 버림
-        })
-        .filter(Boolean);
-    }
-
-    // 중복 제거
-    return Array.from(new Set(urls));
+    });
   };
 
   // 완료/취소 여부
@@ -85,8 +111,8 @@ export default function RequestDetail({ data, onClose, currentUserName, currentU
     (currentUserRole === 1) &&// 요청자만 허용
     !isEnded;
 
-  // 렌더 전에 한번만 파싱
-  const urlList = useMemo(() => parseUrls(data?.url), [data?.url]);
+  // ★ 변경: "URL만 리스트"를 더 이상 안쓴다 (원문 유지가 목표)
+  // const urlList = useMemo(() => parseUrls(data?.url), [data?.url]);
 
   // "내용이 넘쳐서 잘릴 때만" hover 확장 허용
   const urlWrapRef = useRef<HTMLDivElement | null>(null);
@@ -102,8 +128,6 @@ export default function RequestDetail({ data, onClose, currentUserName, currentU
     }
 
     const checkOverflow = () => {
-      // ★ 변경: clientHeight(hover로 변하는 값) 기준 말고,
-      //         접힌 상태 기준값(50px)으로만 overflow 여부 판단
       const isOverflow = el.scrollHeight > URL_COLLAPSED_MAX + 1;
       setEnableUrlHover(isOverflow);
     };
@@ -116,7 +140,8 @@ export default function RequestDetail({ data, onClose, currentUserName, currentU
     requestAnimationFrame(checkOverflow);
 
     return () => ro.disconnect();
-  }, [urlList.join("\n")]);
+    // ★ 변경: urlTextForView 기준으로 체크 (텍스트가 길어도 hover 필요)
+  }, [urlTextForView]);
 
   return (
     <>
@@ -145,19 +170,15 @@ export default function RequestDetail({ data, onClose, currentUserName, currentU
                   <RequestDetailTableTh>문서전달</RequestDetailTableTh>
                   <RequestDeliverTd>
                     <RequestDeliverWrap>
-                      {/* <span className="name">{data?.requester || "-"}</span> */}
-                        <RequestDeliver
-                          // 전달에 필요한 최소 정보 전달
-                          designRequestId={data?.design_request_id}           // 비즈니스 키
-                          currentRequester={data?.requester || ""}
-                          company={data?.company || ""}                       // data.company 없는 경우를 대비해 컴포넌트 내부에서 보강
-                          status={data?.status}
-                          onDone={() => {
-                            // 성공 시 UI 반응은 간단하게: 상세는 실시간 snapshot으로 최신 반영될 가능성이 높음
-                            // 필요하면 토스트 사용 가능(여기서는 간단히 alert)
-                            alert("요청자 변경 완료");
-                          }}
-                        />
+                      <RequestDeliver
+                        designRequestId={data?.design_request_id}
+                        currentRequester={data?.requester || ""}
+                        company={data?.company || ""}
+                        status={data?.status}
+                        onDone={() => {
+                          alert("요청자 변경 완료");
+                        }}
+                      />
                     </RequestDeliverWrap>
                   </RequestDeliverTd>
                 </>
@@ -207,7 +228,8 @@ export default function RequestDetail({ data, onClose, currentUserName, currentU
               <RequestDetailTableTh>긴급 일정</RequestDetailTableTh>
               <RequestDetailTableTd colSpan={3}>{data?.emergency ? "긴급 일정으로 설정" : "긴급 일정으로 설정 안함"}</RequestDetailTableTd>
             </tr>
-            {/* ★ 변경: urlList 2개 이상일 때만 hover 확장 클래스 부여 */}
+
+            {/* ★ 변경: url_text 원문을 그대로 보여주되, URL만 a로 처리 */}
             <tr className={`urlRow ${enableUrlHover ? "urlHover" : ""}`}>
               <RequestUrlTh>
                 <UrlThInner>요청서 URL</UrlThInner>
@@ -215,19 +237,9 @@ export default function RequestDetail({ data, onClose, currentUserName, currentU
 
               <RequestUrlTd colSpan={3}>
                 <UrlTdInner>
-                  {urlList.length > 0 ? (
+                  {urlTextForView ? (
                     <UrlListWrap ref={urlWrapRef}>
-                      {urlList.map((u, idx) => (
-                        <UrlLink
-                          key={`${u}-${idx}`}
-                          className="urlLink"
-                          href={u} // ★ 변경: 무조건 그대로 href
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          {u}
-                        </UrlLink>
-                      ))}
+                      {renderBodyWithLinks(urlTextForView)}
                     </UrlListWrap>
                   ) : (
                     ""
@@ -238,10 +250,10 @@ export default function RequestDetail({ data, onClose, currentUserName, currentU
           </tbody>
         </RequestDetailTable>
       </RequestDetailWrap>
+
       <Comment
-        // 문서번호로 부모 문서 찾아서 그 아래 서브컬렉션 사용
-        designRequestId={data?.design_request_id!}   // 필수
-        currentUserName={currentUserName || ""}      // 작성자 이름
+        designRequestId={data?.design_request_id!}
+        currentUserName={currentUserName || ""}
         status={data?.status}
       />
     </>
@@ -271,37 +283,39 @@ const RequestExitButton = styled.button`
   background-size: contain;
 `;
 
-const RequestUrlTh = styled.th` /* ★ 추가 */
+const RequestUrlTh = styled.th`
   font-size: 15px;
   border: 1px solid ${({ theme }) => theme.colors.gray02};
   border-left: none;
   background-color: ${({ theme }) => theme.colors.gray04};
-  position: relative; /* inner absolute 기준 */
-  padding: 0;         /* 중앙 정렬을 inner에서 처리 */
+  position: relative;
+  padding: 0;
 `;
 
-const RequestUrlTd = styled.td` /* ★ 추가 */
+const RequestUrlTd = styled.td`
   border-right: none;
-  position: relative; /* inner absolute 기준 */
-  overflow: visible;  /* hover 확장 시 아래로 덮이게 */
-  padding-left: 0;    /* 기존 td padding-left(24px) 대신 inner에서 처리 */
+  position: relative;
+  overflow: visible;
+  padding-left: 0;
 `;
 
-const UrlThInner = styled.div` /* ★ 추가 */
-  height: 45px;            /* 기본 행 높이 */
-  display: flex;           /* ★ th 텍스트 중앙 */
-  align-items: center;     /* ★ 수직 중앙 */
-  justify-content: center; /* ★ 수평 중앙 */
+const UrlThInner = styled.div`
+  height: 45px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 `;
 
 const UrlTdInner = styled.div`
   height: 45px;
   padding-top: 0;
-  overflow: hidden; /* ★ 추가: 기본은 닫아두고 hover에서 visible */
+  overflow: hidden;
 `;
 
 const UrlListWrap = styled.div`
   padding-right: 6px;
+  white-space: pre-wrap;      /* ★ 추가: 줄바꿈 유지 */
+  overflow-wrap: anywhere;    /* ★ 추가: 긴 줄 줄바꿈 */
 `;
 
 const RequestDetailTable = styled.table`
@@ -356,7 +370,7 @@ const RequestDetailTable = styled.table`
 
   tr.urlRow.urlHover:hover .urlLink,
   tr.urlRow.urlHover:focus-within .urlLink {
-    display: block !important;
+    display: inline; /* ★ 변경: renderBodyWithLinks 안에서 인라인/줄바꿈은 <br>로 처리 */
   }
 `;
 
@@ -383,7 +397,7 @@ const RequestDetailTableTd = styled.td`
 const RequestDeliverTd = styled.td`
   padding: 0 24px;
   border-right: none;
-`
+`;
 
 const RequestListcompletionTd = styled.td`
   border-right: none;
@@ -401,25 +415,23 @@ const RequestListOpenDtTd = styled.td`
   font-weight: 500;
 `;
 
-const RequestDetailTaskType = styled.span`
-`;
+const RequestDetailTaskType = styled.span``;
 
 const RequestDetailTaskTypeArrow = styled.span`
   margin: 0 5px;
 `;
 
-const RequestDetailTaskTypeDetail = styled.span`
-  
-`;
+const RequestDetailTaskTypeDetail = styled.span``;
 
 const Requirement = styled.p`
   max-height: 50px;
   overflow-y: auto;
 `;
 
-const UrlLink = styled.a` /* ★ 변경 */
-  display: block;
-  -webkit-box-orient: vertical;
+// ★ 변경: a 스타일은 그대로 유지 (renderBodyWithLinks에서 사용)
+const UrlLink = styled.a`
+  display: inline;
+  text-decoration: underline;
   word-break: break-word;
 `;
 

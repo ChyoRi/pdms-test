@@ -20,7 +20,7 @@ type CompanyDoc = {
 type RD = RequestData;
 type WeightedKey = { key: string; w: number };
 
-// ★ 추가: assigned_designers row 최소 타입(타입가드용)
+// assigned_designers row 최소 타입(타입가드용)
 type AssignedDesignerRow = {
   task_type?: string;
   taskType?: string;
@@ -33,7 +33,7 @@ const companyKey = (v: any) => String(v ?? "").replace(/\s+/g, "").toLowerCase()
 const isHomeplus = (r: RD) => companyKey((r as any).company) === "homeplus";
 const isNSmall = (r: RD) => ["nsmall", "n-small"].includes(companyKey((r as any).company));
 
-// ★ 추가: task_type 정규화(제로폭 공백 제거 + 연속 공백 정리)
+// task_type 정규화(제로폭 공백 제거 + 연속 공백 정리)
 function normalizeTaskTypeKey_(v: unknown): string {
   return String(v ?? "")
     .replace(/[\u200B-\u200D\uFEFF]/g, "") // zero-width 제거
@@ -41,7 +41,7 @@ function normalizeTaskTypeKey_(v: unknown): string {
     .trim();
 }
 
-// ★ 추가: count 파서(“2개/2건/2 ” 같은 케이스를 숫자로 복원)
+// count 파서(“2개/2건/2 ” 같은 케이스를 숫자로 복원)
 function parseCount_(v: unknown): number {
   if (typeof v === "number") return Number.isFinite(v) ? v : NaN;
   if (typeof v === "string") {
@@ -56,21 +56,21 @@ function parseCount_(v: unknown): number {
   return NaN;
 }
 
-// ★ 변경: 월 필터에서 누락 방지용 날짜 후보 확장
+// 월 필터에서 누락 방지용 날짜 후보 확장
 function pickDateMillis(d: RD): number | null {
   const c = [
     (d as any).request_date,
-    (d as any).requestDate,     // ★ 추가
-    (d as any).request_dt,      // ★ 추가
-    (d as any).requestDt,       // ★ 추가
+    (d as any).requestDate,
+    (d as any).request_dt,
+    (d as any).requestDt,
     (d as any).open_date,
     (d as any).created_date,
     (d as any).createdAt,
     (d as any).created_at,
-    (d as any).created_time,    // ★ 추가
-    (d as any).createdTime,     // ★ 추가
+    (d as any).created_time,
+    (d as any).createdTime,
     (d as any).create_time,
-    (d as any).createTime,      // ★ 추가
+    (d as any).createTime,
     (d as any).designer_start_date,
     (d as any).designer_end_date,
   ];
@@ -96,7 +96,7 @@ function groupCount(arr: (string | undefined)[]) {
   return Array.from(m, ([name, value]) => ({ name, value }));
 }
 
-// ★ 추가: 가중치(count)까지 반영 가능한 그룹 집계
+// 가중치(count)까지 반영 가능한 그룹 집계
 function groupCountWeighted(arr: { key?: string; w?: number }[]) {
   const m = new Map<string, number>();
   for (const it of arr) {
@@ -108,32 +108,25 @@ function groupCountWeighted(arr: { key?: string; w?: number }[]) {
   return Array.from(m, ([name, value]) => ({ name, value }));
 }
 
-// ★ 변경: 도넛 집계키 = assigned_designers[].task_type만 사용 (없으면 스킵, 상위문서 fallback X)
+// 도넛 집계키 = assigned_designers[].task_type만 사용 (없으면 스킵, 상위문서 fallback X)
 function getTaskTypesFromAssignedDesigners_(r: RD): WeightedKey[] {
   const adsRaw = Array.isArray((r as any).assigned_designers) ? (r as any).assigned_designers : [];
 
-  // ★ 변경: x 타입 명시 + 타입가드 (implicit any 해결)
-  const ads = adsRaw.filter(
-    (x: unknown): x is AssignedDesignerRow => x !== null && typeof x === "object" && !Array.isArray(x)
-  );
-
+  // x 타입 명시 + 타입가드 (implicit any 해결)
+  const ads = adsRaw.filter((x: unknown): x is AssignedDesignerRow => x !== null && typeof x === "object" && !Array.isArray(x));
   if (ads.length === 0) return [];
 
   return ads
     .map((ad: AssignedDesignerRow): WeightedKey | null => {
-      // ★ 변경: task_type 정규화(숨은 공백 때문에 키가 갈리는 것 방지)
+      // task_type 정규화(숨은 공백 때문에 키가 갈리는 것 방지)
       const keyRaw = ad?.task_type ?? ad?.taskType ?? "";
       const key = normalizeTaskTypeKey_(keyRaw);
       if (!key) return null;
 
       const rawN = parseCount_(ad?.count);
-      let w: number;
-      if (!Number.isFinite(rawN)) {
-        w = 1; // count 비어있으면 기존처럼 1건으로 처리
-      } else {
-        w = Math.floor(rawN);
-        if (w <= 0) return null; // ★ 핵심: 0 이하면 집계에서 제외
-      }
+      if (!Number.isFinite(rawN)) return null;
+      const w = Math.floor(rawN);
+      if (w <= 0) return null;
 
       return { key, w };
     })
@@ -192,6 +185,25 @@ function countWorkingDays(start: number, end: number) {
     cur.setDate(cur.getDate() + 1);
   }
   return cnt;
+}
+
+// "실 제작건수" = (완료 문서들의 assigned_designers[].count 합)
+// - count 없거나 파싱불가: 0 (정확도 우선)
+// - count <= 0: 0
+function getProducedCountFromAssignedDesigners_(r: RD): number {
+  const adsRaw = Array.isArray((r as any).assigned_designers) ? (r as any).assigned_designers : [];
+  const ads = adsRaw.filter((x: unknown): x is AssignedDesignerRow => x !== null && typeof x === "object" && !Array.isArray(x));
+  if (ads.length === 0) return 0; // assigned_designers 없으면 0 (정확도 우선)
+
+  let total = 0;
+  for (const ad of ads) {
+    const n = parseCount_(ad?.count);
+    if (!Number.isFinite(n)) continue; // 파싱 불가면 제외
+    const w = Math.floor(n);
+    if (w <= 0) continue;
+    total += w;
+  }
+  return total; // ★ 변경: fallback 없음
 }
 
 export default function DashBoard() {
@@ -339,7 +351,7 @@ export default function DashBoard() {
     if (isOpsAllMode) return null;
 
     const totalRequests = monthRows.length;
-    const producedCount = monthRows.filter((r) => normalizeStatus((r as any).status) === "완료").length;
+    const producedCount = sum(monthRows.map((r) => getProducedCountFromAssignedDesigners_(r)));
     const usedHours = sum(monthRows.map((r) => Number((r as any).out_work_hour) || 0));
 
     const targetCompanyId = isRequester ? requesterCompanyKey : effectiveMode;
@@ -357,7 +369,7 @@ export default function DashBoard() {
     };
   }, [monthRows, effectiveMode, isOpsAllMode, isRequester, requesterCompanyKey, companyDocs]);
 
-  // ★ 변경: 도넛 = assigned_designers[].task_type + count(가중치)만
+  // 도넛 = assigned_designers[].task_type + count(가중치)만
   const taskTypeArr = useMemo(() => {
     if (isOpsAllMode) return [];
     const weighted: WeightedKey[] = monthRows.flatMap((r) => getTaskTypesFromAssignedDesigners_(r));
@@ -411,7 +423,7 @@ export default function DashBoard() {
     if (!isOpsAllMode || !periodInfo) return null;
 
     const totalRequests = allFilteredRows.length;
-    const producedCount = allFilteredRows.filter((r) => normalizeStatus((r as any).status) === "완료").length;
+    const producedCount = sum(allFilteredRows.map((r) => getProducedCountFromAssignedDesigners_(r)));
     const usedHours = sum(allFilteredRows.map((r) => Number((r as any).in_work_hour) || 0));
 
     const people = designers.length;
