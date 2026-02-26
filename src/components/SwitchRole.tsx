@@ -34,7 +34,7 @@ export default function SwitchRole({ isOpen, onClose }: Props) {
   const [selectedCompany, setSelectedCompany] = useState<string>("");
   const [selectedRole, setSelectedRole] = useState<number>(1);
 
-  // ★ 추가: 권한 플래그
+  // 권한 플래그
   const [canSwitchAccount, setCanSwitchAccount] = useState<boolean>(false);
 
   const isPushComz = useMemo(() => isPushComzCompany(selectedCompany), [selectedCompany]);
@@ -50,15 +50,22 @@ export default function SwitchRole({ isOpen, onClose }: Props) {
     if (!selectedCompany) return;
 
     if (isPushComz) {
-      if (selectedRole === 1) setSelectedRole(2);
+      // PushComz면 기본을 담당자(3)로 맞춤 (값이 이상하면 3으로)
+      if (![2, 3].includes(selectedRole)) setSelectedRole(3);
       return;
     }
 
+    // 클라이언트 계정은 요청자(1)만
     if (selectedRole !== 1) setSelectedRole(1);
   }, [selectedCompany, isPushComz]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const visibleRoleOptions = useMemo(() => {
-    if (isPushComz) return roleOptions.filter((r) => r.value === 2 || r.value === 3);
+    if (isPushComz) {
+      // PushComz에서 옵션 순서를 "담당자(3) -> 디자이너(2)"로
+      return roleOptions
+        .filter((r) => r.value === 2 || r.value === 3)
+        .sort((a, b) => b.value - a.value);
+    }
     return roleOptions.filter((r) => r.value === 1);
   }, [isPushComz]);
 
@@ -88,7 +95,7 @@ export default function SwitchRole({ isOpen, onClose }: Props) {
         if (userSnap.exists()) {
           const u = userSnap.data() as any;
 
-          // ★ 추가: can_switch_account 읽기
+          // can_switch_account 읽기
           setCanSwitchAccount(!!u.can_switch_account);
 
           const curCompany = String(u.company ?? "").trim();
@@ -119,7 +126,7 @@ export default function SwitchRole({ isOpen, onClose }: Props) {
 
     setLoading(true);
     try {
-      // ★ 추가: 저장 직전 재검증(방어)
+      // 저장 직전 재검증(방어)
       const meSnap = await getDoc(doc(db, "users", user.uid));
       const me = meSnap.exists() ? (meSnap.data() as any) : null;
       if (!me?.can_switch_account) {

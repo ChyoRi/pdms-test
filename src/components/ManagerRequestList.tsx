@@ -28,13 +28,13 @@ export default function ManagerRequestList({
           <col style={{ width: '2.542%' }} /><col style={{ width: '6.057%' }} />
           <col style={{ width: '4.583%' }} /><col style={{ width: '3.177%' }} />
           <col style={{ width: '3.177%' }} /><col style={{ width: '3.177%' }} />
-          <col style={{ width: '3.177%' }} /><col style={{ width: '3.177%' }} />
-          <col style={{ width: '5.354%' }} /><col style={{ width: '7.124%' }} />
-          <col style={{ width: '11.514%' }} /><col style={{ width: '3.177%' }} />
+          <col style={{ width: '3.177%' }} /><col style={{ width: '3.677%' }} />
+          <col style={{ width: '5.354%' }} /><col style={{ width: '9.024%' }} />
+          <col style={{ width: '12.514%' }} /><col style={{ width: '3.177%' }} />
           <col style={{ width: '5.401%' }} /><col style={{ width: '5.401%' }} />
           <col style={{ width: '3.177%' }} /><col style={{ width: '3.177%' }} />
-          <col style={{ width: '3.177%' }} /><col style={{ width: '11.386%' }} />
-          <col style={{ width: '5.083%' }} /><col style={{ width: '6.982%' }} />
+          <col style={{ width: '3.177%' }} /><col style={{ width: '10.886%' }} />
+          <col style={{ width: '5.083%' }} /><col style={{ width: '4.082%' }} />
         </colgroup>
         <thead>
           <tr>
@@ -47,7 +47,7 @@ export default function ManagerRequestList({
             <RequestListTableTh>담당<br />MD</RequestListTableTh>
             <RequestListTableTh>요청자</RequestListTableTh>
             <RequestListTableTh>업무부서</RequestListTableTh>
-            <RequestListTableTh>업무형태</RequestListTableTh>
+            <RequestListTableTh>업무유형</RequestListTableTh>
             <RequestListTableTh>작업항목</RequestListTableTh>
             <RequestListTableTh>요청서<br />URL</RequestListTableTh>
             <RequestListTableTh>메모 Talk</RequestListTableTh>

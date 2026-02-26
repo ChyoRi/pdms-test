@@ -372,7 +372,7 @@ const RequestListOpenDtTd = styled.td`
 `;
 
 const RequestListTaskTypeTd = styled.td`
-  padding: 15px 12px;
+  padding: 15px 9px;
   line-height: 15px;
 `;
 

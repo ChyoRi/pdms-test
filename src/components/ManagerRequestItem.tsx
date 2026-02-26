@@ -258,13 +258,13 @@ export default function ManagerRequestItem({
       <RequestListTableTd>
         {finalAssigned.length > 0 && (
           <AssignedWrap>
-            {finalAssigned.map((d) => (
-              <AssignedTag key={d.uid || d.name}>
+            {finalAssigned.map((d, idx) => ( // ★ 변경: idx 추가
+              <AssignedTag key={`${d.uid || d.name}-${idx}`}> {/* ★ 변경: key 유니크 */}
                 {d.name}
                 <RemoveBtn
                   type="button"
                   onClick={() => {
-                    if (!isDoneOrCanceled) onUnassignDesigner({ uid: d.uid, name: d.name }); // ★ 변경
+                    if (!isDoneOrCanceled) onUnassignDesigner({ uid: d.uid, name: d.name });
                   }}
                   disabled={isDoneOrCanceled}
                   aria-label={`${d.name} 배정 해제`}
@@ -377,7 +377,7 @@ const RequestListOpenDtTd = styled.td`
 `;
 
 const RequestListTaskTypeTd = styled.td`
-  padding: 15px 12px;
+  padding: 15px 9px;
   line-height: 15px;
 `;
 
