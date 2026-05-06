@@ -21,7 +21,7 @@ const toRoleKey = (num?: number | null): RoleKey =>
 // 역할별 셀렉트 옵션 (요청자는 5개)
 const STATUS_OPTIONS: Record<RoleKey, string[]> = {
   requester: [DEFAULT_STATUS, "대기", "진행중", "검수중", "수정", "완료", "취소"],
-  manager:   [DEFAULT_STATUS, "대기", "진행중", "검수중", "검수요청", "수정", "완료", "취소"],
+  manager:   [DEFAULT_STATUS, "대기", "진행중", "검수중", "검수요청", "수정", "완료", "취소", "디자이너 미배정"],
   designer:  [DEFAULT_STATUS, "대기", "진행중", "검수요청", "수정", "완료", "취소"],
 };
 

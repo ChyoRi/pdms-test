@@ -613,7 +613,7 @@ const CellStack = styled.div`
 `;
 
 const CellTop = styled.div`
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 700;
 `;
 

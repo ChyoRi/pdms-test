@@ -24,6 +24,7 @@ import ExportCSV from "./ExportCSV";
 import { makeSearchIndex, matchesQuery } from "../utils/search";
 import { downloadArrayToCSV } from "../utils/firestoreToCSV";
 
+
 type ViewType = "dashboard" | "myrequestlist" | "allrequestlist" | "inworkhour" | "channelworkhour";
 
 interface RequesterProps {
@@ -392,8 +393,18 @@ export default function Manager({
 
         if (!searchOn && isDone && !keepThisMonth) return false;
 
-        if (statusFilter !== DEFAULT_STATUS && r.status !== statusFilter) {
-          return false;
+        if (statusFilter !== DEFAULT_STATUS) {
+          if (statusFilter === "디자이너 미배정") {
+            const raw = (r as any).assigned_designers;
+            const arrNames = getAssignedNames(raw);
+            const single = String((r as any).assigned_designer ?? "").trim();
+
+            const isUnassigned = arrNames.length === 0 && !single;
+
+            if (!isUnassigned) return false;
+          } else {
+            if (r.status !== statusFilter) return false;
+          }
         }
       }
 

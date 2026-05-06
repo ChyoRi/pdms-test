@@ -6,6 +6,7 @@ import RequestDrawer from "../components/RequestDrawer";
 import RequestForm from "../components/RequestForm";
 import RequestDetail from "../components/RequestDetail";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "../firebaseconfig";
 import {
@@ -21,6 +22,7 @@ import {
 import AssignDesigner from "../components/AssignDesigner";
 import type { AssignedDesigner } from "../components/AssignDesigner";
 import SwitchRole from "../components/SwitchRole";
+import { startTimeLogoutGuard } from "../utils/timeLogout";
 
 // ✅ Drawer 콘텐츠 모드 타입
 type DrawerMode = "create" | "edit" | "detail" | null;
@@ -94,6 +96,8 @@ export default function MainPage() {
   const [userName, setUserName] = useState<string>("");
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
 
+  const navigate = useNavigate();
+
   // 현재 로그인 유저 회사(Aside 카운트/필터 기준)
   const [/*userCompany*/, setUserCompany] = useState<string>("");
 
@@ -137,6 +141,13 @@ export default function MainPage() {
     setSwitchOpen(true);
   };
   const closeSwitchAccount = () => setSwitchOpen(false);
+
+  useEffect(() => {
+    const cleanupIdleLogout = startTimeLogoutGuard(navigate);
+    return () => {
+      cleanupIdleLogout();
+    };
+  }, [navigate]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
