@@ -26,8 +26,11 @@ function escapeHtml(s: string) {
 let _mailer: nodemailer.Transporter | null = null;
 
 function getMailer() {
-  const MAIL_USER = process.env.MAIL_USER || "";
-  const MAIL_PASS = process.env.MAIL_PASS || "";
+  // ★ 변경: Secret 값에 섞일 수 있는 공백/줄바꿈 정리
+  const MAIL_USER = String(process.env.MAIL_USER || "").trim();
+
+  // ★ 변경: Gmail 앱 비밀번호는 공백 없이 사용하도록 강제 정리
+  const MAIL_PASS = String(process.env.MAIL_PASS || "").replace(/\s+/g, "");
 
   if (!MAIL_USER || !MAIL_PASS) {
     throw new Error(
@@ -37,9 +40,21 @@ function getMailer() {
 
   if (_mailer) return _mailer;
 
+  // ★ 변경: service: "gmail" 대신 SMTP 직접 지정
   _mailer = nodemailer.createTransport({
-    service: "gmail",
-    auth: { user: MAIL_USER, pass: MAIL_PASS },
+    host: "smtp.gmail.com",
+    port: 465,
+    secure: true,
+    auth: {
+      user: MAIL_USER,
+      pass: MAIL_PASS,
+    },
+  });
+
+  // ★ 추가: 실제 함수가 어떤 형태의 값을 쓰는지 확인용. 비밀번호는 출력 안 함.
+  console.log("[SMTP] mailer created", {
+    user: MAIL_USER,
+    passLength: MAIL_PASS.length,
   });
 
   return _mailer;
