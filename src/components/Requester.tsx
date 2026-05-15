@@ -2,7 +2,7 @@ import styled from "styled-components";
 import { useState, useEffect, useMemo } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "../firebaseconfig";
-import { collection, onSnapshot, query, where, updateDoc, doc, orderBy, getDoc, serverTimestamp } from "firebase/firestore";
+import { collection, onSnapshot, query, where, updateDoc, doc, getDoc, serverTimestamp } from "firebase/firestore";
 import RequesterRequestList from "./RequesterRequestList";
 import MainTitle from "./MainTitle";
 import RequestFilterSearchWrap from "./RequestFilterSearchWrap";
@@ -16,6 +16,7 @@ type ViewType = "dashboard" | "myrequestlist" | "allrequestlist" | "inworkhour";
 
 interface RequesterProps {
   view: ViewType;
+  requestRows: RequestData[];
   setIsDrawerOpen: (value: boolean) => void;
   setEditData: (data: RequestData) => void;
   setDetailData: (data: RequestData) => void;
@@ -43,7 +44,7 @@ const normalizeCompanyKey = (v: any) =>
   String(v ?? "")
     .trim()
     .toLowerCase()
-    .replace(/\s+/g, "");
+    .replace(/[\s_-]+/g, "");
 
 // 회사 동일 판정 헬퍼
 const isSameCompany = (a: any, b: any) => normalizeCompanyKey(a) === normalizeCompanyKey(b);
@@ -61,7 +62,7 @@ const round3 = (n: number) => Math.round((Number(n) || 0) * 1000) / 1000;
 const isSameMonth = (d: Date, base = new Date()) =>
   d.getFullYear() === base.getFullYear() && d.getMonth() === base.getMonth();
 
-export default function Requester({ view, userRole, setIsDrawerOpen, setEditData, setDetailData, statusFromAside, clearStatusFromAside, filterResetKey }: RequesterProps) {
+export default function Requester({ view, requestRows, userRole, setIsDrawerOpen, setEditData, setDetailData, statusFromAside, clearStatusFromAside, filterResetKey }: RequesterProps) {
   const [userName, setUserName] = useState("");
   const [userCompany, setUserCompany] = useState<string>("");
   const [userUid, setUserUid]   = useState("");
@@ -138,7 +139,6 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
   // 요청 데이터: view에 따라 쿼리 스위칭
   // ✅ 목록 구독: view/userCompany/userName 변화에 반응
   useEffect(() => {
-    // 항상 먼저 비워서 이전 구독 잔상 제거
     setRequests([]);
 
     // 대시보드/공수 화면은 이 컴포넌트에서 목록 없음
@@ -146,70 +146,40 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
       return;
     }
 
-    // myrequestlist: 본인이 요청한 것
+    if (!userName) return;
+
+    let nextRows: RequestData[] = [];
+
+    // myrequestlist: 내가 요청한 것
     if (view === "myrequestlist") {
-      if (!userName) return;
+      nextRows = requestRows.filter((r: any) => {
+        const sameRequester = String(r.requester ?? "").trim() === userName;
 
-      const qRef = query(
-        collection(db, "design_request"),
-        where("requester", "==", userName),
-        orderBy("design_request_id", "desc")
-      );
-
-      const unsubscribe = onSnapshot(qRef, (snapshot) => {
-        const all = snapshot.docs.map((d) => ({
-          id: d.id,
-          ...(d.data() as Omit<RequestData, "id">),
-        })) as any[];
-
-        // 현재 로그인 유저의 company 컨텍스트로 필터링
-        // - userCompany가 있으면 같은 회사만 노출
-        // - userCompany가 비어있으면(예외) 기존처럼 전체 노출
-        const filtered =
+        const sameCompany =
           userCompany && userCompany.trim()
-            ? all.filter((r) => isSameCompany((r as any).company, userCompany))
-            : all;
+            ? isSameCompany((r as any).company, userCompany)
+            : true;
 
-        setRequests(filtered as any);
+        return sameRequester && sameCompany;
       });
-
-      return () => unsubscribe();
     }
 
-    // allrequestlist: 같은 회사의 모든 요청
+    // allrequestlist: 같은 회사 전체 요청
     if (view === "allrequestlist") {
-      if (!userCompany) return;
-
-      const variants = companyVariants(userCompany);
-      const col = collection(db, "design_request");
-
-      const seen = new Map<string, RequestData>(); // dedup
-      const unsubs: Array<() => void> = [];
-
-      const publish = () => {
-        const arr = Array.from(seen.values()).sort((a: any, b: any) => {
-          // design_request_id가 문자열일 가능성 고려
-          const aa = String(a.design_request_id ?? "");
-          const bb = String(b.design_request_id ?? "");
-          return bb.localeCompare(aa, "en", { numeric: true });
-        });
-        setRequests(arr);
-      };
-
-      variants.forEach((v) => {
-        const qRef = query(col, where("company", "==", v), orderBy("design_request_id", "desc"));
-        const unsub = onSnapshot(qRef, (snap) => {
-          snap.docs.forEach((d) => {
-            seen.set(d.id, { id: d.id, ...(d.data() as Omit<RequestData, "id">) });
-          });
-          publish();
-        });
-        unsubs.push(unsub);
+      nextRows = requestRows.filter((r: any) => {
+        if (!userCompany) return false;
+        return isSameCompany((r as any).company, userCompany);
       });
-
-      return () => unsubs.forEach((f) => f());
     }
-  }, [view, userCompany, userName]);
+
+    const sorted = [...nextRows].sort((a: any, b: any) => {
+      const aa = String(a.design_request_id ?? "");
+      const bb = String(b.design_request_id ?? "");
+      return bb.localeCompare(aa, "en", { numeric: true });
+    });
+
+    setRequests(sorted);
+  }, [view, requestRows, userCompany, userName]);
 
   useEffect(() => {
     if (!statusFromAside) return;
@@ -625,7 +595,7 @@ export default function Requester({ view, userRole, setIsDrawerOpen, setEditData
       <MainTitle userRole={userRole} />
       {view === "dashboard" && (
         <DashBoardWrap>
-          <DashBoard />
+          <DashBoard rows={requestRows} />
         </DashBoardWrap>
       )}
 

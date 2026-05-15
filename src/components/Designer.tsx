@@ -2,7 +2,7 @@ import styled from "styled-components";
 import { useEffect, useState, useMemo } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "../firebaseconfig";
-import { query, where, collection, onSnapshot, doc, updateDoc, Timestamp, orderBy, serverTimestamp } from "firebase/firestore";
+import { collection, onSnapshot, doc, updateDoc, Timestamp, serverTimestamp } from "firebase/firestore";
 import DesignerRequestList from "./DesignerRequestList";
 import MainTitle from "./MainTitle";
 import RequestFilterSearchWrap, { type CompletionSortKey } from "./RequestFilterSearchWrap";
@@ -13,6 +13,7 @@ type ViewType = "dashboard" | "myrequestlist" | "allrequestlist" | "inworkhour";
 
 interface RequesterProps {
   view: ViewType;
+  requestRows: RequestData[];
   userRole: number | null;
   setIsDrawerOpen: (value: boolean) => void;
   setDetailData: (data: RequestData) => void;
@@ -97,7 +98,7 @@ const normalizeAssignedDesigners = (raw: any): AssignedDesignerLike[] => {
   return [];
 };
 
-export default function Designer({ view, userRole, setIsDrawerOpen, setDetailData, statusFromAside, clearStatusFromAside, filterResetKey }: RequesterProps) {
+export default function Designer({ view, userRole, requestRows, setIsDrawerOpen, setDetailData, statusFromAside, clearStatusFromAside, filterResetKey }: RequesterProps) {
   const [assignedRequests, setAssignedRequests] = useState<DesignRequest[]>([]);
   const [designerName, setDesignerName] = useState(""); // ✅ 로그인 디자이너 이름
   const [userUid, setUserUid]   = useState("");
@@ -135,38 +136,55 @@ export default function Designer({ view, userRole, setIsDrawerOpen, setDetailDat
 
   // ✅ Firestore에서 로그인 디자이너에게 배정된 요청만 가져오기
   useEffect(() => {
-    // ★ 변경: 디자이너 배정은 UID 기반으로 조회해야 함
     if (view === "dashboard" || view === "inworkhour") {
       setAssignedRequests([]);
       return;
     }
 
+    let nextRows: RequestData[] = [];
+
     // 전체 요청 리스트
     if (view === "allrequestlist") {
-      const qAll = query(
-        collection(db, "design_request"),
-        orderBy("design_request_id", "desc")
-      );
-      const unsubAll = onSnapshot(qAll, snap => {
-        setAssignedRequests(snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })));
-      });
-      return () => unsubAll();
+      nextRows = requestRows;
     }
 
-    // ★ 변경: "내 작업 리스트"는 assigned_designer_uids array-contains(userUid)
-    if (!userUid) return;
+    // 내 작업 리스트
+    if (view === "myrequestlist") {
+      if (!userUid && !designerName) {
+        setAssignedRequests([]);
+        return;
+      }
 
-    const qArr = query(
-      collection(db, "design_request"),
-      where("assigned_designer_uids", "array-contains", userUid), // ★ 변경
-      orderBy("design_request_id", "desc")
-    );
+      nextRows = requestRows.filter((r: any) => {
+        const uids = Array.isArray(r.assigned_designer_uids)
+          ? r.assigned_designer_uids.map((v: any) => String(v).trim())
+          : [];
 
-    const unsub = onSnapshot(qArr, snap => {
-      setAssignedRequests(snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })));
+        const byUid = !!userUid && uids.includes(userUid);
+
+        const assignedObjects = normalizeAssignedDesigners(r.assigned_designers);
+        const byAssignedObj = assignedObjects.some((d) => {
+          const uid = String(d.uid ?? "").trim();
+          const name = String(d.name ?? "").trim();
+
+          return (!!userUid && uid === userUid) || (!!designerName && name === designerName);
+        });
+
+        const legacySingle = String(r.assigned_designer ?? "").trim();
+        const byLegacyName = !!designerName && legacySingle === designerName;
+
+        return byUid || byAssignedObj || byLegacyName;
+      });
+    }
+
+    const sorted = [...nextRows].sort((a: any, b: any) => {
+      const aa = String(a.design_request_id ?? "");
+      const bb = String(b.design_request_id ?? "");
+      return bb.localeCompare(aa, "ko", { numeric: true });
     });
-    return () => unsub();
-  }, [userUid, view]);
+
+    setAssignedRequests(sorted as unknown as DesignRequest[]);
+  }, [view, requestRows, userUid, designerName]);
   
   // 회사 옵션 = companies 컬렉션 문서(company_name)로 구성
   useEffect(() => {
@@ -497,7 +515,7 @@ export default function Designer({ view, userRole, setIsDrawerOpen, setDetailDat
       )}
       {view === "dashboard" && (
         <DashBoardWrap>
-          <DashBoard />
+          <DashBoard rows={requestRows} />
         </DashBoardWrap>
       )}
     </>

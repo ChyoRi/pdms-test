@@ -7,6 +7,7 @@ import { useEffect } from "react";
 
 interface MainProps {
   userRole: number | null;
+  requestRows: RequestData[];
   setIsDrawerOpen: (value: boolean) => void;
   setEditData: (data: RequestData) => void;
   setDetailData: (data: RequestData) => void;
@@ -19,7 +20,7 @@ interface MainProps {
 // 전역 타입과 동일해야 함
 type ViewType = "dashboard" | "myrequestlist" | "allrequestlist" | "inworkhour";
 
-export default function Main({ userRole, setIsDrawerOpen, setEditData, setDetailData, statusFromAside, clearStatusFromAside, filterResetKey, onOpenAssignDesigner }: MainProps) {
+export default function Main({ userRole, requestRows, setIsDrawerOpen, setEditData, setDetailData, statusFromAside, clearStatusFromAside, filterResetKey, onOpenAssignDesigner }: MainProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const view = (searchParams.get("view") || "dashboard") as ViewType;
 
@@ -36,9 +37,9 @@ export default function Main({ userRole, setIsDrawerOpen, setEditData, setDetail
 
   // ✅ 권한별 컴포넌트 렌더링
   const renderComponent = () => {
-    if (userRole === 1) return <Requester view={view} userRole={userRole} setIsDrawerOpen={setIsDrawerOpen} setEditData={setEditData} setDetailData={setDetailData} statusFromAside={statusFromAside} clearStatusFromAside={clearStatusFromAside} filterResetKey={filterResetKey} />;
-    if (userRole === 2) return <Designer view={view} userRole={userRole} setIsDrawerOpen={setIsDrawerOpen} setDetailData={setDetailData} statusFromAside={statusFromAside} clearStatusFromAside={clearStatusFromAside} filterResetKey={filterResetKey} />;
-    if (userRole === 3) return <Manager view={view} userRole={userRole} setIsDrawerOpen={setIsDrawerOpen} setDetailData={setDetailData} statusFromAside={statusFromAside} clearStatusFromAside={clearStatusFromAside} filterResetKey={filterResetKey} onOpenAssignDesigner={onOpenAssignDesigner} />;
+    if (userRole === 1) return <Requester view={view} userRole={userRole} requestRows={requestRows} setIsDrawerOpen={setIsDrawerOpen} setEditData={setEditData} setDetailData={setDetailData} statusFromAside={statusFromAside} clearStatusFromAside={clearStatusFromAside} filterResetKey={filterResetKey} />;
+    if (userRole === 2) return <Designer view={view} userRole={userRole} requestRows={requestRows} setIsDrawerOpen={setIsDrawerOpen} setDetailData={setDetailData} statusFromAside={statusFromAside} clearStatusFromAside={clearStatusFromAside} filterResetKey={filterResetKey} />;
+    if (userRole === 3) return <Manager view={view} userRole={userRole} requestRows={requestRows} setIsDrawerOpen={setIsDrawerOpen} setDetailData={setDetailData} statusFromAside={statusFromAside} clearStatusFromAside={clearStatusFromAside} filterResetKey={filterResetKey} onOpenAssignDesigner={onOpenAssignDesigner} />;
   }
 
   return <Container>{renderComponent()}</Container>;

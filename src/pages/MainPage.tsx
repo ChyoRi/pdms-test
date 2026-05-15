@@ -53,12 +53,12 @@ const round3 = (n: number) => Math.round(n * 1000) / 1000;
 const sanitizeForFirestore = (v: any): any => {
   if (v === undefined) return undefined;
 
-  // ★ 추가: Firestore Timestamp (toDate 존재) 그대로 유지
+  // Firestore Timestamp (toDate 존재) 그대로 유지
   if (v && typeof v === "object" && typeof v.toDate === "function") {
     return v;
   }
 
-  // ★ 추가: serverTimestamp() 같은 FieldValue는 내부에 _methodName이 있음 (분해 금지)
+  // serverTimestamp() 같은 FieldValue는 내부에 _methodName이 있음 (분해 금지)
   if (v && typeof v === "object" && typeof (v as any)._methodName === "string") {
     return v;
   }
@@ -85,14 +85,73 @@ const normalizeCompanyKey = (v: any) =>
   String(v ?? "")
     .trim()
     .toLowerCase()
-    .replace(/\s+/g, "");
+    .replace(/[\s_-]+/g, "");
 
 const isSameCompany = (a: any, b: any) =>
   normalizeCompanyKey(a) === normalizeCompanyKey(b);
 
+// Firestore company 값 대소문자/표기 차이 대응
+const companyVariants = (raw: any) => {
+  const t = String(raw ?? "").trim();
+  if (!t) return [];
+
+  const lower = t.toLowerCase();
+  const upper = t.toUpperCase();
+  const cap = t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
+
+  const list = [t, lower, upper, cap];
+
+  // ★ 추가: NSmall / n-small 표기 차이 대응
+  const key = normalizeCompanyKey(t);
+  if (key === "nsmall") {
+    list.push("nsmall", "NSmall", "Nsmall", "n-small", "N-Small");
+  }
+
+  if (key === "homeplus") {
+    list.push("homeplus", "HomePlus", "Homeplus", "HOMEPLUS");
+  }
+
+  return Array.from(new Set(list)).slice(0, 30);
+};
+
+// full RequestData → Aside용 RequestLite 변환
+const toRequestLite = (r: RequestData): RequestLite => {
+  const d = r as any;
+
+  return {
+    id: r.id,
+    status: (d.status as RequestData["status"]) ?? "대기중",
+    completion_date:
+      d.completion_date ??
+      d.complete_date ??
+      d.completion_dt ??
+      d.completed_at ??
+      null,
+    company: norm(d.company ?? ""),
+  };
+};
+
+// 디자이너 하위호환 필터용
+const isAssignedToDesigner = (r: RequestData, displayName: string): boolean => {
+  const d = r as any;
+
+  const legacySingle = String(d.assigned_designer ?? "").trim();
+
+  const arr = Array.isArray(d.assigned_designers) ? d.assigned_designers : [];
+  const namesFromArr =
+    arr.length > 0 && typeof arr[0] === "string"
+      ? arr.map((x: any) => String(x).trim())
+      : arr.map((x: any) => String(x?.name ?? "").trim());
+
+  return legacySingle === displayName || namesFromArr.includes(displayName);
+};
+
 export default function MainPage() {
   const [userRole, setUserRole] = useState<number>(0);
+  // Aside 카운트용 경량 데이터
   const [requests, setRequests] = useState<RequestLite[]>([]);
+  // Dashboard / InWorkHour / ChannelWorkHour에 넘길 전체 design_request 데이터
+  const [fullRequests, setFullRequests] = useState<RequestData[]>([]);
   const [userName, setUserName] = useState<string>("");
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
 
@@ -150,11 +209,21 @@ export default function MainPage() {
   }, [navigate]);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    // ★ 추가: auth 변경 시 기존 design_request 리스너 정리용
+    let requestUnsubscribe: (() => void) | null = null;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
+      // ★ 추가: 로그인 유저가 바뀌면 이전 design_request 리스너 제거
+      if (requestUnsubscribe) {
+        requestUnsubscribe();
+        requestUnsubscribe = null;
+      }
+
       if (!user) {
         setUserRole(0);
         setUserName("");
         setRequests([]);
+        setFullRequests([]); // ★ 추가
         setCanSwitchAccount(false);
         setUserCompany("");
         return;
@@ -164,7 +233,15 @@ export default function MainPage() {
       setUserName(displayName);
 
       const userDoc = await getDoc(doc(db, "users", user.uid));
-      if (!userDoc.exists()) return;
+
+      if (!userDoc.exists()) {
+        setUserRole(0);
+        setRequests([]);
+        setFullRequests([]); // ★ 추가
+        setCanSwitchAccount(false);
+        setUserCompany("");
+        return;
+      }
 
       const data = userDoc.data() as any;
 
@@ -180,87 +257,88 @@ export default function MainPage() {
       let qRef: any;
 
       if (role === 1) {
-        qRef = query(
-          collection(db, "design_request"),
-          where("requester", "==", displayName)
-        );
+        // 요청자는 같은 회사 전체 요청을 받아야 allrequestlist가 동작함
+        const variants = companyVariants(curCompany);
+
+        qRef =
+          variants.length > 0
+            ? query(
+                collection(db, "design_request"),
+                where("company", "in", variants)
+              )
+            : query(
+                collection(db, "design_request"),
+                where("requester", "==", displayName)
+              );
       } else if (role === 2) {
         // 디자이너는 인덱스용 필드로 조회
-        qRef = query(
-          collection(db, "design_request"),
-          where("assigned_designer_uids", "array-contains", user.uid)
-        );
+        qRef = collection(db, "design_request");
       } else {
         // role 3(매니저) 등
         qRef = collection(db, "design_request");
       }
 
-      onSnapshot(qRef, (snapshot: any) => {
-        const listAll: RequestLite[] = snapshot.docs.map((docSnap: any) => {
-          const d = docSnap.data() as any;
-          return {
-            id: docSnap.id,
-            status: (d.status as RequestData["status"]) ?? "대기중",
-            completion_date:
-              d.completion_date ??
-              d.complete_date ??
-              d.completion_dt ??
-              d.completed_at ??
-              null,
-            company: norm(d.company ?? ""),
-          };
-        });
+      // ★ 변경: design_request는 여기서 full data로 1번만 받아둠
+      requestUnsubscribe = onSnapshot(qRef, (snapshot: any) => {
+        const fullRows: RequestData[] = snapshot.docs.map((docSnap: any) => ({
+          id: docSnap.id,
+          ...(docSnap.data() as Omit<RequestData, "id">),
+        }));
 
-        // 요청자(role=1)는 "현재 회사 컨텍스트" 기준으로만 Aside 카운트 반영
+        // 요청자(role=1)는 "현재 회사 컨텍스트" 기준으로만 Aside/하위 컴포넌트 반영
         if (role === 1) {
-          const filtered =
+          // ★ 같은 회사 전체 요청
+          const companyRows =
             curCompany
-              ? listAll.filter((r) => isSameCompany(r.company, curCompany))
-              : listAll;
+              ? fullRows.filter((r) => isSameCompany((r as any).company, curCompany))
+              : fullRows;
 
-          setRequests(filtered);
-          return;
-        }
-
-        if (role !== 2) {
-          setRequests(listAll);
-          return;
-        }
-
-        // ★ 디자이너는 클라 필터(하위호환)
-        const filtered = snapshot.docs
-          .filter((docSnap: any) => {
-            const d = docSnap.data() as any;
-            const legacySingle = String(d.assigned_designer ?? "").trim();
-
-            const arr = Array.isArray(d.assigned_designers) ? d.assigned_designers : [];
-            const namesFromArr =
-              arr.length > 0 && typeof arr[0] === "string"
-                ? arr.map((x: any) => String(x).trim())
-                : arr.map((x: any) => String(x?.name ?? "").trim());
-
-            return legacySingle === displayName || namesFromArr.includes(displayName);
-          })
-          .map((docSnap: any) => {
-            const d = docSnap.data() as any;
-            return {
-              id: docSnap.id,
-              status: (d.status as RequestData["status"]) ?? "대기중",
-              completion_date:
-                d.completion_date ??
-                d.complete_date ??
-                d.completion_dt ??
-                d.completed_at ??
-                null,
-              company: norm(d.company ?? ""),
-            } as RequestLite;
+          // ★ Aside 카운트는 기존처럼 내 요청 기준으로 유지
+          const myRows = companyRows.filter((r: any) => {
+            return String(r.requester ?? "").trim() === displayName;
           });
 
-        setRequests(filtered);
+          // ★ Requester allrequestlist / dashboard용: 같은 회사 전체
+          setFullRequests(companyRows);
+
+          // ★ Aside용: 내 요청만
+          setRequests(myRows.map(toRequestLite));
+
+          return;
+        }
+
+        // 매니저/관리자 등은 전체 데이터 사용
+        if (role !== 2) {
+          setFullRequests(fullRows); // ★ 추가
+          setRequests(fullRows.map(toRequestLite)); // ★ 변경
+          return;
+        }
+
+        // 디자이너는 클라 필터(하위호환)
+        const filteredFull = fullRows.filter((r: any) => {
+          const uids = Array.isArray(r.assigned_designer_uids)
+            ? r.assigned_designer_uids.map((v: any) => String(v).trim())
+            : [];
+
+          const byUid = !!user.uid && uids.includes(user.uid);
+          const byName = isAssignedToDesigner(r, displayName);
+
+          return byUid || byName;
+        });
+
+        setFullRequests(fullRows); // ★ 추가
+        setRequests(filteredFull.map(toRequestLite)); // ★ 변경
       });
     });
 
-    return () => unsubscribe();
+    return () => {
+      // ★ 변경: auth 리스너 + design_request 리스너 둘 다 정리
+      if (requestUnsubscribe) {
+        requestUnsubscribe();
+      }
+
+      unsubscribeAuth();
+    };
   }, []);
 
   const handleOpenCreate = () => {
@@ -291,7 +369,7 @@ export default function MainPage() {
     setFilterResetKey((prev) => prev + 1);
   };
 
-  // ★ 변경: AssignDesigner rows를 design_request 문서에 저장
+  // AssignDesigner rows를 design_request 문서에 저장
   // - assigned_designers가 "row형 본체"가 됨
   // - _rowId는 UI 전용이므로 DB에 저장하지 않음
   // - assigned_rows는 더 이상 저장하지 않음
@@ -380,6 +458,7 @@ export default function MainPage() {
 
         <Main
           userRole={userRole}
+          requestRows={fullRequests}
           setIsDrawerOpen={setIsDrawerOpen}
           setEditData={(data: RequestData) => {
             setSelectedData(data);

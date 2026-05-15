@@ -11,7 +11,6 @@ import {
   onSnapshot,
   query,
   where,
-  orderBy,
   serverTimestamp,
 } from "firebase/firestore";
 import ManagerRequestList from "./ManagerRequestList";
@@ -29,6 +28,7 @@ type ViewType = "dashboard" | "myrequestlist" | "allrequestlist" | "inworkhour" 
 
 interface RequesterProps {
   view: ViewType;
+  requestRows: RequestData[];
   setIsDrawerOpen: (value: boolean) => void;
   setDetailData: (data: RequestData) => void;
   userRole: number | null;
@@ -65,6 +65,7 @@ const isSameMonth = (d: Date, base = new Date()) =>
 
 export default function Manager({
   view,
+  requestRows,
   setIsDrawerOpen,
   setDetailData,
   userRole,
@@ -122,23 +123,26 @@ export default function Manager({
 
   // ✅ Firestore에서 요청 리스트 가져오기
   useEffect(() => {
-    // 대시보드/내부공수에서는 목록 조회 안 함
-    if (view === "dashboard" || view === "inworkhour") {
+    // 대시보드/공수 화면에서는 ManagerRequestList용 requests 비움
+    if (
+      view === "dashboard" ||
+      view === "inworkhour" ||
+      view === "channelworkhour"
+    ) {
       setRequests([]);
       return;
     }
 
-    // 매니저는 myrequestlist도 '전체'와 동일하게 처리(원한다면 별도 규칙으로 분기 가능)
-    const qRef = query(collection(db, "design_request"), orderBy("design_request_id", "desc"));
-    const unsubscribe = onSnapshot(qRef, (snapshot) => {
-      const data = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...(doc.data() as Omit<RequestData, "id">),
-      }));
-      setRequests(data);
+    // 기존 orderBy("design_request_id", "desc")를 배열 정렬로 대체
+    const sorted = [...requestRows].sort((a: any, b: any) => {
+      const av = String(a.design_request_id ?? "");
+      const bv = String(b.design_request_id ?? "");
+
+      return bv.localeCompare(av, "ko", { numeric: true });
     });
-    return () => unsubscribe();
-  }, [view]);
+
+    setRequests(sorted);
+  }, [view, requestRows]);
 
   // ⭐ 사이드바 상태 클릭 시 필터 동기화
   useEffect(() => {
@@ -180,7 +184,7 @@ export default function Manager({
     return () => unsub();
   }, []);
 
-   // ★ 추가: assigned_rows 기반 재요약 (배정 해제 시 단일 진실)
+   // assigned_rows 기반 재요약 (배정 해제 시 단일 진실)
   const summarizeFromAssignedRows = (rows: any[]) => {
     const per: Record<string, AssignedDesignerObj> = {};
 
@@ -208,7 +212,7 @@ export default function Manager({
     return { assigned_designers, totalOut, totalIn, uids };
   };
 
-  // ★ 변경: 디자이너 배정 해제 (assigned_rows까지 동기화)
+  // 디자이너 배정 해제 (assigned_rows까지 동기화)
   const unassignDesigner = async (requestId: string, payload: { uid?: string; name: string }) => {
     const docRef = doc(db, "design_request", requestId);
     const snap = await getDoc(docRef);
@@ -245,8 +249,24 @@ export default function Manager({
     const raw = data?.assigned_designers;
 
     if (Array.isArray(raw) && raw.length > 0 && typeof raw[0] === "string") {
-      const nextArr = (raw as string[]).filter((n) => String(n).trim() !== name);
-      await updateDoc(docRef, { assigned_designers: nextArr });
+      const nextArr = (raw as string[]).filter(
+        (n) => String(n).trim() !== name
+      );
+
+      // uid가 넘어온 경우 assigned_designer_uids에서도 제거
+      const prevUids = Array.isArray(data?.assigned_designer_uids)
+        ? data.assigned_designer_uids.map((v: any) => String(v).trim()).filter(Boolean)
+        : [];
+
+      const nextUids = uid
+        ? prevUids.filter((v: string) => v !== uid)
+        : prevUids;
+
+      await updateDoc(docRef, {
+        assigned_designers: nextArr,
+        assigned_designer_uids: nextUids,
+      });
+
       return;
     }
 
@@ -261,8 +281,18 @@ export default function Manager({
     const totalOut = round3(next.reduce((s, d) => s + Number((d as any)?.out_work_hour ?? 0), 0));
     const totalIn = round3(next.reduce((s, d) => s + Number((d as any)?.in_work_hour ?? 0), 0));
 
+    // 남아있는 assigned_designers 기준으로 UID 배열도 다시 생성
+    const uidsFromNext = Array.from(
+      new Set(
+        next
+          .map((d: any) => String(d?.uid ?? "").trim())
+          .filter(Boolean)
+      )
+    );
+
     await updateDoc(docRef, {
       assigned_designers: next,
+      assigned_designer_uids: uidsFromNext, // 배정 취소된 UID 제거
       out_work_hour: totalOut,
       in_work_hour: totalIn,
     });
@@ -300,14 +330,14 @@ export default function Manager({
       setReadLocal((prev) => ({ ...prev, [item.id]: now }));
 
       try {
-        // ★ 변경: 업데이트 payload를 객체로 만든 뒤, 조건에 따라 필드 추가
+        // 업데이트 payload를 객체로 만든 뒤, 조건에 따라 필드 추가
         const updates: any = {
           // 댓글 읽음
           [`comment_read_by.${userUid}`]: serverTimestamp(),
           [`comment_read_by_client.${userUid}`]: now,
         };
 
-        // ★ 추가: 문서가 수정된 상태라면 → 문서 읽음 필드도 같이 찍기
+        // 문서가 수정된 상태라면 → 문서 읽음 필드도 같이 찍기
         if ((item as any).requester_edit_state) {
           updates[`requester_edit_read_by.${userUid}`] = serverTimestamp();
           updates[`requester_edit_read_by_client.${userUid}`] = now;
@@ -410,7 +440,7 @@ export default function Manager({
 
       if (requesterFilter !== DEFAULT_REQUESTER && r.requester !== requesterFilter) return false;
 
-      // ★ 변경: 디자이너 필터(객체배열 대응)
+      // 디자이너 필터(객체배열 대응)
       if (designerFilter !== DEFAULT_DESIGNER) {
         const raw = (r as any).assigned_designers;
         const arrNames = getAssignedNames(raw);
@@ -584,12 +614,12 @@ export default function Manager({
       )}
       {view === "dashboard" && (
         <DashBoardWrap>
-          <DashBoard />
+          <DashBoard rows={requestRows} />
         </DashBoardWrap>
       )}
       {view === "inworkhour" && (
         <InWorkHourWrap>
-          <InWorkHour />
+          <InWorkHour rows={requestRows} />
         </InWorkHourWrap>
       )}
       {view === "channelworkhour" && (

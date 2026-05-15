@@ -61,6 +61,12 @@ type RequestDoc = {
   }>;
 };
 
+type InWorkHourProps = {
+  rows: RequestData[]; // ★ 추가
+  dailyHours?: number;
+  targetDate?: Date;
+};
+
 // 이름 끝 '.'(여러 개 포함)인 계정은 전부 제외
 const isDummyByName = (name: string) => {
   const n = String(name ?? "").trim();
@@ -136,13 +142,13 @@ const toNum = (v: any) => {
 
 /** ───────── Component ───────── */
 export default function InWorkHour({
+  rows: requestRows,
   dailyHours = 8,
   targetDate,
-}: {
-  dailyHours?: number;
-  targetDate?: Date;
-}) {
-  const [docs, setDocs] = useState<RequestDoc[]>([]);
+}: InWorkHourProps) {
+  const docs = useMemo<RequestDoc[]>(() => {
+    return requestRows.map((r: any) => r as RequestDoc);
+  }, [requestRows]);
   const [designerNames, setDesignerNames] = useState<string[]>([]);
 
   const [uidByName, setUidByName] = useState<Record<string, string>>({});
@@ -205,15 +211,6 @@ export default function InWorkHour({
       setNameByUid(_nameByUid);
     });
 
-    return () => unSub();
-  }, []);
-
-  useEffect(() => {
-    const qRef = query(collection(db, "design_request"));
-    const unSub = onSnapshot(qRef, (snap) => {
-      const list = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
-      setDocs(list);
-    });
     return () => unSub();
   }, []);
 

@@ -27,6 +27,10 @@ type AssignedDesignerRow = {
   count?: number | string;
 };
 
+type DashBoardProps = {
+  rows: RequestData[];
+};
+
 // ───────── helpers ─────────
 const COLORS = ["#4e79a7", "#ff9da7", "#59a14f", "#9c755f", "#edc949", "#e15759", "#76b7b2", "#f28e2b", "#af7aa1", "#bab0ab"];
 const companyKey = (v: any) => String(v ?? "").replace(/\s+/g, "").toLowerCase();
@@ -206,7 +210,7 @@ function getProducedCountFromAssignedDesigners_(r: RD): number {
   return total; // ★ 변경: fallback 없음
 }
 
-export default function DashBoard() {
+export default function DashBoard({ rows }: DashBoardProps) {
   const now = new Date();
   const [ym, setYM] = useState({ y: now.getFullYear(), m: now.getMonth() + 1 });
 
@@ -273,16 +277,6 @@ export default function DashBoard() {
       setCompanyDocs(list);
     });
 
-    return () => unsub();
-  }, []);
-
-  const [rows, setRows] = useState<RD[]>([]);
-  useEffect(() => {
-    const unsub = onSnapshot(query(collection(db, "design_request")), (snap) => {
-      const list: RD[] = [];
-      snap.forEach((d) => list.push({ id: d.id, ...(d.data() as any) }));
-      setRows(list);
-    });
     return () => unsub();
   }, []);
 
