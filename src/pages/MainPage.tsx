@@ -22,7 +22,6 @@ import {
 import AssignDesigner from "../components/AssignDesigner";
 import type { AssignedDesigner } from "../components/AssignDesigner";
 import SwitchRole from "../components/SwitchRole";
-import { startTimeLogoutGuard } from "../utils/timeLogout";
 
 // ✅ Drawer 콘텐츠 모드 타입
 type DrawerMode = "create" | "edit" | "detail" | null;
@@ -200,13 +199,6 @@ export default function MainPage() {
     setSwitchOpen(true);
   };
   const closeSwitchAccount = () => setSwitchOpen(false);
-
-  useEffect(() => {
-    const cleanupIdleLogout = startTimeLogoutGuard(navigate);
-    return () => {
-      cleanupIdleLogout();
-    };
-  }, [navigate]);
 
   useEffect(() => {
     // ★ 추가: auth 변경 시 기존 design_request 리스너 정리용

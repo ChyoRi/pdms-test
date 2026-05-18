@@ -29,16 +29,6 @@ interface RequesterProps {
 const DEFAULT_STATUS = "진행 상태 선택";
 const DEFAULT_DEPT = "부서 선택";
 
-// 회사 문자열 변형 세트(공백 trim + 대/소문자 변형)
-const companyVariants = (raw: string) => {
-  const t = (raw ?? "").trim();
-  if (!t) return [] as string[];
-  const lower = t.toLowerCase();
-  const upper = t.toUpperCase();
-  const cap = t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
-  return Array.from(new Set([t, lower, upper, cap]));
-};
-
 // 회사 키 정규화 (homeplus 판정용)
 const normalizeCompanyKey = (v: any) =>
   String(v ?? "")
