@@ -123,7 +123,7 @@ export default function Requester({ view, requestRows, userRole, setIsDrawerOpen
     });
 
     return () => unsub();
-  }, [userCompany]); // ★ 추가
+  }, [userCompany]);
 
   // ✅ 요청자가 보낸 요청만 가져오기
   // 요청 데이터: view에 따라 쿼리 스위칭

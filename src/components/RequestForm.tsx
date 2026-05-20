@@ -55,6 +55,15 @@ const _toStrArray = (v: any): string[] => {
   return [];
 };
 
+// 한글 ㄱ,ㄴ,ㄷ 순 정렬 유틸
+const koCollator = new Intl.Collator("ko-KR", {
+  numeric: true,
+  sensitivity: "base",
+});
+
+const sortKo = (arr: string[]): string[] =>
+  [...arr].filter(Boolean).sort((a, b) => koCollator.compare(a, b));
+
 // task_type 자동 파서 (A/B/C/D 형태 자동 판별)
 const parseTaskTypeSpec = (taskType: any, forms: string[]): TaskTypeParsed => {
   // (A) string[]
@@ -75,7 +84,7 @@ const parseTaskTypeSpec = (taskType: any, forms: string[]): TaskTypeParsed => {
       const map: Record<string, string[]> = {};
       keys.forEach((k) => (map[k] = _toStrArray(taskType[k])));
 
-      // ★ 변경: forms와 key가 일부라도 겹치면 "form -> types"로 판단
+      // forms와 key가 일부라도 겹치면 "form -> types"로 판단
       // - 경동(GHS)처럼 task_form 기반으로 task_type만 노출되어야 하는 회사 대응
       const overlapCount = forms.length > 0 ? keys.filter((k) => forms.includes(k)).length : 0;
       const looksLikeFormType = forms.length > 0 && overlapCount > 0;
@@ -203,7 +212,7 @@ const buildCompanyCfg = (docData: CompanyOptionsDoc | null, companyKey?: string)
 
   const rawTaskType = (docData as any)?.task_type ?? (docData as any)?.task_type_form ?? null;
 
-  // ★ 변경: forms는 homeplus만이 아니라 "모든 회사"에 전달해야 form->types 오판이 안남
+  // forms는 homeplus만이 아니라 "모든 회사"에 전달해야 form->types 오판이 안남
   const parsed = parseTaskTypeSpec(rawTaskType, forms);
 
   const typeSelectMode: "native" | "custom" =
@@ -212,13 +221,15 @@ const buildCompanyCfg = (docData: CompanyOptionsDoc | null, companyKey?: string)
   const getTypes = (form?: string): string[] => {
     const f = (form ?? "").trim();
 
-    if (parsed.mode === "flat") return [...parsed.allTypes];
-    if (parsed.mode === "type_detail") return [...parsed.allTypes];
-    if (parsed.mode === "form_type") return [..._toStrArray(parsed.typesByForm[f] ?? [])];
+    if (parsed.mode === "flat") return sortKo(parsed.allTypes);
+    if (parsed.mode === "type_detail") return sortKo(parsed.allTypes);
+    if (parsed.mode === "form_type") return sortKo(_toStrArray(parsed.typesByForm[f] ?? []));
+
     if (parsed.mode === "form_type_detail") {
       const inner = parsed.spec[f] || {};
-      return Object.keys(inner);
+      return sortKo(Object.keys(inner));
     }
+
     return [];
   };
 
@@ -473,7 +484,7 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
     }
   }, [isDrawerOpen]);
 
-  // ★ 추가: 사용자가 입력한 원문(텍스트+URL)을 “그대로” 저장할 값 (CR만 제거 + 끝 공백 정리)
+  // 사용자가 입력한 원문(텍스트+URL)을 “그대로” 저장할 값 (CR만 제거 + 끝 공백 정리)
   const normalizeUrlText = (s: any) => String(s ?? "").replace(/\r/g, "").trimEnd();
 
   // 추가 폼 세트
@@ -717,7 +728,7 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
           .map((s) => s.trim())
           .filter(Boolean);
 
-    // 2) ★ 추가: http(s) URL만 DB에 저장 (텍스트 라벨은 제외)
+    // 2) http(s) URL만 DB에 저장 (텍스트 라벨은 제외)
     return lines.filter((s) => /^https?:\/\//i.test(s));
   };
 
@@ -747,7 +758,7 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
         task_type_detail: requestData.task_type_detail ?? "",
         requirement: requestData.requirement,
         url: parseUrls(requestData.url), // 기존: URL만
-        url_text: normalizeUrlText(requestData.url), // ★ 추가: 원문 저장
+        url_text: normalizeUrlText(requestData.url),
         emergency: requestData.emergency,
         requester_edit_state: true,
         requester_edit_last_uid: uid || null,
@@ -844,7 +855,7 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
 
       const { out, in: inn } = await fetchWorkHourPreset(formValue, typeValue, f.task_type_detail as string);
 
-      const { out: outP, in: inP } = await fetchWorkPricePreset( // ★ 추가
+      const { out: outP, in: inP } = await fetchWorkPricePreset(
         formValue,
         typeValue,
         f.task_type_detail as string
@@ -864,7 +875,7 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
         task_type_detail: f.task_type_detail ?? "",
         requirement: f.requirement,
         url: parseUrls(f.url), // 기존: URL만
-        url_text: normalizeUrlText(f.url), // ★ 추가: 원문 저장
+        url_text: normalizeUrlText(f.url),
         status: "대기",
         assigned_designers: [],
         requester_review_status: "검수대기",
@@ -1093,7 +1104,7 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
               <tr>
                 <RequestFormTableTh><RequestFormItemLabel htmlFor="task_type">업무 유형</RequestFormItemLabel></RequestFormTableTh>
                 <RequestFormTableTd>
-                  {/* ★ 변경: 회사 DB 기반 타입 셀렉트(옵션으로 native/custom 선택 가능) */}
+                  {/* 회사 DB 기반 타입 셀렉트(옵션으로 native/custom 선택 가능) */}
                   {companyCfg.typeSelectMode === "custom" ? (
                     <SelectBox
                       value={requestData.task_type || (renderTypes[0] as string) || ""}
@@ -1122,7 +1133,7 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
                     </RequestFormSelectBox>
                   )}
 
-                  {/* ★ 변경: detail 옵션이 있을 때만 상세 셀렉트 노출 */}
+                  {/* detail 옵션이 있을 때만 상세 셀렉트 노출 */}
                   {!!requestData.task_type && currentDetailOptions.length > 0 && (
                     <RequestFormSelectBox
                       id="task_type_detail"
@@ -1265,8 +1276,8 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
                         <RequestFormTableTd>
                           {companyCfg.typeSelectMode === "custom" ? (
                             <SelectBox
-                              value={(f.task_type as string) || (exTypes[0] ?? "")} // ★ 변경
-                              options={exTypes as string[]} // ★ 변경
+                              value={(f.task_type as string) || (exTypes[0] ?? "")}
+                              options={exTypes as string[]}
                               onChange={(v) => updateExtra(idx, "task_type", v)}
                             />
                           ) : (
@@ -1281,7 +1292,7 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
                               }}
                             >
                               <option value="">업무 유형을 선택해주세요</option>
-                              {exTypes.map((v) => ( // ★ 변경
+                              {exTypes.map((v) => (
                                 <option key={v} value={v}>
                                   {v}
                                 </option>
@@ -1289,7 +1300,7 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
                             </RequestFormSelectBox>
                           )}
 
-                          {Boolean(f.task_type) && exDetails.length > 0 && ( // ★ 변경
+                          {Boolean(f.task_type) && exDetails.length > 0 && (
                             <RequestFormSelectBox
                               id={`task_type_detail_ex_${idx}`}
                               $wide
@@ -1301,7 +1312,7 @@ export default function RequestForm({ userName, editData, isDrawerOpen, onClose 
                               }}
                             >
                               <option value="">상세 유형을 선택해주세요</option>
-                              {exDetails.map((opt: string) => ( // ★ 변경: opt 타입 지정(noImplicitAny 대응)
+                              {exDetails.map((opt: string) => ( // opt 타입 지정(noImplicitAny 대응)
                                 <option key={opt} value={opt}>
                                   {opt}
                                 </option>
