@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import styled from "styled-components";
-import { collection, onSnapshot, query, where } from "firebase/firestore";
+import { collection, onSnapshot, query, where, getDocs, Timestamp, type QueryConstraint } from "firebase/firestore";
 import { db } from "../firebaseconfig";
 import InWorkHourFilter from "./InWorkHourFilter";
 
 /** ───────── Types ───────── */
-// ★ 변경: 제작건수(count) 제거 → 해당일 내부공수(inHour)로 교체
+// 제작건수(count) 제거 → 해당일 내부공수(inHour)로 교체
 type DailyStat = { rate: number; inHour: number };
 
 type DesignerRow = {
@@ -62,7 +62,7 @@ type RequestDoc = {
 };
 
 type InWorkHourProps = {
-  rows: RequestData[]; // ★ 추가
+  rows: RequestData[];
   dailyHours?: number;
   targetDate?: Date;
 };
@@ -108,6 +108,17 @@ const requestDateOnly = (r: RequestDoc): Date | null => parseLoose(r.request_dat
 
 const getDaysInMonth = (year: number, monthIndex: number) =>
   new Date(year, monthIndex + 1, 0).getDate();
+
+// 선택 연월 Timestamp 범위
+function getMonthTimestampRange(year: number, monthIndex: number) {
+  const start = new Date(year, monthIndex, 1, 0, 0, 0, 0);
+  const end = new Date(year, monthIndex + 1, 1, 0, 0, 0, 0);
+
+  return {
+    startTs: Timestamp.fromDate(start),
+    endTs: Timestamp.fromDate(end),
+  };
+}
 
 const isWait = (s?: string) => s === "대기" || s === "대기중";
 const isDone = (s?: string) => s === "완료";
@@ -160,6 +171,9 @@ export default function InWorkHour({
   const [selectedYear, setSelectedYear] = useState(day.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(day.getMonth());
 
+  // 일별 진행현황 / 월 내부공수용 선택 연월 DB 조회 데이터
+  const [monthDocs, setMonthDocs] = useState<RequestDoc[]>([]);
+
   const daysInSelectedMonth = useMemo(
     () => getDaysInMonth(selectedYear, selectedMonth),
     [selectedYear, selectedMonth]
@@ -186,6 +200,93 @@ export default function InWorkHour({
     const todayIdx = todayMidnight.getDate() - 1;
     return Array.from({ length: daysInSelectedMonth }, (_, i) => i === todayIdx);
   }, [todayMidnight, selectedYear, selectedMonth, daysInSelectedMonth]);
+
+  // 일별 진행현황 / 월 누적 내부공수용 선택 연월 DB 직접 조회
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchMonthDocs = async () => {
+      try {
+        const { startTs, endTs } = getMonthTimestampRange(
+          selectedYear,
+          selectedMonth
+        );
+
+        const colRef = collection(db, "design_request");
+
+        const constraints: QueryConstraint[] = [
+          where("request_date", ">=", startTs),
+          where("request_date", "<", endTs),
+        ];
+
+        console.log("[InWorkHour] 선택 연월 DB 조회 조건", {
+          collection: "design_request",
+          year: selectedYear,
+          month: selectedMonth + 1,
+          request_date_start: startTs.toDate().toLocaleString(),
+          request_date_end_exclusive: endTs.toDate().toLocaleString(),
+          queryType:
+            "전체 design_request 읽기 아님. 선택 연월 request_date 문서만 조회",
+          conditions: [
+            `request_date >= ${startTs.toDate().toLocaleString()}`,
+            `request_date < ${endTs.toDate().toLocaleString()}`,
+          ],
+        });
+
+        const snap = await getDocs(query(colRef, ...constraints));
+
+        if (cancelled) return;
+
+        const list = snap.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as any),
+        })) as RequestDoc[];
+
+        setMonthDocs(list);
+
+        console.log("[InWorkHour] 선택 연월 실제 읽은 문서 수", {
+          year: selectedYear,
+          month: selectedMonth + 1,
+          readDocs: snap.docs.length,
+        });
+
+        console.table(
+          list.map((r: any) => ({
+            id: r.id,
+            company: r.company,
+            status: r.status,
+            request_date:
+              typeof r.request_date?.toDate === "function"
+                ? r.request_date.toDate().toLocaleString()
+                : r.request_date,
+            assigned_dates: Array.isArray(r.assigned_designers)
+              ? r.assigned_designers
+                  .filter((ad: any) => ad && typeof ad === "object")
+                  .map((ad: any) =>
+                    typeof ad.assigned_date?.toDate === "function"
+                      ? ad.assigned_date.toDate().toLocaleString()
+                      : ad.assigned_date
+                  )
+              : [],
+            assigned_designers_count: Array.isArray(r.assigned_designers)
+              ? r.assigned_designers.length
+              : 0,
+          }))
+        );
+      } catch (error) {
+        if (cancelled) return;
+
+        console.error("[InWorkHour] 선택 연월 DB 조회 오류", error);
+        setMonthDocs([]);
+      }
+    };
+
+    fetchMonthDocs();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedYear, selectedMonth]);
 
   useEffect(() => {
     const qUsers = query(collection(db, "users"), where("role", "==", 2));
@@ -420,7 +521,18 @@ export default function InWorkHour({
       )
     );
 
-    const designers = Array.from(new Set([...designerNames, ...fromDocs]))
+    // ★ 추가: 선택 연월 DB 조회 데이터에서도 디자이너명 수집
+    const fromMonthDocs = Array.from(
+      new Set(
+        monthDocs
+          .flatMap((d) => getAssignees(d))
+          .filter((n) => n && n !== "미배정" && !isDummyByName(n))
+      )
+    );
+
+    const designers = Array.from(
+      new Set([...designerNames, ...fromDocs, ...fromMonthDocs])
+    )
       .filter((n) => n && !DISPLAY_BLACKLIST.has(n) && !isDummyByName(n))
       .sort((a, b) => a.localeCompare(b, "ko"));
 
@@ -429,28 +541,46 @@ export default function InWorkHour({
     const daysInMonth = daysInSelectedMonth;
 
     return designers.map((name) => {
+      // ★ 현재현황용: 부모 requestRows 기준
+      // 대기 / 진행중 / 오늘 완료 / 오늘 일공수는 기존처럼 docs 기준 유지
       const mine = docs.filter((d) => getEffectiveAssignees(d).includes(name));
 
+      // ★ 일별 진행현황 / 월 누적 내부공수용: 선택 연월 DB 조회 기준
+      const monthMine = monthDocs.filter((d) =>
+        getEffectiveAssignees(d).includes(name)
+      );
+
+      // 현재현황: 대기 / 진행중은 부모 rows 기준 유지
       const wait = mine.filter((d) => isWait(d.status)).length;
       const progress = mine.filter((d) => isProgress(d.status)).length;
 
-      // ★ 변경: "오늘" 기준도 assigned_date(없으면 request_date fallback)
-      const dayDocs = mine.filter((d) => sameDay(getAssignedDateFor(d, name), day));
+      // ★ 유지: 완료는 오늘 기준 그대로
+      const dayDocs = mine.filter((d) =>
+        sameDay(getAssignedDateFor(d, name), day)
+      );
+
       const done = dayDocs.filter((d) => isDone(d.status)).length;
 
-      // ★ 변경: usedHours = 오늘(배정일 기준)의 내부공수 합
-      const usedHoursRaw = dayDocs.reduce((s, d) => s + shareHourFor(d, name), 0);
+      // ★ 유지: 일공수도 오늘 기준 그대로
+      const usedHoursRaw = dayDocs.reduce(
+        (s, d) => s + shareHourFor(d, name),
+        0
+      );
+
       const usedHours = floorTo(usedHoursRaw, 2);
 
-      // 일별 셀의 하단 값 = 해당일 in_work_hour 합 (배정일 기준)
+      // 일별 진행현황 하단 값 = 선택 연월 내부공수 합
       const dailyInArr = Array(daysInMonth).fill(0);
 
-      // ★ 변경: monthDocs 대신, mine 전체를 돌면서 assigned_date가 선택월이면 해당 날짜칸에 더함
-      mine.forEach((d) => {
+      // ★ 변경: 일별 진행현황만 monthDocs 기준
+      // 날짜 배치는 기존 방식 유지: assigned_date → request_date fallback
+      monthMine.forEach((d) => {
         const dt = getAssignedDateFor(d, name);
         if (!dt) return;
 
-        if (dt.getFullYear() !== targetYear || dt.getMonth() !== targetMonth) return;
+        if (dt.getFullYear() !== targetYear || dt.getMonth() !== targetMonth) {
+          return;
+        }
 
         const idx = dt.getDate() - 1;
         if (idx < 0 || idx >= daysInMonth) return;
@@ -466,7 +596,10 @@ export default function InWorkHour({
       const monthInRaw = dailyInArr.reduce((s, h) => s + h, 0);
       const monthInHour = floorTo(monthInRaw, 2);
 
-      const monthRate = monthInRaw > 0 ? Math.round((monthInRaw / MONTHLY_TARGET_HOURS) * 100) : 0;
+      const monthRate =
+        monthInRaw > 0
+          ? Math.round((monthInRaw / MONTHLY_TARGET_HOURS) * 100)
+          : 0;
 
       return {
         name,
@@ -481,6 +614,7 @@ export default function InWorkHour({
     });
   }, [
     docs,
+    monthDocs, // ★ 추가
     designerNames,
     selectedYear,
     selectedMonth,

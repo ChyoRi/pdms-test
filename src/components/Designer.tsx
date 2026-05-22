@@ -1,8 +1,8 @@
 import styled from "styled-components";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "../firebaseconfig";
-import { collection, onSnapshot, doc, updateDoc, Timestamp, serverTimestamp } from "firebase/firestore";
+import { collection, onSnapshot, doc, updateDoc, Timestamp, serverTimestamp, getDocs, query, where } from "firebase/firestore";
 import DesignerRequestList from "./DesignerRequestList";
 import MainTitle from "./MainTitle";
 import RequestFilterSearchWrap, { type CompletionSortKey } from "./RequestFilterSearchWrap";
@@ -11,9 +11,22 @@ import { makeSearchIndex, matchesQuery } from "../utils/search";
 
 type ViewType = "dashboard" | "myrequestlist" | "allrequestlist" | "inworkhour";
 
+type DbCountInfo = {
+  totalCount: number;
+  readDocCount: number;
+  unreadDocCount: number;
+};
+
+type GlobalFilterState = {
+  hasDateFilter: boolean;
+  hasKeyword: boolean;
+};
+
 interface RequesterProps {
   view: ViewType;
   requestRows: RequestData[];
+  dbCountInfo?: DbCountInfo;
+  onGlobalFilterChange?: (state: GlobalFilterState) => void;
   userRole: number | null;
   setIsDrawerOpen: (value: boolean) => void;
   setDetailData: (data: RequestData) => void;
@@ -64,6 +77,45 @@ const DEFAULT_STATUS = "진행 상태 선택";
 const DEFAULT_COMPANY = "회사 선택";
 const SPECIAL_SOLO_NAME = "홈돌이";
 
+// ★ 추가: 요청기간 직접 조회용 날짜 필드 후보
+const REQUEST_DATE_FIELDS = ["request_date", "requested_at", "requestDate"] as const;
+
+// ★ 추가: 요청기간 시작 시간
+const toStartOfDayForQuery = (date: Date) => {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
+
+// ★ 추가: 요청기간 종료 시간
+const toEndOfDayForQuery = (date: Date) => {
+  const d = new Date(date);
+  d.setHours(23, 59, 59, 999);
+  return d;
+};
+
+// ★ 추가: 문자열 날짜 DB 대응용
+const formatYmdForQuery = (date: Date, sep: "-" | "." | "/") => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}${sep}${m}${sep}${d}`;
+};
+
+// ★ 추가: 중복 문서 병합
+const mergeRequestRows = (...groups: RequestData[][]) => {
+  const map = new Map<string, RequestData>();
+
+  groups.forEach((rows) => {
+    rows.forEach((row: any) => {
+      if (!row?.id) return;
+      map.set(row.id, row);
+    });
+  });
+
+  return Array.from(map.values());
+};
+
 // 회사 비교용 정규화(문서ID nsmall vs 표시명 NSmall 모두 매칭)
 const companyKey = (v: any) =>
   String(v ?? "")
@@ -98,8 +150,14 @@ const normalizeAssignedDesigners = (raw: any): AssignedDesignerLike[] => {
   return [];
 };
 
-export default function Designer({ view, userRole, requestRows, setIsDrawerOpen, setDetailData, statusFromAside, clearStatusFromAside, filterResetKey }: RequesterProps) {
+export default function Designer({ view, userRole, requestRows, dbCountInfo, onGlobalFilterChange, setIsDrawerOpen, setDetailData, statusFromAside, clearStatusFromAside, filterResetKey }: RequesterProps) {
   const [assignedRequests, setAssignedRequests] = useState<DesignRequest[]>([]);
+  // ★ 추가: 요청기간/검색 시 Firestore에서 직접 가져온 데이터
+  const [filterFetchedRows, setFilterFetchedRows] = useState<RequestData[] | null>(null);
+  // ★ 추가: 기간/검색 직접 조회로 읽은 문서 수
+  const [filterReadInfo, setFilterReadInfo] = useState({
+    readDocCount: 0,
+  });
   const [designerName, setDesignerName] = useState(""); // ✅ 로그인 디자이너 이름
   const [userUid, setUserUid]   = useState("");
   const [formData, setFormData] = useState<{ [key: string]: RowForm  }>({});
@@ -119,6 +177,37 @@ export default function Designer({ view, userRole, requestRows, setIsDrawerOpen,
   const [readLocal, setReadLocal] = useState<{ [id: string]: number }>({});
 
   const lockOthers = view === "allrequestlist";
+
+  // ★ 추가: 이전 view 저장용
+  const prevViewRef = useRef<ViewType | null>(null);
+
+  // ★ 추가: 나의 작업 리스트 ↔ 전체 작업 리스트 이동 시 필터 초기화
+  useEffect(() => {
+    // 최초 진입은 초기화하지 않음
+    if (prevViewRef.current && prevViewRef.current !== view) {
+      setDateRange({ start: null, end: null });
+      setKeyword("");
+      setKeywordInput("");
+      setStatusFilter(DEFAULT_STATUS);
+      setCompanyFilter(DEFAULT_COMPANY);
+      setCompletionSort("none");
+
+      // ★ 중요: 기간/검색 직접 조회 데이터 초기화
+      setFilterFetchedRows(null);
+      setFilterReadInfo({ readDocCount: 0 });
+
+      // ★ 중요: MainPage 기본 조회 중단 상태 해제
+      onGlobalFilterChange?.({
+        hasDateFilter: false,
+        hasKeyword: false,
+      });
+
+      // ★ 사이드바 상태 필터도 같이 초기화
+      clearStatusFromAside?.();
+    }
+
+    prevViewRef.current = view;
+  }, [view]);
 
   // ✅ 로그인 디자이너 이름 가져오기
   useEffect(() => {
@@ -141,11 +230,14 @@ export default function Designer({ view, userRole, requestRows, setIsDrawerOpen,
       return;
     }
 
+    // ★ 추가: 요청기간/검색 직접 조회 데이터가 있으면 우선 사용
+    const sourceRows = filterFetchedRows ?? requestRows;
+
     let nextRows: RequestData[] = [];
 
     // 전체 요청 리스트
     if (view === "allrequestlist") {
-      nextRows = requestRows;
+      nextRows = sourceRows;
     }
 
     // 내 작업 리스트
@@ -155,7 +247,7 @@ export default function Designer({ view, userRole, requestRows, setIsDrawerOpen,
         return;
       }
 
-      nextRows = requestRows.filter((r: any) => {
+      nextRows = sourceRows.filter((r: any) => { // ★ 변경
         const uids = Array.isArray(r.assigned_designer_uids)
           ? r.assigned_designer_uids.map((v: any) => String(v).trim())
           : [];
@@ -184,7 +276,178 @@ export default function Designer({ view, userRole, requestRows, setIsDrawerOpen,
     });
 
     setAssignedRequests(sorted as unknown as DesignRequest[]);
-  }, [view, requestRows, userUid, designerName]);
+  }, [view, requestRows, filterFetchedRows, userUid, designerName]);
+
+  // ★ 추가: Designer - 요청기간/검색 시 완료·취소 포함해서 Firestore 직접 조회
+  useEffect(() => {
+    if (view === "dashboard" || view === "inworkhour") {
+      setFilterFetchedRows(null);
+      return;
+    }
+
+    const hasDateFilter = !!(dateRange.start && dateRange.end);
+    const q = keyword.trim();
+    const hasKeyword = !!q;
+
+    // 요청기간도 없고 검색어도 없으면 기본 데이터 사용
+    if (!hasDateFilter && !hasKeyword) {
+      setFilterFetchedRows(null);
+      setFilterReadInfo({ readDocCount: 0 });
+      return;
+    }
+
+    let cancelled = false;
+
+    const fetchFilteredRows = async () => {
+      try {
+        const fetchedGroups: RequestData[][] = [];
+        let directReadDocCount = 0;
+        // ★ 추가: 요청자 화면 필터 직접 조회용 기본 조건
+        const baseConstraints: any[] = [];
+
+        if (view === "myrequestlist") {
+          if (userUid) {
+            baseConstraints.push(
+              where("assigned_designer_uids", "array-contains", userUid)
+            );
+          } else if (designerName) {
+            // ★ 하위호환: 예전 단일 문자열 필드가 있는 경우만 대응
+            // assigned_designers 객체 배열의 name은 Firestore에서 직접 where 불가
+            baseConstraints.push(where("assigned_designer", "==", designerName));
+          }
+        }
+
+        // ★ 요청기간 필터가 있으면 해당 기간 전체 조회
+        // status 조건을 넣지 않으므로 완료/취소 포함
+        if (hasDateFilter && dateRange.start && dateRange.end) {
+          const startDate = toStartOfDayForQuery(dateRange.start);
+          const endDate = toEndOfDayForQuery(dateRange.end);
+
+          const startTimestamp = Timestamp.fromDate(startDate);
+          const endTimestamp = Timestamp.fromDate(endDate);
+
+          const startHyphen = formatYmdForQuery(startDate, "-");
+          const endHyphen = formatYmdForQuery(endDate, "-");
+
+          const startDot = formatYmdForQuery(startDate, ".");
+          const endDot = formatYmdForQuery(endDate, ".");
+
+          const startSlash = formatYmdForQuery(startDate, "/");
+          const endSlash = formatYmdForQuery(endDate, "/");
+
+          const queryTasks: Promise<any>[] = [];
+
+          REQUEST_DATE_FIELDS.forEach((field) => {
+            // Timestamp 날짜 대응
+            queryTasks.push(
+              getDocs(
+                query(
+                  collection(db, "design_request"),
+                  ...baseConstraints,
+                  where(field, ">=", startTimestamp),
+                  where(field, "<=", endTimestamp)
+                )
+              )
+            );
+
+            // "2026-01-31" 대응
+            queryTasks.push(
+              getDocs(
+                query(
+                  collection(db, "design_request"),
+                  ...baseConstraints,
+                  where(field, ">=", startHyphen),
+                  where(field, "<=", endHyphen)
+                )
+              )
+            );
+
+            // "2026.01.31" 대응
+            queryTasks.push(
+              getDocs(
+                query(
+                  collection(db, "design_request"),
+                  ...baseConstraints,
+                  where(field, ">=", startDot),
+                  where(field, "<=", endDot)
+                )
+              )
+            );
+
+            // "2026/01/31" 대응
+            queryTasks.push(
+              getDocs(
+                query(
+                  collection(db, "design_request"),
+                  ...baseConstraints,
+                  where(field, ">=", startSlash),
+                  where(field, "<=", endSlash)
+                )
+              )
+            );
+          });
+
+          const snapshots = await Promise.all(queryTasks);
+
+          const dateReadDocCount = snapshots.reduce(
+            (sum, snapshot) => sum + snapshot.docs.length,
+            0
+          );
+
+          directReadDocCount += dateReadDocCount;
+
+          const dateRows: RequestData[] = snapshots.flatMap((snapshot) =>
+            snapshot.docs.map((docSnap: any) => ({
+              id: docSnap.id,
+              ...(docSnap.data() as Omit<RequestData, "id">),
+            }))
+          );
+
+          fetchedGroups.push(dateRows);
+        }
+
+        // ★ 검색어만 있는 경우: 문서번호 정확히 일치 직접 조회
+        if (!hasDateFilter && hasKeyword) {
+          const searchSnap = await getDocs(
+            query(
+              collection(db, "design_request"),
+              ...baseConstraints,
+              where("design_request_id", "==", q)
+            )
+          );
+
+          directReadDocCount += searchSnap.docs.length;
+
+          const searchRows: RequestData[] = searchSnap.docs.map((docSnap: any) => ({
+            id: docSnap.id,
+            ...(docSnap.data() as Omit<RequestData, "id">),
+          }));
+
+          fetchedGroups.push(searchRows);
+        }
+
+        const mergedRows = mergeRequestRows(...fetchedGroups);
+
+        if (cancelled) return;
+
+        setFilterFetchedRows(mergedRows);
+        setFilterReadInfo({ readDocCount: directReadDocCount });
+      } catch (error) {
+        console.error("Designer 요청기간/검색 직접 조회 오류:", error);
+
+        if (!cancelled) {
+          setFilterFetchedRows(requestRows);
+          setFilterReadInfo({ readDocCount: 0 });
+        }
+      }
+    };
+
+    fetchFilteredRows();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [view, dateRange, keyword, requestRows]);
   
   // 회사 옵션 = companies 컬렉션 문서(company_name)로 구성
   useEffect(() => {
@@ -393,6 +656,62 @@ export default function Designer({ view, userRole, requestRows, setIsDrawerOpen,
     designerName,
     completionSort, // ★ 추가
   ]);
+
+  useEffect(() => {
+    const hasDateFilter = !!(dateRange.start && dateRange.end);
+    const hasKeyword = !!keyword.trim();
+    const isFilterMode = hasDateFilter || hasKeyword;
+
+    const baseReadDocCount = isFilterMode ? 0 : dbCountInfo?.readDocCount ?? 0;
+    const filterReadDocCount = filterReadInfo.readDocCount;
+    const totalReadDocCount = baseReadDocCount + filterReadDocCount;
+
+    const totalCount = dbCountInfo?.totalCount ?? 0;
+    const unreadDocCount = Math.max(totalCount - totalReadDocCount, 0);
+
+    console.log("====== Designer 최종 viewList ======");
+    console.log("전체 DB 문서 수:", totalCount);
+    console.log("MainPage 기본 읽은 문서 수:", baseReadDocCount);
+    console.log("기간/검색 필터 직접 읽은 문서 수:", filterReadDocCount);
+    console.log("총 읽은 문서 수:", totalReadDocCount);
+    console.log("안 읽은 문서 수:", unreadDocCount);
+    console.log("현재 view:", view);
+    console.log("assignedRequests:", assignedRequests.length);
+    console.log("viewList 최종 표시 수:", viewList.length);
+    console.log("dateRange:", dateRange);
+    console.log("statusFilter:", statusFilter);
+    console.log("companyFilter:", companyFilter);
+    console.log("completionSort:", completionSort);
+    console.log("keyword:", keyword);
+    console.log("designerName:", designerName);
+    console.log("===================================");
+  }, [
+    dbCountInfo?.totalCount,
+    dbCountInfo?.readDocCount,
+    filterReadInfo.readDocCount,
+    view,
+    assignedRequests.length,
+    viewList.length,
+    dateRange,
+    statusFilter,
+    companyFilter,
+    completionSort,
+    keyword,
+    designerName
+  ]);
+
+  // ★ 추가: 기간/검색 필터 상태를 MainPage로 올림
+  useEffect(() => {
+    const hasDateFilter = !!(dateRange.start && dateRange.end);
+    const hasKeyword = !!keyword.trim();
+
+    const isListView = view === "myrequestlist" || view === "allrequestlist";
+
+    onGlobalFilterChange?.({
+      hasDateFilter: isListView && hasDateFilter,
+      hasKeyword: isListView && hasKeyword,
+    });
+  }, [view, dateRange.start, dateRange.end, keyword, onGlobalFilterChange]);
 
   // 🔍 검색 버튼 클릭 시 적용
   const applySearch = (kw: string) => setKeyword(kw);

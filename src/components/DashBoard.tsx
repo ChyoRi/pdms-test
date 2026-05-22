@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import styled from "styled-components";
-import { collection, onSnapshot, query, doc, getDoc, where } from "firebase/firestore";
+import { collection, onSnapshot, query, doc, getDoc, getDocs, where, Timestamp, type QueryConstraint } from "firebase/firestore";
 import { db, auth } from "../firebaseconfig";
 import { onAuthStateChanged } from "firebase/auth";
 import DashBoardFilter from "./DashBoardFilter";
@@ -28,7 +28,7 @@ type AssignedDesignerRow = {
 };
 
 type DashBoardProps = {
-  rows: RequestData[];
+  rows?: RequestData[];
 };
 
 // ───────── helpers ─────────
@@ -36,6 +36,17 @@ const COLORS = ["#4e79a7", "#ff9da7", "#59a14f", "#9c755f", "#edc949", "#e15759"
 const companyKey = (v: any) => String(v ?? "").replace(/\s+/g, "").toLowerCase();
 const isHomeplus = (r: RD) => companyKey((r as any).company) === "homeplus";
 const isNSmall = (r: RD) => ["nsmall", "n-small"].includes(companyKey((r as any).company));
+
+// ★ 추가: 선택 연월의 Firestore Timestamp 범위
+function getMonthTimestampRange(y: number, m: number) {
+  const start = new Date(y, m - 1, 1, 0, 0, 0, 0);
+  const end = new Date(y, m, 1, 0, 0, 0, 0);
+
+  return {
+    startTs: Timestamp.fromDate(start),
+    endTs: Timestamp.fromDate(end),
+  };
+}
 
 // task_type 정규화(제로폭 공백 제거 + 연속 공백 정리)
 function normalizeTaskTypeKey_(v: unknown): string {
@@ -145,6 +156,7 @@ function normalizeStatus(s?: string) {
   if (/(진행)/.test(t)) return "진행중";
   if (/(검수중)/.test(t)) return "검수중";
   if (/(검수요청)/.test(t)) return "검수요청";
+  if (/(수정)/.test(t)) return "수정";
   if (/(완료)/.test(t)) return "완료";
   if (/(취소|cancel)/i.test(t)) return "취소";
   if (/(대기)/.test(t)) return "대기";
@@ -210,7 +222,7 @@ function getProducedCountFromAssignedDesigners_(r: RD): number {
   return total; // ★ 변경: fallback 없음
 }
 
-export default function DashBoard({ rows }: DashBoardProps) {
+export default function DashBoard({ rows = [] }: DashBoardProps) {
   const now = new Date();
   const [ym, setYM] = useState({ y: now.getFullYear(), m: now.getMonth() + 1 });
 
@@ -224,6 +236,9 @@ export default function DashBoard({ rows }: DashBoardProps) {
   const requesterCompanyKey = companyKey(userCompany);
   const [companyMode, setCompanyMode] = useState<string>("homeplus");
   const [companyDocs, setCompanyDocs] = useState<CompanyDoc[]>([]);
+
+  // ★ 추가: 선택 연월 기준으로 design_request에서 직접 읽은 데이터
+  const [dashboardRows, setDashboardRows] = useState<RequestData[]>([]);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
@@ -310,6 +325,139 @@ export default function DashBoard({ rows }: DashBoardProps) {
   const isRequester = userRole === 1;
   const isOpsAllMode = !isRequester && effectiveMode === "all";
 
+  // ★ 추가: companyMode 값을 실제 design_request.company 값으로 변환
+  const getCompanyQueryValue = (companyId: string): string => {
+    const key = companyKey(companyId);
+
+    const found = companyDocs.find(
+      (c) => companyKey(c.id) === key || companyKey(c.company_name) === key
+    );
+
+    return found?.company_name ?? companyId;
+  };
+
+  // ★ 추가: 선택 연월 / 회사 기준으로 design_request 직접 조회
+  useEffect(() => {
+    if (!roleReady) return;
+
+    if (isOpsAllMode) {
+      setDashboardRows([]); // ★ 추가
+      return;
+    }
+
+    const modeKey = companyKey(effectiveMode);
+
+    if (!isRequester && modeKey === "all") {
+      setDashboardRows([]); // ★ 추가
+      return;
+    }
+
+    if (!isRequester && companyDocs.length === 0) return;
+
+    let targetCompany = "";
+
+    if (isRequester) {
+      targetCompany = userCompany;
+    } else {
+      targetCompany = getCompanyQueryValue(effectiveMode);
+    }
+
+    if (!targetCompany) {
+      setDashboardRows([]); // ★ 추가
+      return;
+    }
+
+    let cancelled = false;
+
+    const fetchDashboardRows = async () => {
+      try {
+        const { startTs, endTs } = getMonthTimestampRange(ym.y, ym.m);
+        const colRef = collection(db, "design_request");
+
+        const constraints: QueryConstraint[] = [
+          where("company", "==", targetCompany),
+          where("request_date", ">=", startTs),
+          where("request_date", "<", endTs),
+        ];
+
+        // ★ 추가: Firestore에 넘기는 실제 조회 조건 확인
+        console.log("[DashBoard] Firestore query 조건", {
+          collection: "design_request",
+          company: targetCompany,
+          year: ym.y,
+          month: ym.m,
+          request_date_start: startTs.toDate().toLocaleString(),
+          request_date_end_exclusive: endTs.toDate().toLocaleString(),
+          queryType: "전체 design_request 읽기 아님. 조건에 맞는 문서만 조회",
+          conditions: [
+            `company == ${targetCompany}`,
+            `request_date >= ${startTs.toDate().toLocaleString()}`,
+            `request_date < ${endTs.toDate().toLocaleString()}`,
+          ],
+        });
+
+        const q = query(colRef, ...constraints);
+        const snap = await getDocs(q);
+
+        // ★ 추가: 실제 Firestore에서 읽힌 문서 수 확인
+        console.log("[DashBoard] Firestore 실제 읽은 문서 수", {
+          readDocs: snap.docs.length,
+        });
+
+        if (cancelled) return;
+
+        const list = snap.docs.map((d) => ({
+          id: d.id,
+          ...d.data(),
+        })) as RequestData[];
+
+        setDashboardRows(list);
+
+        // ★ 추가: 읽힌 문서 상세 확인
+        console.table(
+          list.map((r: any) => ({
+            id: r.id,
+            company: r.company,
+            status: r.status,
+            request_date:
+              typeof r.request_date?.toDate === "function"
+                ? r.request_date.toDate().toLocaleString()
+                : r.request_date,
+            task_form: r.task_form,
+            out_work_hour: r.out_work_hour,
+          }))
+        );
+
+        console.log("[DashBoard] month direct read", {
+          company: targetCompany,
+          year: ym.y,
+          month: ym.m,
+          readDocs: snap.docs.length,
+        });
+      } catch (error) {
+        if (cancelled) return;
+
+        console.error("[DashBoard] month direct read error", error);
+        setDashboardRows([]);
+      }
+    };
+
+    fetchDashboardRows();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    roleReady,
+    ym.y,
+    ym.m,
+    effectiveMode,
+    isRequester,
+    userCompany,
+    isOpsAllMode,
+    companyDocs,
+  ]);
+
   const getAvailHourByCompanyId = (companyId: string): number | null => {
     const key = companyKey(companyId);
     if (!key) return null;
@@ -323,9 +471,10 @@ export default function DashBoard({ rows }: DashBoardProps) {
   const monthRows = useMemo(() => {
     if (isOpsAllMode) return [];
 
-    return rows.filter((r) => {
+    return dashboardRows.filter((r) => {
       const ts = pickDateMillis(r);
       const inMonth = ts !== null && ts >= monthRange.start && ts <= monthRange.end;
+
       if (!inMonth) return false;
 
       if (isRequester && requesterCompanyKey) {
@@ -333,13 +482,23 @@ export default function DashBoard({ rows }: DashBoardProps) {
       }
 
       const modeKey = companyKey(effectiveMode);
+
       if (modeKey === "all") return true;
 
       const rowKey = companyKey((r as any).company);
+
       if (modeKey === "nsmall") return rowKey === "nsmall" || rowKey === "n-small";
+
       return rowKey === modeKey;
     });
-  }, [rows, monthRange, effectiveMode, isOpsAllMode, isRequester, requesterCompanyKey]);
+  }, [
+    dashboardRows, // ★ 변경
+    monthRange,
+    effectiveMode,
+    isOpsAllMode,
+    isRequester,
+    requesterCompanyKey,
+  ]);
 
   const kpiMonth = useMemo(() => {
     if (isOpsAllMode) return null;
@@ -371,12 +530,20 @@ export default function DashBoard({ rows }: DashBoardProps) {
     return arr;
   }, [monthRows, isOpsAllMode]);
 
+  // ★ 변경: 진행현황도 별도 DB 조회 없이 선택 연월 monthRows 안에서 status 집계
   const statusArr = useMemo(() => {
     if (isOpsAllMode) return [];
-    const order = ["대기중", "진행중", "검수중", "검수요청중", "완료", "취소"];
+
+    // ★ 변경: normalizeStatus 반환값과 동일하게 맞춤 + 수정 추가
+    const order = ["대기", "진행중", "검수중", "검수요청", "수정", "완료", "취소"];
+
     const counts = groupCount(monthRows.map((r) => normalizeStatus((r as any).status)));
     const map = new Map(counts.map((v) => [v.name, v.value]));
-    return order.map((n) => ({ name: n, value: map.get(n) || 0 }));
+
+    return order.map((n) => ({
+      name: n,
+      value: map.get(n) || 0,
+    }));
   }, [monthRows, isOpsAllMode]);
 
   const formArr = useMemo(() => {
@@ -507,7 +674,7 @@ export default function DashBoard({ rows }: DashBoardProps) {
 
   const statusForChart = useMemo(() => {
     if (isOpsAllMode) {
-      const order = ["대기", "진행중", "검수중", "검수요청", "완료", "취소"];
+      const order = ["대기", "진행중", "검수중", "검수요청", "수정", "완료", "취소"];
       const counts = groupCount(allFilteredRows.map((r) => normalizeStatus((r as any).status)));
       const map = new Map(counts.map((v) => [v.name, v.value]));
       return { labels: order, data: order.map((n) => map.get(n) || 0) };

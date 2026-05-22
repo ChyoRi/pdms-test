@@ -1,8 +1,8 @@
 import styled from "styled-components";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "../firebaseconfig";
-import { collection, onSnapshot, query, where, updateDoc, doc, getDoc, serverTimestamp } from "firebase/firestore";
+import { collection, onSnapshot, query, where, updateDoc, doc, getDoc, serverTimestamp, getDocs, Timestamp } from "firebase/firestore";
 import RequesterRequestList from "./RequesterRequestList";
 import MainTitle from "./MainTitle";
 import RequestFilterSearchWrap from "./RequestFilterSearchWrap";
@@ -14,9 +14,22 @@ import { addHistoryComment } from "../utils/commentHistory";
 
 type ViewType = "dashboard" | "myrequestlist" | "allrequestlist" | "inworkhour";
 
+type DbCountInfo = {
+  totalCount: number;
+  readDocCount: number;
+  unreadDocCount: number;
+};
+
+type GlobalFilterState = {
+  hasDateFilter: boolean;
+  hasKeyword: boolean;
+};
+
 interface RequesterProps {
   view: ViewType;
   requestRows: RequestData[];
+  dbCountInfo?: DbCountInfo;
+  onGlobalFilterChange?: (state: GlobalFilterState) => void;
   setIsDrawerOpen: (value: boolean) => void;
   setEditData: (data: RequestData) => void;
   setDetailData: (data: RequestData) => void;
@@ -28,6 +41,45 @@ interface RequesterProps {
 
 const DEFAULT_STATUS = "진행 상태 선택";
 const DEFAULT_DEPT = "부서 선택";
+
+// ★ 추가: 요청기간 직접 조회용 날짜 필드 후보
+const REQUEST_DATE_FIELDS = ["request_date", "requested_at", "requestDate"] as const;
+
+// ★ 추가: 요청기간 시작 시간
+const toStartOfDayForQuery = (date: Date) => {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
+
+// ★ 추가: 요청기간 종료 시간
+const toEndOfDayForQuery = (date: Date) => {
+  const d = new Date(date);
+  d.setHours(23, 59, 59, 999);
+  return d;
+};
+
+// ★ 추가: 문자열 날짜 DB 대응용
+const formatYmdForQuery = (date: Date, sep: "-" | "." | "/") => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}${sep}${m}${sep}${d}`;
+};
+
+// ★ 추가: 중복 문서 병합
+const mergeRequestRows = (...groups: RequestData[][]) => {
+  const map = new Map<string, RequestData>();
+
+  groups.forEach((rows) => {
+    rows.forEach((row: any) => {
+      if (!row?.id) return;
+      map.set(row.id, row);
+    });
+  });
+
+  return Array.from(map.values());
+};
 
 // 회사 키 정규화 (homeplus 판정용)
 const normalizeCompanyKey = (v: any) =>
@@ -52,11 +104,17 @@ const round3 = (n: number) => Math.round((Number(n) || 0) * 1000) / 1000;
 const isSameMonth = (d: Date, base = new Date()) =>
   d.getFullYear() === base.getFullYear() && d.getMonth() === base.getMonth();
 
-export default function Requester({ view, requestRows, userRole, setIsDrawerOpen, setEditData, setDetailData, statusFromAside, clearStatusFromAside, filterResetKey }: RequesterProps) {
+export default function Requester({ view, requestRows, dbCountInfo, onGlobalFilterChange, userRole, setIsDrawerOpen, setEditData, setDetailData, statusFromAside, clearStatusFromAside, filterResetKey }: RequesterProps) {
   const [userName, setUserName] = useState("");
   const [userCompany, setUserCompany] = useState<string>("");
   const [userUid, setUserUid]   = useState("");
   const [requests, setRequests] = useState<RequestData[]>([]); // request DB 배열
+  // ★ 추가: 요청기간/검색 시 Firestore에서 직접 가져온 데이터
+  const [filterFetchedRows, setFilterFetchedRows] = useState<RequestData[] | null>(null);
+  // ★ 추가: 기간/검색 직접 조회로 Firestore에서 읽은 문서 수
+  const [filterReadInfo, setFilterReadInfo] = useState({
+    readDocCount: 0,
+  });
   const [statusFilter, setStatusFilter] = useState<string>("진행 상태 선택");
   const [dateRange, setDateRange] = useState<{ start: Date | null; end: Date | null }>({ start: null, end: null });
   const [deptFilter, setDeptFilter] = useState<string>(DEFAULT_DEPT);
@@ -72,6 +130,72 @@ export default function Requester({ view, requestRows, userRole, setIsDrawerOpen
   // CSV로 추출 상태
   const [exporting, setExporting] = useState(false);
   const [readLocal, setReadLocal] = useState<{ [id: string]: number }>({});
+
+  // ★ 추가: 이전 view 저장용
+  const prevViewRef = useRef<ViewType | null>(null);
+
+  // ★ 추가: view 변경 직후 이전 필터값으로 globalFilter가 다시 켜지는 것 방지
+  const isResettingViewRef = useRef(false);
+
+  // ★ 추가: view 변경 직후 필터 직접 조회 1회 차단용
+  const skipFilterFetchOnceRef = useRef(false);
+
+  // ★ 추가: 나의 요청 리스트 ↔ 전체 요청 리스트 이동 시 필터 초기화
+  useEffect(() => {
+    // 최초 진입은 초기화하지 않음
+    if (prevViewRef.current && prevViewRef.current !== view) {
+      // ★ 추가: 아래 onGlobalFilterChange useEffect가 이전 필터값으로 다시 true 보내는 것 방지
+      isResettingViewRef.current = true;
+
+      // ★ 추가: view 변경 순간 이전 dateRange/keyword로 직접 조회되는 것 방지
+      skipFilterFetchOnceRef.current = true;
+
+      setDateRange({ start: null, end: null });
+      setKeyword("");
+      setKeywordInput("");
+      setStatusFilter(DEFAULT_STATUS);
+      setDeptFilter(DEFAULT_DEPT);
+
+      // ★ 중요: 기간/검색 직접 조회 데이터 초기화
+      setFilterFetchedRows(null);
+      setFilterReadInfo({ readDocCount: 0 });
+
+      // ★ 중요: MainPage 기본 조회 중단 상태 해제
+      onGlobalFilterChange?.({
+        hasDateFilter: false,
+        hasKeyword: false,
+      });
+
+      // ★ 사이드바 상태 필터도 같이 초기화
+      clearStatusFromAside?.();
+    }
+
+    prevViewRef.current = view;
+  }, [view]);
+
+  useEffect(() => {
+    // ★ 추가: view 변경 초기화 직후에는 무조건 false만 보냄
+    if (isResettingViewRef.current) {
+      isResettingViewRef.current = false;
+
+      onGlobalFilterChange?.({
+        hasDateFilter: false,
+        hasKeyword: false,
+      });
+
+      return;
+    }
+
+    const hasDateFilter = !!(dateRange.start && dateRange.end);
+    const hasKeyword = !!keyword.trim();
+
+    const isListView = view === "myrequestlist" || view === "allrequestlist";
+
+    onGlobalFilterChange?.({
+      hasDateFilter: isListView && hasDateFilter,
+      hasKeyword: isListView && hasKeyword,
+    });
+  }, [view, dateRange.start, dateRange.end, keyword, onGlobalFilterChange]);
 
   // ✅ 로그인 사용자 이름 가져오기
   // ✅ 로그인 사용자 이름 + company 가져오기
@@ -138,11 +262,14 @@ export default function Requester({ view, requestRows, userRole, setIsDrawerOpen
 
     if (!userName) return;
 
+    // ★ 추가: 요청기간/검색 직접 조회 데이터가 있으면 우선 사용
+    const sourceRows = filterFetchedRows ?? requestRows;
+
     let nextRows: RequestData[] = [];
 
     // myrequestlist: 내가 요청한 것
     if (view === "myrequestlist") {
-      nextRows = requestRows.filter((r: any) => {
+      nextRows = sourceRows.filter((r: any) => {
         const sameRequester = String(r.requester ?? "").trim() === userName;
 
         const sameCompany =
@@ -156,7 +283,7 @@ export default function Requester({ view, requestRows, userRole, setIsDrawerOpen
 
     // allrequestlist: 같은 회사 전체 요청
     if (view === "allrequestlist") {
-      nextRows = requestRows.filter((r: any) => {
+      nextRows = sourceRows.filter((r: any) => {
         if (!userCompany) return false;
         return isSameCompany((r as any).company, userCompany);
       });
@@ -169,7 +296,207 @@ export default function Requester({ view, requestRows, userRole, setIsDrawerOpen
     });
 
     setRequests(sorted);
-  }, [view, requestRows, userCompany, userName]);
+  }, [view, requestRows, filterFetchedRows, userCompany, userName]);
+
+  // ★ 추가: Requester - 요청기간/검색 시 완료·취소 포함해서 Firestore 직접 조회
+  useEffect(() => {
+    // ★ 추가: view 변경 직후 이전 필터값으로 getDocs가 실행되는 것 방지
+    if (skipFilterFetchOnceRef.current) {
+      skipFilterFetchOnceRef.current = false;
+      setFilterFetchedRows(null);
+      setFilterReadInfo({ readDocCount: 0 });
+      return;
+    }
+    
+    if (view === "dashboard" || view === "inworkhour") {
+      setFilterFetchedRows(null);
+      setFilterReadInfo({ readDocCount: 0 });
+      return;
+    }
+
+    const hasDateFilter = !!(dateRange.start && dateRange.end);
+    const q = keyword.trim();
+    const hasKeyword = !!q;
+
+    // 요청기간도 없고 검색어도 없으면 기본 데이터 사용
+    if (!hasDateFilter && !hasKeyword) {
+      setFilterFetchedRows(null);
+      setFilterReadInfo({ readDocCount: 0 });
+      return;
+    }
+
+    let cancelled = false;
+
+    const fetchFilteredRows = async () => {
+      try {
+        const fetchedGroups: RequestData[][] = [];
+        let directReadDocCount = 0;
+        // ★ 추가: 요청자 화면 필터 직접 조회용 기본 조건
+        const baseConstraints: any[] = [];
+
+        if (view === "myrequestlist") {
+            // 나의 요청 리스트: 내 요청 + 내 회사만 DB에서 조회
+            if (userName) {
+              baseConstraints.push(where("requester", "==", userName));
+            }
+
+            if (userCompany) {
+              baseConstraints.push(where("company", "==", userCompany));
+            }
+          }
+
+          if (view === "allrequestlist") {
+            // 전체 요청 리스트: 내 회사 전체만 DB에서 조회
+            if (userCompany) {
+              baseConstraints.push(where("company", "==", userCompany));
+            }
+          }
+
+        // ★ 요청기간 필터가 있으면 해당 기간 전체 조회
+        // status 조건을 넣지 않으므로 완료/취소 포함
+        if (hasDateFilter && dateRange.start && dateRange.end) {
+          const startDate = toStartOfDayForQuery(dateRange.start);
+          const endDate = toEndOfDayForQuery(dateRange.end);
+
+          const startTimestamp = Timestamp.fromDate(startDate);
+          const endTimestamp = Timestamp.fromDate(endDate);
+
+          const startHyphen = formatYmdForQuery(startDate, "-");
+          const endHyphen = formatYmdForQuery(endDate, "-");
+
+          const startDot = formatYmdForQuery(startDate, ".");
+          const endDot = formatYmdForQuery(endDate, ".");
+
+          const startSlash = formatYmdForQuery(startDate, "/");
+          const endSlash = formatYmdForQuery(endDate, "/");
+
+          const queryTasks: Promise<any>[] = [];
+
+          REQUEST_DATE_FIELDS.forEach((field) => {
+            // Timestamp 날짜 대응
+            queryTasks.push(
+              getDocs(
+                query(
+                  collection(db, "design_request"),
+                  ...baseConstraints,
+                  where(field, ">=", startTimestamp),
+                  where(field, "<=", endTimestamp)
+                )
+              )
+            );
+
+            // "2026-01-31" 대응
+            queryTasks.push(
+              getDocs(
+                query(
+                  collection(db, "design_request"),
+                  ...baseConstraints,
+                  where(field, ">=", startHyphen),
+                  where(field, "<=", endHyphen)
+                )
+              )
+            );
+
+            // "2026.01.31" 대응
+            queryTasks.push(
+              getDocs(
+                query(
+                  collection(db, "design_request"),
+                  ...baseConstraints,
+                  where(field, ">=", startDot),
+                  where(field, "<=", endDot)
+                )
+              )
+            );
+
+            // "2026/01/31" 대응
+            queryTasks.push(
+              getDocs(
+                query(
+                  collection(db, "design_request"),
+                  ...baseConstraints,
+                  where(field, ">=", startSlash),
+                  where(field, "<=", endSlash)
+                )
+              )
+            );
+          });
+
+          const snapshots = await Promise.all(queryTasks);
+
+          // ★ 추가: 기간 필터로 Firestore가 반환한 문서 수 = 읽은 문서 수
+          const dateReadDocCount = snapshots.reduce(
+            (sum, snapshot) => sum + snapshot.docs.length,
+            0
+          );
+
+          directReadDocCount += dateReadDocCount; // ★ 추가
+
+          // ★ 추가: 기간 필터로 실제 Firestore에서 반환된 문서 수
+          // 같은 문서가 여러 쿼리에 중복으로 잡히면 중복 포함
+          const readDocCount = snapshots.reduce(
+            (sum, snapshot) => sum + snapshot.docs.length,
+            0
+          );
+
+          setFilterReadInfo({
+            readDocCount,
+          }); // ★ 추가
+
+          const dateRows: RequestData[] = snapshots.flatMap((snapshot) =>
+            snapshot.docs.map((docSnap: any) => ({
+              id: docSnap.id,
+              ...(docSnap.data() as Omit<RequestData, "id">),
+            }))
+          );
+
+          fetchedGroups.push(dateRows);
+        }
+
+        // ★ 검색어만 있는 경우: 문서번호 정확히 일치 직접 조회
+        if (!hasDateFilter && hasKeyword) {
+          const searchSnap = await getDocs(
+            query(
+              collection(db, "design_request"),
+              ...baseConstraints,
+              where("design_request_id", "==", q)
+            )
+          );
+
+          // ★ 추가: 검색 필터로 Firestore가 반환한 문서 수 = 읽은 문서 수
+          directReadDocCount += searchSnap.docs.length;
+
+          const searchRows: RequestData[] = searchSnap.docs.map((docSnap: any) => ({
+            id: docSnap.id,
+            ...(docSnap.data() as Omit<RequestData, "id">),
+          }));
+
+          fetchedGroups.push(searchRows);
+        }
+
+        const mergedRows = mergeRequestRows(...fetchedGroups);
+        setFilterReadInfo({ readDocCount: directReadDocCount });
+
+        if (cancelled) return;
+
+        setFilterFetchedRows(mergedRows);
+
+      } catch (error) {
+        console.error("Requester 요청기간/검색 직접 조회 오류:", error);
+
+        if (!cancelled) {
+          setFilterFetchedRows([]);
+          setFilterReadInfo({ readDocCount: 0 });
+        }
+      }
+    };
+
+    fetchFilteredRows();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [view, dateRange, keyword, userName, userCompany]);
 
   useEffect(() => {
     if (!statusFromAside) return;
@@ -274,7 +601,44 @@ export default function Requester({ view, requestRows, userRole, setIsDrawerOpen
 
       return true;
     });
-  }, [prepared, statusFilter, dateRange, keyword, deptFilter]); 
+  }, [prepared, statusFilter, dateRange, keyword, deptFilter]);
+  
+  useEffect(() => {
+    const hasDateFilter = !!(dateRange.start && dateRange.end);
+    const hasKeyword = !!keyword.trim();
+    const isFilterMode = hasDateFilter || hasKeyword;
+
+    const baseReadDocCount = isFilterMode ? 0 : dbCountInfo?.readDocCount ?? 0;
+    const filterReadDocCount = filterReadInfo.readDocCount;
+    const totalReadDocCount = baseReadDocCount + filterReadDocCount;
+
+    const totalCount = dbCountInfo?.totalCount ?? 0;
+    const unreadDocCount = Math.max(totalCount - totalReadDocCount, 0);
+
+    console.log("====== Requester 최종 viewList ======");
+    console.log("전체 DB 문서 수:", totalCount);
+    console.log("MainPage 기본 읽은 문서 수:", baseReadDocCount);
+    console.log("기간/검색 필터 직접 읽은 문서 수:", filterReadDocCount);
+    console.log("총 읽은 문서 수:", totalReadDocCount);
+    console.log("안 읽은 문서 수:", unreadDocCount);
+    console.log("현재 view:", view);
+    console.log("viewList 최종 표시 수:", viewList.length);
+    console.log("dateRange:", dateRange);
+    console.log("statusFilter:", statusFilter);
+    console.log("deptFilter:", deptFilter);
+    console.log("keyword:", keyword);
+    console.log("===================================");
+  }, [
+    dbCountInfo?.totalCount,
+    dbCountInfo?.readDocCount,
+    filterReadInfo.readDocCount,
+    view,
+    viewList.length,
+    dateRange,
+    statusFilter,
+    deptFilter,
+    keyword,
+  ]);
 
   const canMutate = (id: string, action: Action) => {
     const row = requests.find(r => r.id === id);
@@ -585,7 +949,7 @@ export default function Requester({ view, requestRows, userRole, setIsDrawerOpen
       <MainTitle userRole={userRole} />
       {view === "dashboard" && (
         <DashBoardWrap>
-          <DashBoard rows={requestRows} />
+          <DashBoard />
         </DashBoardWrap>
       )}
 
