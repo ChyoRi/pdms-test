@@ -124,59 +124,6 @@ const getOutWorkHourFromRequest = (data: any): number => {
   return sum;
 };
 
-// ★ 추가: 채널별 외부공수 DB 읽기 디버그 로그 ON/OFF
-const DEBUG_CHANNEL_WORK_HOUR_READ = true;
-
-// ★ 추가: 로그용 날짜 포맷
-const formatDateForLog = (v: any) => {
-  const d = parseDate(v);
-  if (!d) return v ?? null;
-  return d.toLocaleString();
-};
-
-// ★ 추가: assigned_designers 배열의 외부공수 합산값 확인용
-const getAssignedDesignerOutWorkHourSum = (data: any): number => {
-  const arr = Array.isArray(data?.assigned_designers)
-    ? data.assigned_designers
-    : [];
-
-  const sum = arr.reduce((acc: number, it: any) => {
-    const v = Number(it?.out_work_hour);
-    return acc + (Number.isNaN(v) ? 0 : v);
-  }, 0);
-
-  return round2(sum);
-};
-
-// ★ 추가: 어떤 필드에서 외부공수를 읽었는지 확인용
-const getOutWorkHourDebugFromRequest = (data: any) => {
-  const totalOut = Number(data?.total_out_work_hour);
-  const legacyOut = Number(data?.out_work_hour);
-  const assignedOutSum = getAssignedDesignerOutWorkHourSum(data);
-
-  let source = "none";
-  let calculatedOut = 0;
-
-  if (!Number.isNaN(totalOut) && totalOut > 0) {
-    source = "total_out_work_hour";
-    calculatedOut = totalOut;
-  } else if (!Number.isNaN(legacyOut) && legacyOut > 0) {
-    source = "out_work_hour";
-    calculatedOut = legacyOut;
-  } else if (assignedOutSum > 0) {
-    source = "assigned_designers[].out_work_hour";
-    calculatedOut = assignedOutSum;
-  }
-
-  return {
-    total_out_work_hour: Number.isNaN(totalOut) ? null : totalOut,
-    out_work_hour: Number.isNaN(legacyOut) ? null : legacyOut,
-    assigned_designers_out_sum: assignedOutSum,
-    calculated_out_work_hour: round2(calculatedOut),
-    out_source: source,
-  };
-};
-
 // dayOutSum 배열에서 cutoffDay까지 out 총합(주말 포함, 미래 제외)
 const sumOutUpTo = (arr: number[] | undefined, cutoffDay: number) => {
   if (!arr || cutoffDay <= 0) return 0;
@@ -215,38 +162,12 @@ export default function ChannelWorkHour({ targetDate }: { targetDate?: Date }) {
   useEffect(() => {
     const qRef = query(collection(db, "companies"));
 
-    // ★ 변경: companies 컬렉션도 실제 읽은 문서 수 확인 가능하도록 로그 추가
     const unSub = onSnapshot(qRef, (snap) => {
-      if (DEBUG_CHANNEL_WORK_HOUR_READ) {
-        console.log("[ChannelWorkHour] companies Firestore 실제 읽은 문서 수", {
-          collection: "companies",
-          readDocs: snap.docs.length,
-          queryType: "companies 전체 구독 후 pushcomz 제외",
-        });
-
-        console.table(
-          snap.docs.map((d) => {
-            const data = d.data() as any;
-
-            return {
-              id: d.id,
-              normalizedId: normalizeKey(d.id),
-              display_name: data?.display_name,
-              company_name: data?.company_name,
-              avail_hour: data?.avail_hour,
-              available_hour: data?.available_hour,
-              work_hour: data?.work_hour,
-              isExcluded: normalizeKey(d.id) === "pushcomz",
-            };
-          })
-        );
-      }
-
       const list = snap.docs
         .map((d) => ({ id: d.id, ...(d.data() as any) }))
         .filter((c) => normalizeKey(c.id) !== "pushcomz");
 
-      // ★ 변경: kyungdong을 항상 마지막으로 정렬
+      // ★ 유지: kyungdong을 항상 마지막으로 정렬
       list.sort((a, b) => {
         const ak = normalizeKey(a.id);
         const bk = normalizeKey(b.id);
@@ -270,14 +191,6 @@ export default function ChannelWorkHour({ targetDate }: { targetDate?: Date }) {
 
         nextAvail[key] = Number.isNaN(v) ? 0 : v;
       });
-
-      if (DEBUG_CHANNEL_WORK_HOUR_READ) {
-        console.log("[ChannelWorkHour] 채널 목록 / 월 가용공수 맵", {
-          channelCount: list.length,
-          channels: list.map((c) => normalizeKey(c.id)),
-          availMap: nextAvail,
-        });
-      }
 
       setAvailMap(nextAvail);
     });
@@ -310,40 +223,7 @@ export default function ChannelWorkHour({ targetDate }: { targetDate?: Date }) {
         where("request_date", "<", end)
       );
 
-      // ★ 추가: Firestore에 넘기는 실제 조회 조건 확인
-      if (DEBUG_CHANNEL_WORK_HOUR_READ) {
-        console.log("[ChannelWorkHour] Firestore query 조건", {
-          collection: "design_request",
-          year,
-          month: monthIndex + 1,
-          monthKey: mKey,
-          request_date_start: start.toLocaleString(),
-          request_date_end_exclusive: end.toLocaleString(),
-          queryType:
-            "전체 design_request 읽기 아님. request_date 월 범위에 맞는 문서만 실시간 구독",
-          conditions: [
-            `request_date >= ${start.toLocaleString()}`,
-            `request_date < ${end.toLocaleString()}`,
-          ],
-          channelCount: channels.length,
-          channels: channels.map((c) => normalizeKey(c.id)),
-        });
-      }
-
       const unSub = onSnapshot(qRef, (snap) => {
-        // ★ 추가: 실제 Firestore에서 현재 스냅샷으로 들어온 문서 수 확인
-        if (DEBUG_CHANNEL_WORK_HOUR_READ) {
-          console.log("[ChannelWorkHour] Firestore 실제 읽은 문서 수", {
-            collection: "design_request",
-            year,
-            month: monthIndex + 1,
-            monthKey: mKey,
-            readDocs: snap.docs.length,
-            queryType:
-              "onSnapshot 결과 문서 수. 최초 구독 시 조건에 맞는 문서들이 들어오고, 이후 변경 시 갱신됨",
-          });
-        }
-
         const byChannelDayOut: Record<string, number[]> = {};
         const totalByChannel: Record<string, number> = {};
 
@@ -353,37 +233,11 @@ export default function ChannelWorkHour({ targetDate }: { targetDate?: Date }) {
           totalByChannel[k] = 0;
         });
 
-        // ★ 추가: 읽힌 문서 상세 확인용 배열
-        const debugReadRows: any[] = [];
-
         snap.docs.forEach((docSnap) => {
           const data = docSnap.data() as any;
 
           const ck = getChannelKeyFromRequest(data);
           const rd = parseDate(data?.request_date);
-          const outDebug = getOutWorkHourDebugFromRequest(data);
-
-          // ★ 추가: 실제 읽힌 문서 상세 로그용
-          debugReadRows.push({
-            id: docSnap.id,
-            company: data?.company,
-            company_id: data?.company_id,
-            companyId: data?.companyId,
-            channel: data?.channel,
-            channelKey: data?.channelKey,
-            company_key: data?.company_key,
-            matchedChannelKey: ck,
-            isChannelMatched: !!ck && !!byChannelDayOut[ck],
-            status: data?.status,
-            request_date: formatDateForLog(data?.request_date),
-            requestDay: rd ? rd.getDate() : null,
-            task_form: data?.task_form,
-            assigned_designer: data?.assigned_designer,
-            assigned_designers_count: Array.isArray(data?.assigned_designers)
-              ? data.assigned_designers.length
-              : 0,
-            ...outDebug,
-          });
 
           if (!ck) return;
           if (!byChannelDayOut[ck]) return;
@@ -398,19 +252,6 @@ export default function ChannelWorkHour({ targetDate }: { targetDate?: Date }) {
           byChannelDayOut[ck][d - 1] += out;
           totalByChannel[ck] += out;
         });
-
-        // ★ 추가: 읽힌 문서 상세 table
-        if (DEBUG_CHANNEL_WORK_HOUR_READ) {
-          console.table(debugReadRows);
-
-          console.log("[ChannelWorkHour] month direct read", {
-            collection: "design_request",
-            year,
-            month: monthIndex + 1,
-            monthKey: mKey,
-            readDocs: snap.docs.length,
-          });
-        }
 
         const nextStatsForMonth: Record<
           string,
@@ -450,32 +291,6 @@ export default function ChannelWorkHour({ targetDate }: { targetDate?: Date }) {
             monthOut,
           };
         });
-
-        // ★ 추가: 채널별 최종 합산 결과 확인
-        if (DEBUG_CHANNEL_WORK_HOUR_READ) {
-          console.table(
-            channels.map((c) => {
-              const ck = normalizeKey(c.id);
-              const stat = nextStatsForMonth[ck];
-
-              return {
-                channel: c.id,
-                normalizedChannelKey: ck,
-                avail_hour: Number(availMap?.[ck] ?? 0),
-                monthOut: stat?.monthOut ?? 0,
-                monthRate: stat?.monthRate ?? 0,
-                dayOutSum: stat?.dayOutSum?.join(", "),
-              };
-            })
-          );
-
-          console.log("[ChannelWorkHour] channel summary", {
-            year,
-            month: monthIndex + 1,
-            monthKey: mKey,
-            channelCount: channels.length,
-          });
-        }
 
         setMonthStats((prevState) => ({
           ...prevState,

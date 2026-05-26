@@ -219,20 +219,6 @@ export default function InWorkHour({
           where("request_date", "<", endTs),
         ];
 
-        console.log("[InWorkHour] 선택 연월 DB 조회 조건", {
-          collection: "design_request",
-          year: selectedYear,
-          month: selectedMonth + 1,
-          request_date_start: startTs.toDate().toLocaleString(),
-          request_date_end_exclusive: endTs.toDate().toLocaleString(),
-          queryType:
-            "전체 design_request 읽기 아님. 선택 연월 request_date 문서만 조회",
-          conditions: [
-            `request_date >= ${startTs.toDate().toLocaleString()}`,
-            `request_date < ${endTs.toDate().toLocaleString()}`,
-          ],
-        });
-
         const snap = await getDocs(query(colRef, ...constraints));
 
         if (cancelled) return;
@@ -243,36 +229,6 @@ export default function InWorkHour({
         })) as RequestDoc[];
 
         setMonthDocs(list);
-
-        console.log("[InWorkHour] 선택 연월 실제 읽은 문서 수", {
-          year: selectedYear,
-          month: selectedMonth + 1,
-          readDocs: snap.docs.length,
-        });
-
-        console.table(
-          list.map((r: any) => ({
-            id: r.id,
-            company: r.company,
-            status: r.status,
-            request_date:
-              typeof r.request_date?.toDate === "function"
-                ? r.request_date.toDate().toLocaleString()
-                : r.request_date,
-            assigned_dates: Array.isArray(r.assigned_designers)
-              ? r.assigned_designers
-                  .filter((ad: any) => ad && typeof ad === "object")
-                  .map((ad: any) =>
-                    typeof ad.assigned_date?.toDate === "function"
-                      ? ad.assigned_date.toDate().toLocaleString()
-                      : ad.assigned_date
-                  )
-              : [],
-            assigned_designers_count: Array.isArray(r.assigned_designers)
-              ? r.assigned_designers.length
-              : 0,
-          }))
-        );
       } catch (error) {
         if (cancelled) return;
 

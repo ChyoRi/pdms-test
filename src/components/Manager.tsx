@@ -27,12 +27,6 @@ import { downloadArrayToCSV } from "../utils/firestoreToCSV";
 
 type ViewType = "dashboard" | "myrequestlist" | "allrequestlist" | "inworkhour" | "channelworkhour";
 
-type DbCountInfo = {
-  totalCount: number;
-  readDocCount: number;
-  unreadDocCount: number;
-};
-
 type GlobalFilterState = {
   hasDateFilter: boolean;
   hasKeyword: boolean;
@@ -41,7 +35,6 @@ type GlobalFilterState = {
 interface RequesterProps {
   view: ViewType;
   requestRows: RequestData[];
-  dbCountInfo?: DbCountInfo;
   onGlobalFilterChange?: (state: GlobalFilterState) => void;
   setIsDrawerOpen: (value: boolean) => void;
   setDetailData: (data: RequestData) => void;
@@ -119,7 +112,6 @@ const isSameMonth = (d: Date, base = new Date()) =>
 export default function Manager({
   view,
   requestRows,
-  dbCountInfo,
   onGlobalFilterChange,
   setIsDrawerOpen,
   setDetailData,
@@ -132,10 +124,6 @@ export default function Manager({
   const [requests, setRequests] = useState<RequestData[]>([]);
   // ★ 추가: 요청기간/검색 시 Firestore에서 직접 가져온 데이터
   const [filterFetchedRows, setFilterFetchedRows] = useState<RequestData[] | null>(null);
-  // ★ 추가: 기간/검색 직접 조회로 읽은 문서 수
-  const [filterReadInfo, setFilterReadInfo] = useState({
-    readDocCount: 0,
-  });
   const [/* designerList */, setDesignerList] = useState<any[]>([]);
   const [userUid, setUserUid] = useState("");
   const [/*managerName*/, setManagerName] = useState("");
@@ -223,7 +211,6 @@ export default function Manager({
     // 요청기간도 없고 검색어도 없으면 기본 데이터 사용
     if (!hasDateFilter && !hasKeyword) {
       setFilterFetchedRows(null);
-      setFilterReadInfo({ readDocCount: 0 });
       return;
     }
 
@@ -232,7 +219,6 @@ export default function Manager({
     const fetchFilteredRows = async () => {
       try {
         const fetchedGroups: RequestData[][] = [];
-        let directReadDocCount = 0;
 
         /**
          * ★ 요청기간 필터가 있으면:
@@ -305,13 +291,6 @@ export default function Manager({
 
           const snapshots = await Promise.all(queryTasks);
 
-          const dateReadDocCount = snapshots.reduce(
-            (sum, snapshot) => sum + snapshot.docs.length,
-            0
-          );
-
-          directReadDocCount += dateReadDocCount;
-
           const dateRows: RequestData[] = snapshots.flatMap((snapshot) =>
             snapshot.docs.map((docSnap: any) => ({
               id: docSnap.id,
@@ -335,8 +314,6 @@ export default function Manager({
             )
           );
 
-          directReadDocCount += searchSnap.docs.length;
-
           const searchRows: RequestData[] = searchSnap.docs.map((docSnap: any) => ({
             id: docSnap.id,
             ...(docSnap.data() as Omit<RequestData, "id">),
@@ -351,19 +328,17 @@ export default function Manager({
          * - 기존 active 데이터 검색 유지
          * - 직접 조회된 완료/취소 데이터 추가
          */
-        const mergedRows = mergeRequestRows(...fetchedGroups);
+        const mergedRows = mergeRequestRows(requestRows, ...fetchedGroups);
 
         if (cancelled) return;
 
         setFilterFetchedRows(mergedRows);
-        setFilterReadInfo({ readDocCount: directReadDocCount });
       } catch (error) {
         console.error("Manager 필터 직접 조회 오류:", error);
 
         if (!cancelled) {
           // 에러 발생 시 기존 기본 데이터라도 유지
           setFilterFetchedRows(requestRows);
-          setFilterReadInfo({ readDocCount: 0 });
         }
       }
     };
@@ -724,49 +699,6 @@ export default function Manager({
     keyword,
   ]);
 
-  useEffect(() => {
-    const hasDateFilter = !!(dateRange.start && dateRange.end);
-    const hasKeyword = !!keyword.trim();
-    const isFilterMode = hasDateFilter || hasKeyword;
-
-    const baseReadDocCount = isFilterMode ? 0 : dbCountInfo?.readDocCount ?? 0;
-    const filterReadDocCount = filterReadInfo.readDocCount;
-    const totalReadDocCount = baseReadDocCount + filterReadDocCount;
-
-    const totalCount = dbCountInfo?.totalCount ?? 0;
-    const unreadDocCount = Math.max(totalCount - totalReadDocCount, 0);
-
-    console.log("====== Manager 최종 viewList ======");
-    console.log("전체 DB 문서 수:", totalCount);
-    console.log("MainPage 기본 읽은 문서 수:", baseReadDocCount);
-    console.log("기간/검색 필터 직접 읽은 문서 수:", filterReadDocCount);
-    console.log("총 읽은 문서 수:", totalReadDocCount);
-    console.log("안 읽은 문서 수:", unreadDocCount);
-    console.log("현재 view:", view);
-    console.log("requests:", requests.length);
-    console.log("viewList 최종 표시 수:", viewList.length);
-    console.log("dateRange:", dateRange);
-    console.log("statusFilter:", statusFilter);
-    console.log("requesterFilter:", requesterFilter);
-    console.log("designerFilter:", designerFilter);
-    console.log("companyFilter:", companyFilter);
-    console.log("keyword:", keyword);
-    console.log("===================================");
-  }, [
-    dbCountInfo?.totalCount,
-    dbCountInfo?.readDocCount,
-    filterReadInfo.readDocCount,
-    view,
-    requests.length,
-    viewList.length,
-    dateRange,
-    statusFilter,
-    requesterFilter,
-    designerFilter,
-    companyFilter,
-    keyword,
-  ]);
-
   // ★ 추가: 기간/검색 필터 상태를 MainPage로 올림
   useEffect(() => {
     const hasDateFilter = !!(dateRange.start && dateRange.end);
@@ -776,7 +708,11 @@ export default function Manager({
 
     onGlobalFilterChange?.({
       hasDateFilter: isListView && hasDateFilter,
-      hasKeyword: isListView && hasKeyword,
+
+      // ★ 변경:
+      // keyword 단독 검색은 부모 기본 조회를 끊으면 안 됨
+      // 기간 필터가 있을 때는 어차피 hasDateFilter가 true라 직접 조회 모드로 들어감
+      hasKeyword: isListView && hasDateFilter && hasKeyword,
     });
   }, [view, dateRange.start, dateRange.end, keyword, onGlobalFilterChange]);
 

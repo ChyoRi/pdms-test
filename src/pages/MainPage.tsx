@@ -19,7 +19,6 @@ import {
   where,
   onSnapshot,
   Timestamp,
-  getCountFromServer
 } from "firebase/firestore";
 import AssignDesigner from "../components/AssignDesigner";
 import type { AssignedDesigner } from "../components/AssignDesigner";
@@ -321,13 +320,6 @@ export default function MainPage() {
   // MainPage 상단 state
   const [canSwitchAccount, setCanSwitchAccount] = useState(false);
 
-  // ★ 추가: DB 전체 문서 수 / 현재 가져온 문서 수 비교용
-  const [dbCountInfo, setDbCountInfo] = useState({
-    totalCount: 0,
-    readDocCount: 0,
-    unreadDocCount: 0,
-  });
-
   // ★ 추가: 자식 화면에서 기간/검색 필터가 켜졌는지 MainPage가 알기 위한 상태
   const [globalFilterState, setGlobalFilterState] = useState({
     hasDateFilter: false,
@@ -352,15 +344,6 @@ export default function MainPage() {
     setSwitchOpen(true);
   };
   const closeSwitchAccount = () => setSwitchOpen(false);
-
-  // ★ 추가: design_request 전체 문서 수 조회
-  const getTotalDesignRequestCount = async () => {
-    const countSnapshot = await getCountFromServer(
-      collection(db, "design_request")
-    );
-
-    return countSnapshot.data().count;
-  };
 
   /**
    * ★ 변경:
@@ -457,18 +440,6 @@ export default function MainPage() {
     if (isFilterMode) {
       setRequests([]);
       setFullRequests([]);
-
-      setDbCountInfo((prev) => ({
-        totalCount: prev.totalCount,
-        readDocCount: 0,
-        unreadDocCount: prev.totalCount,
-      }));
-
-      console.log("====== MainPage 기본 조회 중단 ======");
-      console.log("사유: 기간/검색 필터 모드");
-      console.log("hasDateFilter:", globalFilterState.hasDateFilter);
-      console.log("hasKeyword:", globalFilterState.hasKeyword);
-      console.log("===================================");
 
       return;
     }
@@ -600,7 +571,7 @@ export default function MainPage() {
       setRequests(filteredFull.map(toRequestLite));
     };
 
-    const emitMergedRows = async () => {
+    const emitMergedRows = () => {
       // 모든 쿼리가 최초 1회는 로드된 뒤 화면 반영
       if (!loaded.every(Boolean)) return;
 
@@ -613,28 +584,6 @@ export default function MainPage() {
       });
 
       const mergedRows = Array.from(merged.values());
-
-      // ★ 변경: Firestore가 실제 반환한 문서 수 = 읽은 문서 수
-      const readDocCount = latestMaps.reduce(
-        (sum, map) => sum + map.size,
-        0
-      );
-
-      const totalCount = await getTotalDesignRequestCount();
-      const unreadDocCount = Math.max(totalCount - readDocCount, 0);
-
-      setDbCountInfo({
-        totalCount,
-        readDocCount,
-        unreadDocCount,
-      });
-      console.log("====== design_request DB 비교 ======");
-      console.log("전체 DB 문서 수:", totalCount);
-      console.log("읽은 문서 수:", readDocCount);
-      console.log("안 읽은 문서 수:", unreadDocCount);
-      console.log("현재 view:", currentView);
-      console.log("현재 role:", role);
-      console.log("===================================");
 
       applyRowsToState(mergedRows);
     };
@@ -786,7 +735,6 @@ export default function MainPage() {
         <Main
           userRole={userRole}
           requestRows={fullRequests}
-          dbCountInfo={dbCountInfo}
           setIsDrawerOpen={setIsDrawerOpen}
           onGlobalFilterChange={setGlobalFilterState}
           setEditData={(data: RequestData) => {

@@ -14,12 +14,6 @@ import { addHistoryComment } from "../utils/commentHistory";
 
 type ViewType = "dashboard" | "myrequestlist" | "allrequestlist" | "inworkhour";
 
-type DbCountInfo = {
-  totalCount: number;
-  readDocCount: number;
-  unreadDocCount: number;
-};
-
 type GlobalFilterState = {
   hasDateFilter: boolean;
   hasKeyword: boolean;
@@ -28,7 +22,6 @@ type GlobalFilterState = {
 interface RequesterProps {
   view: ViewType;
   requestRows: RequestData[];
-  dbCountInfo?: DbCountInfo;
   onGlobalFilterChange?: (state: GlobalFilterState) => void;
   setIsDrawerOpen: (value: boolean) => void;
   setEditData: (data: RequestData) => void;
@@ -104,17 +97,13 @@ const round3 = (n: number) => Math.round((Number(n) || 0) * 1000) / 1000;
 const isSameMonth = (d: Date, base = new Date()) =>
   d.getFullYear() === base.getFullYear() && d.getMonth() === base.getMonth();
 
-export default function Requester({ view, requestRows, dbCountInfo, onGlobalFilterChange, userRole, setIsDrawerOpen, setEditData, setDetailData, statusFromAside, clearStatusFromAside, filterResetKey }: RequesterProps) {
+export default function Requester({ view, requestRows, onGlobalFilterChange, userRole, setIsDrawerOpen, setEditData, setDetailData, statusFromAside, clearStatusFromAside, filterResetKey }: RequesterProps) {
   const [userName, setUserName] = useState("");
   const [userCompany, setUserCompany] = useState<string>("");
   const [userUid, setUserUid]   = useState("");
   const [requests, setRequests] = useState<RequestData[]>([]); // request DB 배열
   // ★ 추가: 요청기간/검색 시 Firestore에서 직접 가져온 데이터
   const [filterFetchedRows, setFilterFetchedRows] = useState<RequestData[] | null>(null);
-  // ★ 추가: 기간/검색 직접 조회로 Firestore에서 읽은 문서 수
-  const [filterReadInfo, setFilterReadInfo] = useState({
-    readDocCount: 0,
-  });
   const [statusFilter, setStatusFilter] = useState<string>("진행 상태 선택");
   const [dateRange, setDateRange] = useState<{ start: Date | null; end: Date | null }>({ start: null, end: null });
   const [deptFilter, setDeptFilter] = useState<string>(DEFAULT_DEPT);
@@ -158,7 +147,6 @@ export default function Requester({ view, requestRows, dbCountInfo, onGlobalFilt
 
       // ★ 중요: 기간/검색 직접 조회 데이터 초기화
       setFilterFetchedRows(null);
-      setFilterReadInfo({ readDocCount: 0 });
 
       // ★ 중요: MainPage 기본 조회 중단 상태 해제
       onGlobalFilterChange?.({
@@ -193,7 +181,7 @@ export default function Requester({ view, requestRows, dbCountInfo, onGlobalFilt
 
     onGlobalFilterChange?.({
       hasDateFilter: isListView && hasDateFilter,
-      hasKeyword: isListView && hasKeyword,
+      hasKeyword: isListView && hasDateFilter && hasKeyword,
     });
   }, [view, dateRange.start, dateRange.end, keyword, onGlobalFilterChange]);
 
@@ -304,13 +292,11 @@ export default function Requester({ view, requestRows, dbCountInfo, onGlobalFilt
     if (skipFilterFetchOnceRef.current) {
       skipFilterFetchOnceRef.current = false;
       setFilterFetchedRows(null);
-      setFilterReadInfo({ readDocCount: 0 });
       return;
     }
-    
+
     if (view === "dashboard" || view === "inworkhour") {
       setFilterFetchedRows(null);
-      setFilterReadInfo({ readDocCount: 0 });
       return;
     }
 
@@ -321,7 +307,6 @@ export default function Requester({ view, requestRows, dbCountInfo, onGlobalFilt
     // 요청기간도 없고 검색어도 없으면 기본 데이터 사용
     if (!hasDateFilter && !hasKeyword) {
       setFilterFetchedRows(null);
-      setFilterReadInfo({ readDocCount: 0 });
       return;
     }
 
@@ -330,27 +315,27 @@ export default function Requester({ view, requestRows, dbCountInfo, onGlobalFilt
     const fetchFilteredRows = async () => {
       try {
         const fetchedGroups: RequestData[][] = [];
-        let directReadDocCount = 0;
+
         // ★ 추가: 요청자 화면 필터 직접 조회용 기본 조건
         const baseConstraints: any[] = [];
 
         if (view === "myrequestlist") {
-            // 나의 요청 리스트: 내 요청 + 내 회사만 DB에서 조회
-            if (userName) {
-              baseConstraints.push(where("requester", "==", userName));
-            }
-
-            if (userCompany) {
-              baseConstraints.push(where("company", "==", userCompany));
-            }
+          // 나의 요청 리스트: 내 요청 + 내 회사만 DB에서 조회
+          if (userName) {
+            baseConstraints.push(where("requester", "==", userName));
           }
 
-          if (view === "allrequestlist") {
-            // 전체 요청 리스트: 내 회사 전체만 DB에서 조회
-            if (userCompany) {
-              baseConstraints.push(where("company", "==", userCompany));
-            }
+          if (userCompany) {
+            baseConstraints.push(where("company", "==", userCompany));
           }
+        }
+
+        if (view === "allrequestlist") {
+          // 전체 요청 리스트: 내 회사 전체만 DB에서 조회
+          if (userCompany) {
+            baseConstraints.push(where("company", "==", userCompany));
+          }
+        }
 
         // ★ 요청기간 필터가 있으면 해당 기간 전체 조회
         // status 조건을 넣지 않으므로 완료/취소 포함
@@ -424,25 +409,6 @@ export default function Requester({ view, requestRows, dbCountInfo, onGlobalFilt
 
           const snapshots = await Promise.all(queryTasks);
 
-          // ★ 추가: 기간 필터로 Firestore가 반환한 문서 수 = 읽은 문서 수
-          const dateReadDocCount = snapshots.reduce(
-            (sum, snapshot) => sum + snapshot.docs.length,
-            0
-          );
-
-          directReadDocCount += dateReadDocCount; // ★ 추가
-
-          // ★ 추가: 기간 필터로 실제 Firestore에서 반환된 문서 수
-          // 같은 문서가 여러 쿼리에 중복으로 잡히면 중복 포함
-          const readDocCount = snapshots.reduce(
-            (sum, snapshot) => sum + snapshot.docs.length,
-            0
-          );
-
-          setFilterReadInfo({
-            readDocCount,
-          }); // ★ 추가
-
           const dateRows: RequestData[] = snapshots.flatMap((snapshot) =>
             snapshot.docs.map((docSnap: any) => ({
               id: docSnap.id,
@@ -463,9 +429,6 @@ export default function Requester({ view, requestRows, dbCountInfo, onGlobalFilt
             )
           );
 
-          // ★ 추가: 검색 필터로 Firestore가 반환한 문서 수 = 읽은 문서 수
-          directReadDocCount += searchSnap.docs.length;
-
           const searchRows: RequestData[] = searchSnap.docs.map((docSnap: any) => ({
             id: docSnap.id,
             ...(docSnap.data() as Omit<RequestData, "id">),
@@ -474,19 +437,16 @@ export default function Requester({ view, requestRows, dbCountInfo, onGlobalFilt
           fetchedGroups.push(searchRows);
         }
 
-        const mergedRows = mergeRequestRows(...fetchedGroups);
-        setFilterReadInfo({ readDocCount: directReadDocCount });
+        const mergedRows = mergeRequestRows(requestRows, ...fetchedGroups);
 
         if (cancelled) return;
 
         setFilterFetchedRows(mergedRows);
-
       } catch (error) {
         console.error("Requester 요청기간/검색 직접 조회 오류:", error);
 
         if (!cancelled) {
           setFilterFetchedRows([]);
-          setFilterReadInfo({ readDocCount: 0 });
         }
       }
     };
@@ -496,12 +456,12 @@ export default function Requester({ view, requestRows, dbCountInfo, onGlobalFilt
     return () => {
       cancelled = true;
     };
-  }, [view, dateRange, keyword, userName, userCompany]);
+  }, [view, dateRange, keyword, requestRows, userName, userCompany]);
 
   useEffect(() => {
     if (!statusFromAside) return;
     setStatusFilter(statusFromAside);
-  }, [statusFromAside])
+  }, [statusFromAside]);
 
   // 필터 적용 콜백 (하위에서 올라옴)
   const applyRange  = (r: { start: Date | null; end: Date | null }) => setDateRange(r); // ⬅️ 추가
@@ -574,13 +534,17 @@ export default function Requester({ view, requestRows, dbCountInfo, onGlobalFilt
         if (String(r.task_form ?? "") !== deptFilter) return false;
       }
 
+      // ★ 요청기간 필터
       if (dateFilterOn) {
         const rd =
           parseLoose(r.request_date) ||
           parseLoose(r.requested_at) ||
           parseLoose(r.requestDate);
+
         if (!rd || rd < s! || rd > e!) return false;
       } else {
+        // ★ 기본 화면 정책:
+        // 요청기간이 없고, 검색어도 없을 때만 과거 완료/취소 숨김
         const cd =
           parseLoose(r.completion_date) ||
           parseLoose((r as any).complete_date) ||
@@ -589,57 +553,24 @@ export default function Requester({ view, requestRows, dbCountInfo, onGlobalFilt
         const completedThisMonth = cd ? isSameMonth(cd, today) : false;
 
         if (!searchOn && !completedThisMonth && isDone) return false;
-
-        if (
-          statusFilter !== DEFAULT_STATUS &&
-          r.displayStatus !== statusFilter
-        )
-          return false;
       }
 
+      // ★ 변경:
+      // 상태 필터는 요청기간 여부와 관계없이 항상 적용
+      if (
+        statusFilter !== DEFAULT_STATUS &&
+        r.displayStatus !== statusFilter
+      ) {
+        return false;
+      }
+
+      // 검색어 필터
       if (q && !matchesQuery(r, q)) return false;
 
       return true;
     });
   }, [prepared, statusFilter, dateRange, keyword, deptFilter]);
   
-  useEffect(() => {
-    const hasDateFilter = !!(dateRange.start && dateRange.end);
-    const hasKeyword = !!keyword.trim();
-    const isFilterMode = hasDateFilter || hasKeyword;
-
-    const baseReadDocCount = isFilterMode ? 0 : dbCountInfo?.readDocCount ?? 0;
-    const filterReadDocCount = filterReadInfo.readDocCount;
-    const totalReadDocCount = baseReadDocCount + filterReadDocCount;
-
-    const totalCount = dbCountInfo?.totalCount ?? 0;
-    const unreadDocCount = Math.max(totalCount - totalReadDocCount, 0);
-
-    console.log("====== Requester 최종 viewList ======");
-    console.log("전체 DB 문서 수:", totalCount);
-    console.log("MainPage 기본 읽은 문서 수:", baseReadDocCount);
-    console.log("기간/검색 필터 직접 읽은 문서 수:", filterReadDocCount);
-    console.log("총 읽은 문서 수:", totalReadDocCount);
-    console.log("안 읽은 문서 수:", unreadDocCount);
-    console.log("현재 view:", view);
-    console.log("viewList 최종 표시 수:", viewList.length);
-    console.log("dateRange:", dateRange);
-    console.log("statusFilter:", statusFilter);
-    console.log("deptFilter:", deptFilter);
-    console.log("keyword:", keyword);
-    console.log("===================================");
-  }, [
-    dbCountInfo?.totalCount,
-    dbCountInfo?.readDocCount,
-    filterReadInfo.readDocCount,
-    view,
-    viewList.length,
-    dateRange,
-    statusFilter,
-    deptFilter,
-    keyword,
-  ]);
-
   const canMutate = (id: string, action: Action) => {
     const row = requests.find(r => r.id === id);
     if (!row) return false;

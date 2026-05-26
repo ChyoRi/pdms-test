@@ -11,12 +11,6 @@ import { makeSearchIndex, matchesQuery } from "../utils/search";
 
 type ViewType = "dashboard" | "myrequestlist" | "allrequestlist" | "inworkhour";
 
-type DbCountInfo = {
-  totalCount: number;
-  readDocCount: number;
-  unreadDocCount: number;
-};
-
 type GlobalFilterState = {
   hasDateFilter: boolean;
   hasKeyword: boolean;
@@ -25,7 +19,6 @@ type GlobalFilterState = {
 interface RequesterProps {
   view: ViewType;
   requestRows: RequestData[];
-  dbCountInfo?: DbCountInfo;
   onGlobalFilterChange?: (state: GlobalFilterState) => void;
   userRole: number | null;
   setIsDrawerOpen: (value: boolean) => void;
@@ -150,14 +143,10 @@ const normalizeAssignedDesigners = (raw: any): AssignedDesignerLike[] => {
   return [];
 };
 
-export default function Designer({ view, userRole, requestRows, dbCountInfo, onGlobalFilterChange, setIsDrawerOpen, setDetailData, statusFromAside, clearStatusFromAside, filterResetKey }: RequesterProps) {
+export default function Designer({ view, userRole, requestRows, onGlobalFilterChange, setIsDrawerOpen, setDetailData, statusFromAside, clearStatusFromAside, filterResetKey }: RequesterProps) {
   const [assignedRequests, setAssignedRequests] = useState<DesignRequest[]>([]);
   // ★ 추가: 요청기간/검색 시 Firestore에서 직접 가져온 데이터
   const [filterFetchedRows, setFilterFetchedRows] = useState<RequestData[] | null>(null);
-  // ★ 추가: 기간/검색 직접 조회로 읽은 문서 수
-  const [filterReadInfo, setFilterReadInfo] = useState({
-    readDocCount: 0,
-  });
   const [designerName, setDesignerName] = useState(""); // ✅ 로그인 디자이너 이름
   const [userUid, setUserUid]   = useState("");
   const [formData, setFormData] = useState<{ [key: string]: RowForm  }>({});
@@ -194,7 +183,6 @@ export default function Designer({ view, userRole, requestRows, dbCountInfo, onG
 
       // ★ 중요: 기간/검색 직접 조회 데이터 초기화
       setFilterFetchedRows(null);
-      setFilterReadInfo({ readDocCount: 0 });
 
       // ★ 중요: MainPage 기본 조회 중단 상태 해제
       onGlobalFilterChange?.({
@@ -292,7 +280,6 @@ export default function Designer({ view, userRole, requestRows, dbCountInfo, onG
     // 요청기간도 없고 검색어도 없으면 기본 데이터 사용
     if (!hasDateFilter && !hasKeyword) {
       setFilterFetchedRows(null);
-      setFilterReadInfo({ readDocCount: 0 });
       return;
     }
 
@@ -301,8 +288,8 @@ export default function Designer({ view, userRole, requestRows, dbCountInfo, onG
     const fetchFilteredRows = async () => {
       try {
         const fetchedGroups: RequestData[][] = [];
-        let directReadDocCount = 0;
-        // ★ 추가: 요청자 화면 필터 직접 조회용 기본 조건
+
+        // ★ 추가: 디자이너 화면 필터 직접 조회용 기본 조건
         const baseConstraints: any[] = [];
 
         if (view === "myrequestlist") {
@@ -389,13 +376,6 @@ export default function Designer({ view, userRole, requestRows, dbCountInfo, onG
 
           const snapshots = await Promise.all(queryTasks);
 
-          const dateReadDocCount = snapshots.reduce(
-            (sum, snapshot) => sum + snapshot.docs.length,
-            0
-          );
-
-          directReadDocCount += dateReadDocCount;
-
           const dateRows: RequestData[] = snapshots.flatMap((snapshot) =>
             snapshot.docs.map((docSnap: any) => ({
               id: docSnap.id,
@@ -416,8 +396,6 @@ export default function Designer({ view, userRole, requestRows, dbCountInfo, onG
             )
           );
 
-          directReadDocCount += searchSnap.docs.length;
-
           const searchRows: RequestData[] = searchSnap.docs.map((docSnap: any) => ({
             id: docSnap.id,
             ...(docSnap.data() as Omit<RequestData, "id">),
@@ -426,18 +404,16 @@ export default function Designer({ view, userRole, requestRows, dbCountInfo, onG
           fetchedGroups.push(searchRows);
         }
 
-        const mergedRows = mergeRequestRows(...fetchedGroups);
+        const mergedRows = mergeRequestRows(requestRows, ...fetchedGroups);
 
         if (cancelled) return;
 
         setFilterFetchedRows(mergedRows);
-        setFilterReadInfo({ readDocCount: directReadDocCount });
       } catch (error) {
         console.error("Designer 요청기간/검색 직접 조회 오류:", error);
 
         if (!cancelled) {
           setFilterFetchedRows(requestRows);
-          setFilterReadInfo({ readDocCount: 0 });
         }
       }
     };
@@ -447,7 +423,7 @@ export default function Designer({ view, userRole, requestRows, dbCountInfo, onG
     return () => {
       cancelled = true;
     };
-  }, [view, dateRange, keyword, requestRows]);
+  }, [view, dateRange, keyword, requestRows, userUid, designerName]);
   
   // 회사 옵션 = companies 컬렉션 문서(company_name)로 구성
   useEffect(() => {
@@ -615,36 +591,42 @@ export default function Designer({ view, userRole, requestRows, dbCountInfo, onG
 
       if (!isVisibleForDesigner(r, designerName, view)) return false;
 
+      // ★ 요청기간 필터
       if (dateFilterOn) {
         const rd =
           parseLoose(r.request_date) ||
           parseLoose(r.requested_at) ||
           parseLoose(r.requestDate);
+
         if (!rd || rd < s! || rd > e!) return false;
       } else {
+        // ★ 기본 화면 정책: 검색어가 없을 때만 과거 완료/취소 숨김
         const cd =
           parseLoose((r as any).completion_date) ||
           parseLoose((r as any).complete_date) ||
           null;
+
         const completedThisMonth = cd ? isSameMonth(cd, today) : false;
 
         if (!searchOn && !completedThisMonth && isDone) return false;
-
-        if (statusFilter !== DEFAULT_STATUS && r.displayStatus !== statusFilter) {
-          return false;
-        }
       }
 
+      // ★ 변경: 상태 필터는 요청기간 여부와 관계없이 항상 적용
+      if (statusFilter !== DEFAULT_STATUS && r.displayStatus !== statusFilter) {
+        return false;
+      }
+
+      // ★ 회사 필터
       if (companyFilter !== DEFAULT_COMPANY) {
         if (companyKey(r.company) !== companyKey(companyFilter)) return false;
       }
 
+      // ★ 검색어 필터
       if (q && !matchesQuery(r, q)) return false;
 
       return true;
     });
 
-    // ★ 추가: 필터링 끝난 뒤 정렬 적용
     return sortByCompletion(filtered, completionSort);
   }, [
     preparedNormalized,
@@ -654,50 +636,7 @@ export default function Designer({ view, userRole, requestRows, dbCountInfo, onG
     keyword,
     view,
     designerName,
-    completionSort, // ★ 추가
-  ]);
-
-  useEffect(() => {
-    const hasDateFilter = !!(dateRange.start && dateRange.end);
-    const hasKeyword = !!keyword.trim();
-    const isFilterMode = hasDateFilter || hasKeyword;
-
-    const baseReadDocCount = isFilterMode ? 0 : dbCountInfo?.readDocCount ?? 0;
-    const filterReadDocCount = filterReadInfo.readDocCount;
-    const totalReadDocCount = baseReadDocCount + filterReadDocCount;
-
-    const totalCount = dbCountInfo?.totalCount ?? 0;
-    const unreadDocCount = Math.max(totalCount - totalReadDocCount, 0);
-
-    console.log("====== Designer 최종 viewList ======");
-    console.log("전체 DB 문서 수:", totalCount);
-    console.log("MainPage 기본 읽은 문서 수:", baseReadDocCount);
-    console.log("기간/검색 필터 직접 읽은 문서 수:", filterReadDocCount);
-    console.log("총 읽은 문서 수:", totalReadDocCount);
-    console.log("안 읽은 문서 수:", unreadDocCount);
-    console.log("현재 view:", view);
-    console.log("assignedRequests:", assignedRequests.length);
-    console.log("viewList 최종 표시 수:", viewList.length);
-    console.log("dateRange:", dateRange);
-    console.log("statusFilter:", statusFilter);
-    console.log("companyFilter:", companyFilter);
-    console.log("completionSort:", completionSort);
-    console.log("keyword:", keyword);
-    console.log("designerName:", designerName);
-    console.log("===================================");
-  }, [
-    dbCountInfo?.totalCount,
-    dbCountInfo?.readDocCount,
-    filterReadInfo.readDocCount,
-    view,
-    assignedRequests.length,
-    viewList.length,
-    dateRange,
-    statusFilter,
-    companyFilter,
     completionSort,
-    keyword,
-    designerName
   ]);
 
   // ★ 추가: 기간/검색 필터 상태를 MainPage로 올림
@@ -709,7 +648,11 @@ export default function Designer({ view, userRole, requestRows, dbCountInfo, onG
 
     onGlobalFilterChange?.({
       hasDateFilter: isListView && hasDateFilter,
-      hasKeyword: isListView && hasKeyword,
+
+      // ★ 변경:
+      // keyword 단독 검색은 기본 requestRows를 유지해야 함
+      // 기간 + 검색 조합일 때는 hasDateFilter가 true라 직접 조회 기준으로 동작
+      hasKeyword: isListView && hasDateFilter && hasKeyword,
     });
   }, [view, dateRange.start, dateRange.end, keyword, onGlobalFilterChange]);
 

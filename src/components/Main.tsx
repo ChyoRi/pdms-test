@@ -5,12 +5,6 @@ import Manager from "./Manager";
 import { useSearchParams } from "react-router-dom";
 import { useEffect } from "react";
 
-// ★ 추가: MainPage에서 내려받는 DB 카운트 정보 타입
-type DbCountInfo = {
-  totalCount: number;
-  readDocCount: number;
-  unreadDocCount: number;
-};
 
 // ★ 추가: MainPage 기본 조회 중단 여부 판단용 필터 상태
 type GlobalFilterState = {
@@ -21,7 +15,6 @@ type GlobalFilterState = {
 interface MainProps {
   userRole: number | null;
   requestRows: RequestData[];
-  dbCountInfo: DbCountInfo;
   onGlobalFilterChange: (state: GlobalFilterState) => void;
   setIsDrawerOpen: (value: boolean) => void;
   setEditData: (data: RequestData) => void;
@@ -60,7 +53,7 @@ const toCommonView = (view: ViewType): CommonViewType => {
   return "dashboard";
 };
 
-export default function Main({ userRole, requestRows, dbCountInfo, onGlobalFilterChange, setIsDrawerOpen, setEditData, setDetailData, statusFromAside, clearStatusFromAside, filterResetKey, onOpenAssignDesigner }: MainProps) {
+export default function Main({ userRole, requestRows, onGlobalFilterChange, setIsDrawerOpen, setEditData, setDetailData, statusFromAside, clearStatusFromAside, filterResetKey, onOpenAssignDesigner }: MainProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const view = (searchParams.get("view") || "dashboard") as ViewType;
 
@@ -85,7 +78,6 @@ export default function Main({ userRole, requestRows, dbCountInfo, onGlobalFilte
         <Requester
           view={requesterView}
           userRole={userRole}
-          dbCountInfo={dbCountInfo}
           onGlobalFilterChange={onGlobalFilterChange}
           requestRows={requestRows}
           setIsDrawerOpen={setIsDrawerOpen}
@@ -106,7 +98,6 @@ export default function Main({ userRole, requestRows, dbCountInfo, onGlobalFilte
         <Designer
           view={designerView}
           userRole={userRole}
-          dbCountInfo={dbCountInfo}
           onGlobalFilterChange={onGlobalFilterChange}
           requestRows={requestRows}
           setIsDrawerOpen={setIsDrawerOpen}
@@ -124,7 +115,6 @@ export default function Main({ userRole, requestRows, dbCountInfo, onGlobalFilte
         <Manager
           view={view}
           userRole={userRole}
-          dbCountInfo={dbCountInfo}
           onGlobalFilterChange={onGlobalFilterChange}
           requestRows={requestRows}
           setIsDrawerOpen={setIsDrawerOpen}

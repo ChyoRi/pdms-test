@@ -9,12 +9,17 @@ import { Chart, registerables } from "chart.js";
 import ChartDataLabels from "chartjs-plugin-datalabels";
 Chart.register(...registerables, ChartDataLabels);
 
+type AvailHourRow = {
+  year_month: string;
+  avail_hour: number;
+};
+
 type CompanyDoc = {
   id: string;
   company_name: string;
   logo_url?: string;
   signup_active?: boolean;
-  avail_hour?: number;
+  avail_hour?: AvailHourRow[];
 };
 
 type RD = RequestData;
@@ -46,6 +51,27 @@ function getMonthTimestampRange(y: number, m: number) {
     startTs: Timestamp.fromDate(start),
     endTs: Timestamp.fromDate(end),
   };
+}
+
+// 선택 연월 key 생성
+function getYearMonthKey_(y: number, m: number) {
+  return `${y}-${String(m).padStart(2, "0")}`;
+}
+
+// Firestore year_month 값 정규화
+function normalizeYearMonthKey_(v: unknown): string {
+  const t = String(v ?? "").trim();
+  if (!t) return "";
+
+  // 2026-05
+  const m1 = t.match(/^(\d{4})-(\d{1,2})$/);
+  if (m1) return `${m1[1]}-${String(Number(m1[2])).padStart(2, "0")}`;
+
+  // 2026-05-01 같은 값이 들어와도 2026-05로 변환
+  const m2 = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (m2) return `${m2[1]}-${String(Number(m2[2])).padStart(2, "0")}`;
+
+  return t;
 }
 
 // task_type 정규화(제로폭 공백 제거 + 연속 공백 정리)
@@ -266,26 +292,56 @@ export default function DashBoard({ rows = [] }: DashBoardProps) {
   useEffect(() => {
     const unsub = onSnapshot(query(collection(db, "companies")), (snap) => {
       const list: CompanyDoc[] = [];
+
       snap.forEach((d) => {
         const data = d.data() as any;
         const id = String(d.id || "");
+
         if (id === "pushcomz") return;
         if (data?.signup_active === false) return;
+
+        // ★ 추가: Firestore avail_hour 배열 파싱
+        // Firestore 구조:
+        // avail_hour: [
+        //   { year_month: "2026-05", avail_hour: 656 }
+        // ]
+        const availHourList: AvailHourRow[] = Array.isArray(data?.avail_hour)
+          ? data.avail_hour
+              .map((row: any) => {
+                const yearMonth = normalizeYearMonthKey_(row?.year_month);
+                const hour = Number(row?.avail_hour);
+
+                return {
+                  year_month: yearMonth,
+                  avail_hour: hour,
+                };
+              })
+              .filter((row: AvailHourRow) => {
+                return (
+                  !!row.year_month &&
+                  Number.isFinite(row.avail_hour) &&
+                  row.avail_hour > 0
+                );
+              })
+          : [];
 
         list.push({
           id,
           company_name: String(data?.company_name ?? id),
           logo_url: data?.logo_url ? String(data.logo_url) : undefined,
           signup_active: Boolean(data?.signup_active),
-          avail_hour: Number.isFinite(Number(data?.avail_hour)) ? Number(data?.avail_hour) : undefined,
+          avail_hour: availHourList, // ★ 변경: 월별 배열
         });
       });
 
       const order = (id: string) => (id === "homeplus" ? 1 : id === "nsmall" ? 2 : 99);
+
       list.sort((a, b) => {
-        const ao = order(a.id),
-          bo = order(b.id);
+        const ao = order(a.id);
+        const bo = order(b.id);
+
         if (ao !== bo) return ao - bo;
+
         return a.company_name.localeCompare(b.company_name);
       });
 
@@ -380,29 +436,8 @@ export default function DashBoard({ rows = [] }: DashBoardProps) {
           where("request_date", "<", endTs),
         ];
 
-        // ★ 추가: Firestore에 넘기는 실제 조회 조건 확인
-        console.log("[DashBoard] Firestore query 조건", {
-          collection: "design_request",
-          company: targetCompany,
-          year: ym.y,
-          month: ym.m,
-          request_date_start: startTs.toDate().toLocaleString(),
-          request_date_end_exclusive: endTs.toDate().toLocaleString(),
-          queryType: "전체 design_request 읽기 아님. 조건에 맞는 문서만 조회",
-          conditions: [
-            `company == ${targetCompany}`,
-            `request_date >= ${startTs.toDate().toLocaleString()}`,
-            `request_date < ${endTs.toDate().toLocaleString()}`,
-          ],
-        });
-
         const q = query(colRef, ...constraints);
         const snap = await getDocs(q);
-
-        // ★ 추가: 실제 Firestore에서 읽힌 문서 수 확인
-        console.log("[DashBoard] Firestore 실제 읽은 문서 수", {
-          readDocs: snap.docs.length,
-        });
 
         if (cancelled) return;
 
@@ -412,28 +447,6 @@ export default function DashBoard({ rows = [] }: DashBoardProps) {
         })) as RequestData[];
 
         setDashboardRows(list);
-
-        // ★ 추가: 읽힌 문서 상세 확인
-        console.table(
-          list.map((r: any) => ({
-            id: r.id,
-            company: r.company,
-            status: r.status,
-            request_date:
-              typeof r.request_date?.toDate === "function"
-                ? r.request_date.toDate().toLocaleString()
-                : r.request_date,
-            task_form: r.task_form,
-            out_work_hour: r.out_work_hour,
-          }))
-        );
-
-        console.log("[DashBoard] month direct read", {
-          company: targetCompany,
-          year: ym.y,
-          month: ym.m,
-          readDocs: snap.docs.length,
-        });
       } catch (error) {
         if (cancelled) return;
 
@@ -458,12 +471,26 @@ export default function DashBoard({ rows = [] }: DashBoardProps) {
     companyDocs,
   ]);
 
-  const getAvailHourByCompanyId = (companyId: string): number | null => {
+  const getAvailHourByCompanyId = (companyId: string, y: number, m: number): number | null => {
     const key = companyKey(companyId);
     if (!key) return null;
-    const found = companyDocs.find((c) => companyKey(c.id) === key);
-    const v = found?.avail_hour;
-    if (typeof v === "number" && Number.isFinite(v) && v > 0) return v;
+
+    const targetYearMonth = getYearMonthKey_(y, m);
+
+    const found = companyDocs.find((c) => {
+      return companyKey(c.id) === key || companyKey(c.company_name) === key;
+    });
+
+    const list = Array.isArray(found?.avail_hour) ? found.avail_hour : [];
+
+    const matched = list.find((row) => {
+      return normalizeYearMonthKey_(row.year_month) === targetYearMonth;
+    });
+
+    const v = Number(matched?.avail_hour);
+
+    if (Number.isFinite(v) && v > 0) return v;
+
     return null;
   };
 
@@ -508,7 +535,7 @@ export default function DashBoard({ rows = [] }: DashBoardProps) {
     const usedHours = sum(monthRows.map((r) => Number((r as any).out_work_hour) || 0));
 
     const targetCompanyId = isRequester ? requesterCompanyKey : effectiveMode;
-    const v = getAvailHourByCompanyId(targetCompanyId);
+    const v = getAvailHourByCompanyId(targetCompanyId, ym.y, ym.m);
     const availHours = v ?? 0;
 
     const usedRatio = availHours > 0 ? round1((usedHours / availHours) * 100) : 0;
@@ -520,7 +547,7 @@ export default function DashBoard({ rows = [] }: DashBoardProps) {
       availHours,
       usedRatio,
     };
-  }, [monthRows, effectiveMode, isOpsAllMode, isRequester, requesterCompanyKey, companyDocs]);
+  }, [monthRows, effectiveMode, isOpsAllMode, isRequester, requesterCompanyKey, companyDocs, ym.y, ym.m]);
 
   // 도넛 = assigned_designers[].task_type + count(가중치)만
   const taskTypeArr = useMemo(() => {

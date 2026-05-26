@@ -5,13 +5,18 @@ export type Period = "day" | "week" | "month";
 
 type YM = { y: number; m: number };
 
+type AvailHourRow = {
+  year_month: string;
+  avail_hour: number;
+};
+
 // ★ 추가: companies 문서 타입(필요한 필드만)
 export type CompanyDoc = {
   id: string;
   company_name: string;
   logo_url?: string;
   signup_active?: boolean;
-  avail_hour?: number;
+  avail_hour?: AvailHourRow[];
 };
 
 interface DashBoardFilterProps {

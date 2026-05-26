@@ -63,11 +63,11 @@ export default function ManagerRequestItem({
 
   const isDoneOrCanceled = item.status === "취소" || item.status === "완료";
 
-  // ★ 변경: assigned_designers(객체/문자열) normalize
+  // assigned_designers(객체/문자열) normalize
   const assignedRaw = (item as any).assigned_designers;
   const assignedList = normalizeAssigned(assignedRaw);
 
-  // ★ 추가: legacy single 지원
+  // legacy single 지원
   const legacySingle = String((item as any).assigned_designer ?? "").trim();
   const finalAssigned = legacySingle
     ? [...assignedList, { name: legacySingle }]
@@ -134,10 +134,10 @@ export default function ManagerRequestItem({
 
   const lastAt   = toMillisSafe((item as any)?.comments_last_date);
   const readRaw  = (item as any)?.comment_read_by?.[userUid ?? ""];
-  // ★ 추가: 서버 확정 안되기 전에 서버-독립적으로 쓰는 클라이언트 보조 필드
+  // 서버 확정 안되기 전에 서버-독립적으로 쓰는 클라이언트 보조 필드
   const readClient = (item as any)?.comment_read_by_client?.[userUid ?? ""];
 
-  // ★ 변경: 내 읽음 시각 계산 우선순위
+  // 내 읽음 시각 계산 우선순위
   // 1) localReadMs(낙관적) → 2) comment_read_by_client(숫자) → 3) serverTimestamp 확정값(또는 보류중 now)
   const myReadAt =
     (typeof localReadMs === "number" ? localReadMs : undefined) ??
@@ -160,12 +160,12 @@ export default function ManagerRequestItem({
 
   const editReadBy =
     ((item as any)?.requester_edit_read_by ??
-      {}) as Record<string, any>; // ★ 추가
+      {}) as Record<string, any>;
   const editReadClient =
     ((item as any)?.requester_edit_read_by_client ??
-      {}) as Record<string, number>; // ★ 추가
+      {}) as Record<string, number>;
 
-  const uid = userUid ?? auth.currentUser?.uid ?? ""; // ★ 추가
+  const uid = userUid ?? auth.currentUser?.uid ?? "";
 
   const editReadRaw = editReadBy[uid];
 
@@ -194,7 +194,7 @@ export default function ManagerRequestItem({
         <RequestListRequestIdText onClick={openDetail}>
           {item.design_request_id}
           <UpdateDotWrap>
-            {/* ★ 추가: 점 그룹 (둘 다 true면 나란히 표시) */}
+            {/* 점 그룹 (둘 다 true면 나란히 표시) */}
             {designEdited && <DotBlue />}
             {showDocEditDot && <DotRed />}
           </UpdateDotWrap>
@@ -281,10 +281,14 @@ export default function ManagerRequestItem({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              if (item.status === "취소") return;
+
+              // 완료/취소 상태에서는 상세배정 열지 않음
+              if (isDoneOrCanceled) return;
+
               onOpenAssignDesigner?.(item);
             }}
-            disabled={item.status === "취소" || !onOpenAssignDesigner}
+            // 완료/취소 상태 모두 상세배정 비활성화
+            disabled={isDoneOrCanceled || !onOpenAssignDesigner}
           >
             상세배정
           </AssignButton>
