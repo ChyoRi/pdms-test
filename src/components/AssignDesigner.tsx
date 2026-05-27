@@ -325,6 +325,9 @@ export default function AssignDesigner({ isOpen, onClose, target, onAssign }: As
   const initialTaskTypeDetail = norm((target as any)?.task_type_detail);
 
   const docRequirement = norm((target as any)?.requirement); // 작업항목(해당 문서 requirement)
+  const isEndedTarget =
+  norm((target as any)?.status) === "완료" ||
+  norm((target as any)?.status) === "취소";
 
   const companyCfg = useMemo(() => buildCompanyCfg(companyDoc, companyKey), [companyDoc, companyKey]);
 
@@ -633,6 +636,7 @@ export default function AssignDesigner({ isOpen, onClose, target, onAssign }: As
   };
 
   const handleAssign = () => {
+    if (isEndedTarget) return;
     // ★ 변경: 유효성은 task_form + task_type + uid 기준
     const validRows = rows.filter((r) => norm(r.task_form) && norm(r.task_type) && norm(r.uid));
     if (!validRows.length) {
@@ -819,7 +823,11 @@ export default function AssignDesigner({ isOpen, onClose, target, onAssign }: As
           <LeftBtn type="button" onClick={handleAddRow}>
             추가
           </LeftBtn>
-          <RightBtn type="button" onClick={handleAssign}>
+          <RightBtn
+            type="button"
+            onClick={handleAssign}
+            disabled={isEndedTarget}
+          >
             배정하기
           </RightBtn>
         </Footer>
@@ -976,4 +984,12 @@ const RightBtn = styled.button`
   color: #fff;
   font-weight: 700;
   cursor: pointer;
+
+  &:disabled {
+    border-color: #d1d5db;
+    background: #e5e7eb;
+    color: #9ca3af;
+    cursor: default;
+    pointer-events: none;
+  }
 `;

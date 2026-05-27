@@ -93,10 +93,6 @@ const toHourNum = (v: any): number => {
 // 소수 3자리 반올림(기존 흐름과 동일하게 쓰기 좋음)
 const round3 = (n: number) => Math.round((Number(n) || 0) * 1000) / 1000;
 
-// 이번 달 판정 헬퍼
-const isSameMonth = (d: Date, base = new Date()) =>
-  d.getFullYear() === base.getFullYear() && d.getMonth() === base.getMonth();
-
 export default function Requester({ view, requestRows, onGlobalFilterChange, userRole, setIsDrawerOpen, setEditData, setDetailData, statusFromAside, clearStatusFromAside, filterResetKey }: RequesterProps) {
   const [userName, setUserName] = useState("");
   const [userCompany, setUserCompany] = useState<string>("");
@@ -521,13 +517,9 @@ export default function Requester({ view, requestRows, onGlobalFilterChange, use
     const s = dateRange.start ? toMidnight(dateRange.start) : null;
     const e = dateRange.end ? toMidnight(dateRange.end) : null;
     const dateFilterOn = !!(s && e);
-    const today = new Date();
     const q = keyword.trim();
-    const searchOn = !!q;
 
     return prepared.filter((r: any) => {
-      const status = String(r.status ?? "").trim();
-      const isDone = status === "완료" || status === "취소";
 
       // 부서 필터(task_form 기준)
       if (deptFilter !== DEFAULT_DEPT) {
@@ -542,17 +534,6 @@ export default function Requester({ view, requestRows, onGlobalFilterChange, use
           parseLoose(r.requestDate);
 
         if (!rd || rd < s! || rd > e!) return false;
-      } else {
-        // ★ 기본 화면 정책:
-        // 요청기간이 없고, 검색어도 없을 때만 과거 완료/취소 숨김
-        const cd =
-          parseLoose(r.completion_date) ||
-          parseLoose((r as any).complete_date) ||
-          null;
-
-        const completedThisMonth = cd ? isSameMonth(cd, today) : false;
-
-        if (!searchOn && !completedThisMonth && isDone) return false;
       }
 
       // ★ 변경:

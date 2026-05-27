@@ -305,9 +305,6 @@ export default function ChannelWorkHour({ targetDate }: { targetDate?: Date }) {
   /** companies 채널 목록 (pushcomz 제외) */
   const [channels, setChannels] = useState<CompanyDoc[]>([]);
 
-  /** 채널별 월 가용공수(분모) 맵 */
-  const [availMap, setAvailMap] = useState<Record<string, number>>({});
-
   type MonthStats = Record<
     string,
     Record<

@@ -282,13 +282,11 @@ export default function ManagerRequestItem({
             onClick={(e) => {
               e.stopPropagation();
 
-              // 완료/취소 상태에서는 상세배정 열지 않음
-              if (isDoneOrCanceled) return;
-
+              // ★ 변경: 완료/취소 모두 상세배정 모달은 열리게 함
               onOpenAssignDesigner?.(item);
             }}
-            // 완료/취소 상태 모두 상세배정 비활성화
-            disabled={isDoneOrCanceled || !onOpenAssignDesigner}
+            // ★ 변경: onOpenAssignDesigner 없을 때만 비활성화
+            disabled={!onOpenAssignDesigner}
           >
             상세배정
           </AssignButton>

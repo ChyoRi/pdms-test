@@ -145,7 +145,7 @@ const toRequestLite = (r: RequestData): RequestLite => {
 // ★ 추가: 월 기준 필드
 // DB에서 월 기준으로 사용할 날짜 필드명
 // 현재 코드에서 completion_date를 많이 쓰고 있으므로 기본값은 completion_date로 둠
-const REQUEST_MONTH_FIELD = "completion_date";
+const REQUEST_MONTH_FIELD = "request_date";
 
 // ★ 추가: 과거 데이터에서 유지할 active 상태값
 const ACTIVE_STATUS_VALUES = [
@@ -213,12 +213,15 @@ const toDateSafe = (v: any): Date | null => {
 // 기존 completion_date 외에 과거 필드명도 프론트 필터용으로 방어
 const getRequestMonthDate = (r: any): Date | null => {
   return toDateSafe(
-    r?.[REQUEST_MONTH_FIELD] ??
+    r?.request_date ??
+      r?.requested_at ??
+      r?.requestDate ??
+      r?.created_date ??
+      r?.created_at ??
+      r?.completion_date ??
       r?.complete_date ??
       r?.completion_dt ??
-      r?.completed_at ??
-      r?.created_at ??
-      r?.request_date
+      r?.completed_at
   );
 };
 

@@ -612,13 +612,9 @@ export default function Manager({
     const s = dateRange.start ? toMidnight(dateRange.start) : null;
     const e = dateRange.end ? toMidnight(dateRange.end) : null;
     const dateFilterOn = !!(s && e);
-    const today = new Date();
     const q = keyword.trim();
-    const searchOn = !!q;
 
     return prepared.filter((r: any) => {
-      const status = String(r.status ?? "").trim();
-      const isDone = status === "완료" || status === "취소";
 
       /**
        * ★ 요청기간 필터
@@ -631,20 +627,6 @@ export default function Manager({
           parseLoose(r.requestDate);
 
         if (!rd || rd < s! || rd > e!) return false;
-      } else {
-        /**
-         * ★ 기본 화면 정책
-         * 검색어가 없을 때만 과거 완료/취소 숨김
-         * 검색어가 있으면 완료/취소도 보여줄 수 있게 유지
-         */
-        const cd =
-          parseLoose(r.completion_date) ||
-          parseLoose((r as any).complete_date) ||
-          null;
-
-        const keepThisMonth = cd ? isSameMonth(cd, today) : false;
-
-        if (!searchOn && isDone && !keepThisMonth) return false;
       }
 
       /**

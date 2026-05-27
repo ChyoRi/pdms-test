@@ -116,10 +116,6 @@ const companyKey = (v: any) =>
     .toLowerCase()
     .replace(/\s+/g, "");
 
-// 이번 달 판정 헬퍼(요청자 코드와 동일)
-const isSameMonth = (d: Date, base = new Date()) =>
-  d.getFullYear() === base.getFullYear() && d.getMonth() === base.getMonth();
-
 type AssignedDesignerLike = { uid?: string; name?: string; out_work_hour?: number; in_work_hour?: number };
 const normalizeAssignedDesigners = (raw: any): AssignedDesignerLike[] => {
   if (!raw) return [];
@@ -581,9 +577,7 @@ export default function Designer({ view, userRole, requestRows, onGlobalFilterCh
     const s = dateRange.start ? toMidnight(dateRange.start) : null;
     const e = dateRange.end ? toMidnight(dateRange.end) : null;
     const dateFilterOn = !!(s && e);
-    const today = new Date();
     const q = keyword.trim();
-    const searchOn = !!q;
 
     const filtered = preparedNormalized.filter((r: any) => {
       const statusRaw = String(r.status ?? "").trim();
@@ -599,16 +593,6 @@ export default function Designer({ view, userRole, requestRows, onGlobalFilterCh
           parseLoose(r.requestDate);
 
         if (!rd || rd < s! || rd > e!) return false;
-      } else {
-        // ★ 기본 화면 정책: 검색어가 없을 때만 과거 완료/취소 숨김
-        const cd =
-          parseLoose((r as any).completion_date) ||
-          parseLoose((r as any).complete_date) ||
-          null;
-
-        const completedThisMonth = cd ? isSameMonth(cd, today) : false;
-
-        if (!searchOn && !completedThisMonth && isDone) return false;
       }
 
       // ★ 변경: 상태 필터는 요청기간 여부와 관계없이 항상 적용
