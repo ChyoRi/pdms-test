@@ -19,15 +19,45 @@ type ChannelRow = {
   monthOut: number;   // ★ 추가: 우측 "월 누적" out_work_hour 총합(KPI 총 사용공수)
 };
 
+// ★ 추가: companies.avail_hour 배열 구조 대응
+type AvailHourItem = {
+  year_month?: string;
+  month?: string;
+  month_key?: string;
+  key?: string;
+  label?: string;
+  ym?: string;
+
+  avail_hour?: number | string;
+  available_hour?: number | string;
+  work_hour?: number | string;
+  hour?: number | string;
+  value?: number | string;
+};
+
+// ★ 추가: 기존 단일 숫자 구조 + 신규 월별 배열/맵 구조 모두 대응
+type AvailSource =
+  | number
+  | string
+  | AvailHourItem[]
+  | Record<string, any>
+  | undefined
+  | null;
+
 type CompanyDoc = {
   id: string; // doc id
   display_name?: string;
   company_name?: string;
 
-  // ★ 월 가용공수(분모)
-  avail_hour?: number;
-  available_hour?: number;
-  work_hour?: number;
+  // ★ 변경: 단일 숫자뿐 아니라 월별 배열도 들어올 수 있음
+  avail_hour?: AvailSource;
+  available_hour?: AvailSource;
+  work_hour?: AvailSource;
+
+  // ★ 추가: 혹시 map 구조로 저장될 경우 대비
+  avail_hour_by_month?: AvailSource;
+  available_hour_by_month?: AvailSource;
+  work_hour_by_month?: AvailSource;
 };
 
 /** ───────── Utils ───────── */
@@ -50,6 +80,139 @@ const round1 = (v: number) => Math.round(v * 10) / 10;
 const round2 = (v: number) => Math.round(v * 100) / 100;
 
 const normalizeKey = (v: any) => String(v ?? "").replace(/\s+/g, "").toLowerCase();
+
+// ★ 추가: 숫자 변환 공통 처리
+const toPositiveNumber = (v: any): number => {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+};
+
+// ★ 추가: 2026-05 / 2026.05 / 2026/5 / 2026년 5월 / 202605 대응
+const normalizeAvailMonthKey = (v: any): string => {
+  const raw = String(v ?? "").trim();
+  if (!raw) return "";
+
+  const compact = raw.replace(/\s+/g, "");
+
+  const m0 = compact.match(/^(\d{4})(\d{2})$/);
+  if (m0) {
+    return `${m0[1]}-${m0[2]}`;
+  }
+
+  const m1 = raw.match(/(\d{4})[.\-/](\d{1,2})/);
+  if (m1) {
+    return `${m1[1]}-${String(Number(m1[2])).padStart(2, "0")}`;
+  }
+
+  const m2 = raw.match(/(\d{4})\s*년\s*(\d{1,2})\s*월/);
+  if (m2) {
+    return `${m2[1]}-${String(Number(m2[2])).padStart(2, "0")}`;
+  }
+
+  return raw;
+};
+
+// ★ 추가: avail_hour 값 추출
+const extractAvailNumber = (v: any): number => {
+  const direct = toPositiveNumber(v);
+  if (direct > 0) return direct;
+
+  if (v && typeof v === "object" && !Array.isArray(v)) {
+    return toPositiveNumber(
+      v?.avail_hour ??
+        v?.available_hour ??
+        v?.work_hour ??
+        v?.hour ??
+        v?.value
+    );
+  }
+
+  return 0;
+};
+
+// ★ 추가: 단일 숫자 / 배열 / 맵 구조에서 해당 월 가용공수 찾기
+const readAvailFromSource = (source: AvailSource, mKey: string): number => {
+  if (source === undefined || source === null) return 0;
+
+  // 기존 단일 숫자 구조 대응
+  if (typeof source === "number" || typeof source === "string") {
+    return extractAvailNumber(source);
+  }
+
+  // 배열 구조 대응:
+  // avail_hour: [{ year_month: "2026-05", avail_hour: 656 }]
+  if (Array.isArray(source)) {
+    let fallback = 0;
+
+    for (const item of source) {
+      const key = normalizeAvailMonthKey(
+        item?.year_month ??
+          item?.month ??
+          item?.month_key ??
+          item?.key ??
+          item?.label ??
+          item?.ym
+      );
+
+      const hour = extractAvailNumber(item);
+
+      if (key === mKey && hour > 0) return hour;
+      if (key === "default" && hour > 0) fallback = hour;
+
+      // 배열에 값이 하나뿐이고 월키가 없는 예외 구조 대응
+      if (!key && source.length === 1 && hour > 0) fallback = hour;
+    }
+
+    return fallback;
+  }
+
+  // 맵 구조 대응:
+  // avail_hour_by_month: { "2026-05": 656 }
+  // 또는 { "2026-05": { avail_hour: 656 } }
+  if (source && typeof source === "object") {
+    const ownKey = normalizeAvailMonthKey(
+      (source as any)?.year_month ??
+        (source as any)?.month ??
+        (source as any)?.month_key ??
+        (source as any)?.key ??
+        (source as any)?.label ??
+        (source as any)?.ym
+    );
+
+    const ownHour = extractAvailNumber(source);
+    if (ownKey === mKey && ownHour > 0) return ownHour;
+
+    const direct = extractAvailNumber((source as any)[mKey]);
+    if (direct > 0) return direct;
+
+    let fallback = 0;
+
+    for (const [key, value] of Object.entries(source)) {
+      const normalizedKey = normalizeAvailMonthKey(key);
+      const hour = extractAvailNumber(value);
+
+      if (normalizedKey === mKey && hour > 0) return hour;
+      if (normalizedKey === "default" && hour > 0) fallback = hour;
+    }
+
+    return fallback;
+  }
+
+  return 0;
+};
+
+// ★ 추가: 선택 월 기준 채널별 가용공수 가져오기
+const getAvailHourForMonth = (company: CompanyDoc, mKey: string): number => {
+  return (
+    readAvailFromSource(company?.avail_hour, mKey) ||
+    readAvailFromSource(company?.available_hour, mKey) ||
+    readAvailFromSource(company?.work_hour, mKey) ||
+    readAvailFromSource(company?.avail_hour_by_month, mKey) ||
+    readAvailFromSource(company?.available_hour_by_month, mKey) ||
+    readAvailFromSource(company?.work_hour_by_month, mKey) ||
+    0
+  );
+};
 
 const parseDate = (v: any): Date | null => {
   if (!v) return null;
@@ -178,21 +341,9 @@ export default function ChannelWorkHour({ targetDate }: { targetDate?: Date }) {
         return String(a.id).localeCompare(String(b.id), "ko");
       });
 
+      // ★ 변경: availMap을 따로 만들지 않음
+      // companies 문서 전체를 보관한 뒤, 선택 월 기준으로 getAvailHourForMonth()에서 직접 계산
       setChannels(list);
-
-      const nextAvail: Record<string, number> = {};
-      list.forEach((c: any) => {
-        const key = normalizeKey(c.id);
-        const v =
-          Number(c?.avail_hour) ||
-          Number(c?.available_hour) ||
-          Number(c?.work_hour) ||
-          0;
-
-        nextAvail[key] = Number.isNaN(v) ? 0 : v;
-      });
-
-      setAvailMap(nextAvail);
     });
 
     return () => unSub();
@@ -243,6 +394,7 @@ export default function ChannelWorkHour({ targetDate }: { targetDate?: Date }) {
           if (!byChannelDayOut[ck]) return;
 
           if (!rd) return;
+
           const d = rd.getDate();
           if (d < 1 || d > daysIn) return;
 
@@ -265,11 +417,14 @@ export default function ChannelWorkHour({ targetDate }: { targetDate?: Date }) {
 
         channels.forEach((c) => {
           const ck = normalizeKey(c.id);
-          const avail = Number(availMap?.[ck] ?? 0);
+
+          // ★ 변경: 월별 avail_hour 배열에서 현재 구독 월(mKey)의 분모를 찾음
+          const avail = getAvailHourForMonth(c, mKey);
 
           const dayOutSum = byChannelDayOut[ck].map((v) => round2(v));
 
           let cum = 0;
+
           const dailyRate: Array<number | null> = dayOutSum.map(
             (daySum, idx) => {
               cum += daySum;
@@ -277,6 +432,7 @@ export default function ChannelWorkHour({ targetDate }: { targetDate?: Date }) {
               if (weekendFlags[idx]) return null;
               if (!avail) return 0;
 
+              // ★ 유지: 누적 out_work_hour / 해당 월 avail_hour * 100
               return round1((cum / avail) * 100);
             }
           );
@@ -301,14 +457,13 @@ export default function ChannelWorkHour({ targetDate }: { targetDate?: Date }) {
       unsubList.push(unSub);
     };
 
-    // ★ 변경: prev + selected 구독
+    // 위: 이전 월 / 아래: 선택 월
     subscribeMonth(prev.year, prev.month);
     subscribeMonth(selectedYear, selectedMonth);
 
     return () => unsubList.forEach((fn) => fn());
   }, [
     channels,
-    availMap,
     selectedYear,
     selectedMonth,
     prev.year,
