@@ -205,6 +205,11 @@ export default function InWorkHour({
   useEffect(() => {
     let cancelled = false;
 
+    const isFinishedStatus = (status: any) => {
+      const s = String(status ?? "").trim();
+      return s === "완료" || s === "취소";
+    };
+
     const fetchMonthDocs = async () => {
       try {
         const { startTs, endTs } = getMonthTimestampRange(
@@ -214,21 +219,39 @@ export default function InWorkHour({
 
         const colRef = collection(db, "design_request");
 
-        const constraints: QueryConstraint[] = [
+        const monthConstraints: QueryConstraint[] = [
           where("request_date", ">=", startTs),
           where("request_date", "<", endTs),
         ];
 
-        const snap = await getDocs(query(colRef, ...constraints));
+        // ★ 추가: 완료/취소가 아닌 active 문서는 request_date(요청월)와 무관하게 조회
+        // → 과거에 요청됐지만 아직 미배정/대기 상태이던 문서가
+        //   "오늘" 배정되는 경우 assigned_date 기준으로 이번 달에 즉시 반영되도록 함
+        const activeConstraints: QueryConstraint[] = [
+          where("status", "not-in", ["완료", "취소"]),
+        ];
+
+        const [monthSnap, activeSnap] = await Promise.all([
+          getDocs(query(colRef, ...monthConstraints)),
+          getDocs(query(colRef, ...activeConstraints)),
+        ]);
 
         if (cancelled) return;
 
-        const list = snap.docs.map((d) => ({
-          id: d.id,
-          ...(d.data() as any),
-        })) as RequestDoc[];
+        // ★ 변경: 두 결과를 docId 기준으로 병합(중복 제거)
+        const merged: Record<string, RequestDoc> = {};
 
-        setMonthDocs(list);
+        monthSnap.docs.forEach((d) => {
+          merged[d.id] = { id: d.id, ...(d.data() as any) } as RequestDoc;
+        });
+
+        activeSnap.docs.forEach((d) => {
+          const data = d.data() as any;
+          if (isFinishedStatus(data?.status)) return; // 안전망(이중 확인)
+          merged[d.id] = { id: d.id, ...data } as RequestDoc;
+        });
+
+        setMonthDocs(Object.values(merged));
       } catch (error) {
         if (cancelled) return;
 

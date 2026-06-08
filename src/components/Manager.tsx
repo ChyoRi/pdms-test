@@ -106,8 +106,8 @@ const getAssignedNames = (raw: any): string[] => {
 
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
 
-const isSameMonth = (d: Date, base = new Date()) =>
-  d.getFullYear() === base.getFullYear() && d.getMonth() === base.getMonth();
+// const isSameMonth = (d: Date, base = new Date()) =>
+//   d.getFullYear() === base.getFullYear() && d.getMonth() === base.getMonth();
 
 export default function Manager({
   view,

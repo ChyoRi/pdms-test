@@ -580,8 +580,8 @@ export default function Designer({ view, userRole, requestRows, onGlobalFilterCh
     const q = keyword.trim();
 
     const filtered = preparedNormalized.filter((r: any) => {
-      const statusRaw = String(r.status ?? "").trim();
-      const isDone = statusRaw === "완료" || statusRaw === "취소";
+      // const statusRaw = String(r.status ?? "").trim();
+      // const isDone = statusRaw === "완료" || statusRaw === "취소";
 
       if (!isVisibleForDesigner(r, designerName, view)) return false;
 

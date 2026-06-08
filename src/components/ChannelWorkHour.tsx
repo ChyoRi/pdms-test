@@ -9,17 +9,17 @@ import ChannelWorkHourFilter from "./ChannelWorkHourFilter";
 // 퍼센트(rate) + "당일 out 합계(dayOut)"를 함께 표시 (주말/미래는 null)
 type DailyStat = {
   rate: number | null;     // 누적 퍼센트
-  dayOut: number | null;   // ★ 추가: 해당 request_date의 out_work_hour 합(누적X)
+  dayOut: number | null;   // 해당 request_date의 out_work_hour 합(누적X)
 };
 
 type ChannelRow = {
   channelKey: string; // companies doc id (예: homeplus, nsmall, ...)
   daily: DailyStat[]; // 1~31일
   monthRate: number;  // 우측 "월 누적" 퍼센트(오늘/표시컷오프 기준)
-  monthOut: number;   // ★ 추가: 우측 "월 누적" out_work_hour 총합(KPI 총 사용공수)
+  monthOut: number;   // 우측 "월 누적" out_work_hour 총합(KPI 총 사용공수)
 };
 
-// ★ 추가: companies.avail_hour 배열 구조 대응
+// companies.avail_hour 배열 구조 대응
 type AvailHourItem = {
   year_month?: string;
   month?: string;
@@ -35,7 +35,7 @@ type AvailHourItem = {
   value?: number | string;
 };
 
-// ★ 추가: 기존 단일 숫자 구조 + 신규 월별 배열/맵 구조 모두 대응
+// 기존 단일 숫자 구조 + 신규 월별 배열/맵 구조 모두 대응
 type AvailSource =
   | number
   | string
@@ -49,12 +49,12 @@ type CompanyDoc = {
   display_name?: string;
   company_name?: string;
 
-  // ★ 변경: 단일 숫자뿐 아니라 월별 배열도 들어올 수 있음
+  // 단일 숫자뿐 아니라 월별 배열도 들어올 수 있음
   avail_hour?: AvailSource;
   available_hour?: AvailSource;
   work_hour?: AvailSource;
 
-  // ★ 추가: 혹시 map 구조로 저장될 경우 대비
+  // 혹시 map 구조로 저장될 경우 대비
   avail_hour_by_month?: AvailSource;
   available_hour_by_month?: AvailSource;
   work_hour_by_month?: AvailSource;
@@ -81,13 +81,13 @@ const round2 = (v: number) => Math.round(v * 100) / 100;
 
 const normalizeKey = (v: any) => String(v ?? "").replace(/\s+/g, "").toLowerCase();
 
-// ★ 추가: 숫자 변환 공통 처리
+// 숫자 변환 공통 처리
 const toPositiveNumber = (v: any): number => {
   const n = Number(v);
   return Number.isFinite(n) && n > 0 ? n : 0;
 };
 
-// ★ 추가: 2026-05 / 2026.05 / 2026/5 / 2026년 5월 / 202605 대응
+// 2026-05 / 2026.05 / 2026/5 / 2026년 5월 / 202605 대응
 const normalizeAvailMonthKey = (v: any): string => {
   const raw = String(v ?? "").trim();
   if (!raw) return "";
@@ -112,7 +112,7 @@ const normalizeAvailMonthKey = (v: any): string => {
   return raw;
 };
 
-// ★ 추가: avail_hour 값 추출
+// avail_hour 값 추출
 const extractAvailNumber = (v: any): number => {
   const direct = toPositiveNumber(v);
   if (direct > 0) return direct;
@@ -130,7 +130,7 @@ const extractAvailNumber = (v: any): number => {
   return 0;
 };
 
-// ★ 추가: 단일 숫자 / 배열 / 맵 구조에서 해당 월 가용공수 찾기
+// 단일 숫자 / 배열 / 맵 구조에서 해당 월 가용공수 찾기
 const readAvailFromSource = (source: AvailSource, mKey: string): number => {
   if (source === undefined || source === null) return 0;
 
@@ -201,7 +201,7 @@ const readAvailFromSource = (source: AvailSource, mKey: string): number => {
   return 0;
 };
 
-// ★ 추가: 선택 월 기준 채널별 가용공수 가져오기
+// 선택 월 기준 채널별 가용공수 가져오기
 const getAvailHourForMonth = (company: CompanyDoc, mKey: string): number => {
   return (
     readAvailFromSource(company?.avail_hour, mKey) ||
@@ -270,6 +270,13 @@ const getChannelKeyFromRequest = (data: any): string | null => {
   return k;
 };
 
+// ★ 추가: 디자이너 배정 항목의 집계 기준일
+// - assigned_designers[].assigned_date가 있으면 그 날짜
+// - 없으면 request_date로 fallback (InWorkHour.getAssignedDateFor와 동일 기준)
+const getAssignedDateForItem = (it: any, data: any): Date | null => {
+  return parseDate(it?.assigned_date) ?? parseDate(data?.request_date);
+};
+
 // 외부공수(out) 추출 - 신/구 구조 모두 지원
 const getOutWorkHourFromRequest = (data: any): number => {
   const t = Number(data?.total_out_work_hour);
@@ -327,7 +334,7 @@ export default function ChannelWorkHour({ targetDate }: { targetDate?: Date }) {
         .map((d) => ({ id: d.id, ...(d.data() as any) }))
         .filter((c) => normalizeKey(c.id) !== "pushcomz");
 
-      // ★ 유지: kyungdong을 항상 마지막으로 정렬
+      // kyungdong을 항상 마지막으로 정렬
       list.sort((a, b) => {
         const ak = normalizeKey(a.id);
         const bk = normalizeKey(b.id);
@@ -338,7 +345,7 @@ export default function ChannelWorkHour({ targetDate }: { targetDate?: Date }) {
         return String(a.id).localeCompare(String(b.id), "ko");
       });
 
-      // ★ 변경: availMap을 따로 만들지 않음
+      // availMap을 따로 만들지 않음
       // companies 문서 전체를 보관한 뒤, 선택 월 기준으로 getAvailHourForMonth()에서 직접 계산
       setChannels(list);
     });
@@ -358,20 +365,27 @@ export default function ChannelWorkHour({ targetDate }: { targetDate?: Date }) {
 
     const unsubList: Array<() => void> = [];
 
-    const subscribeMonth = (year: number, monthIndex: number) => {
-      const start = new Date(year, monthIndex, 1, 0, 0, 0, 0);
-      const end = new Date(year, monthIndex + 1, 1, 0, 0, 0, 0);
-      const mKey = monthKey(year, monthIndex);
-      const daysIn = getDaysInMonth(year, monthIndex);
-      const weekendFlags = buildWeekendFlags(year, monthIndex, daysIn);
+    // ★ 추가: 완료/취소가 아닌 "active" 문서는 request_date(요청월)와 무관하게
+    // 항상 최신 상태를 들고 있어야 함 (과거 요청 + 오늘 배정 케이스 대응)
+    let activeDocsMap: Record<string, any> = {};
+    let monthDocsMaps: Record<string, Record<string, any>> = {};
 
-      const qRef = query(
-        collection(db, "design_request"),
-        where("request_date", ">=", start),
-        where("request_date", "<", end)
-      );
+    const norm = (v: any) => String(v ?? "").trim();
+    const isFinishedStatus = (status: any) => {
+      const s = norm(status);
+      return s === "완료" || s === "취소";
+    };
 
-      const unSub = onSnapshot(qRef, (snap) => {
+    const recompute = () => {
+      // monthDocsMaps에 등록된 월들에 대해서만 재계산
+      Object.keys(monthDocsMaps).forEach((mKey) => {
+        const [yStr, mStr] = mKey.split("-");
+        const year = Number(yStr);
+        const monthIndex = Number(mStr) - 1;
+
+        const daysIn = getDaysInMonth(year, monthIndex);
+        const weekendFlags = buildWeekendFlags(year, monthIndex, daysIn);
+
         const byChannelDayOut: Record<string, number[]> = {};
         const totalByChannel: Record<string, number> = {};
 
@@ -381,16 +395,41 @@ export default function ChannelWorkHour({ targetDate }: { targetDate?: Date }) {
           totalByChannel[k] = 0;
         });
 
-        snap.docs.forEach((docSnap) => {
-          const data = docSnap.data() as any;
+        // ★ 변경: 이번 달 request_date 범위 문서 + active 문서를 docId 기준으로 병합(중복 제거)
+        const merged: Record<string, any> = {
+          ...monthDocsMaps[mKey],
+          ...activeDocsMap,
+        };
 
+        Object.values(merged).forEach((data: any) => {
           const ck = getChannelKeyFromRequest(data);
-          const rd = parseDate(data?.request_date);
-
           if (!ck) return;
           if (!byChannelDayOut[ck]) return;
 
+          const designers = Array.isArray(data?.assigned_designers) ? data.assigned_designers : [];
+
+          if (designers.length > 0) {
+            designers.forEach((it: any) => {
+              const dt = getAssignedDateForItem(it, data);
+              if (!dt) return;
+              if (dt.getFullYear() !== year || dt.getMonth() !== monthIndex) return;
+
+              const d = dt.getDate();
+              if (d < 1 || d > daysIn) return;
+
+              const out = Number(it?.out_work_hour);
+              if (!out || Number.isNaN(out)) return;
+
+              byChannelDayOut[ck][d - 1] += out;
+              totalByChannel[ck] += out;
+            });
+
+            return;
+          }
+
+          const rd = parseDate(data?.request_date);
           if (!rd) return;
+          if (rd.getFullYear() !== year || rd.getMonth() !== monthIndex) return;
 
           const d = rd.getDate();
           if (d < 1 || d > daysIn) return;
@@ -404,45 +443,26 @@ export default function ChannelWorkHour({ targetDate }: { targetDate?: Date }) {
 
         const nextStatsForMonth: Record<
           string,
-          {
-            dailyRate: Array<number | null>;
-            dayOutSum: number[];
-            monthRate: number;
-            monthOut: number;
-          }
+          { dailyRate: Array<number | null>; dayOutSum: number[]; monthRate: number; monthOut: number }
         > = {};
 
         channels.forEach((c) => {
           const ck = normalizeKey(c.id);
-
-          // ★ 변경: 월별 avail_hour 배열에서 현재 구독 월(mKey)의 분모를 찾음
           const avail = getAvailHourForMonth(c, mKey);
-
           const dayOutSum = byChannelDayOut[ck].map((v) => round2(v));
 
           let cum = 0;
-
-          const dailyRate: Array<number | null> = dayOutSum.map(
-            (daySum, idx) => {
-              cum += daySum;
-
-              if (weekendFlags[idx]) return null;
-              if (!avail) return 0;
-
-              // ★ 유지: 누적 out_work_hour / 해당 월 avail_hour * 100
-              return round1((cum / avail) * 100);
-            }
-          );
+          const dailyRate: Array<number | null> = dayOutSum.map((daySum, idx) => {
+            cum += daySum;
+            if (weekendFlags[idx]) return null;
+            if (!avail) return 0;
+            return round1((cum / avail) * 100);
+          });
 
           const monthOut = round2(totalByChannel[ck] || 0);
           const monthRate = !avail ? 0 : round1((monthOut / avail) * 100);
 
-          nextStatsForMonth[ck] = {
-            dailyRate,
-            dayOutSum,
-            monthRate,
-            monthOut,
-          };
+          nextStatsForMonth[ck] = { dailyRate, dayOutSum, monthRate, monthOut };
         });
 
         setMonthStats((prevState) => ({
@@ -450,9 +470,53 @@ export default function ChannelWorkHour({ targetDate }: { targetDate?: Date }) {
           [mKey]: nextStatsForMonth,
         }));
       });
+    };
+
+    const subscribeMonth = (year: number, monthIndex: number) => {
+      const start = new Date(year, monthIndex, 1, 0, 0, 0, 0);
+      const end = new Date(year, monthIndex + 1, 1, 0, 0, 0, 0);
+      const mKey = monthKey(year, monthIndex);
+
+      monthDocsMaps[mKey] = monthDocsMaps[mKey] || {};
+
+      const qRef = query(
+        collection(db, "design_request"),
+        where("request_date", ">=", start),
+        where("request_date", "<", end)
+      );
+
+      const unSub = onSnapshot(qRef, (snap) => {
+        const map: Record<string, any> = {};
+        snap.docs.forEach((docSnap) => {
+          map[docSnap.id] = docSnap.data();
+        });
+        monthDocsMaps[mKey] = map;
+        recompute();
+      });
 
       unsubList.push(unSub);
     };
+
+    // ★ 추가: 완료/취소가 아닌 active 문서를 월과 무관하게 구독
+    // → 과거에 요청(request_date)되었지만 아직 배정 전이던 문서가
+    //   "오늘" 배정되는 경우, assigned_date 기준으로 이번 달에 즉시 반영됨
+    const qActive = query(
+      collection(db, "design_request"),
+      where("status", "not-in", ["완료", "취소"])
+    );
+
+    const unSubActive = onSnapshot(qActive, (snap) => {
+      const map: Record<string, any> = {};
+      snap.docs.forEach((docSnap) => {
+        const data = docSnap.data() as any;
+        if (isFinishedStatus(data?.status)) return; // 안전망(이중 확인)
+        map[docSnap.id] = data;
+      });
+      activeDocsMap = map;
+      recompute();
+    });
+
+    unsubList.push(unSubActive);
 
     // 위: 이전 월 / 아래: 선택 월
     subscribeMonth(prev.year, prev.month);
@@ -526,17 +590,17 @@ export default function ChannelWorkHour({ targetDate }: { targetDate?: Date }) {
     return { daysIn, weekendFlags, todayFlags, rows };
   };
 
-  // ★ 변경: 위 = prev, 아래 = selected
-  const m1Key = useMemo(() => monthKey(prev.year, prev.month), [prev.year, prev.month]); // ★ 변경
-  const m2Key = useMemo(() => monthKey(selectedYear, selectedMonth), [selectedYear, selectedMonth]); // ★ 변경
+  // 위 = prev, 아래 = selected
+  const m1Key = useMemo(() => monthKey(prev.year, prev.month), [prev.year, prev.month]);
+  const m2Key = useMemo(() => monthKey(selectedYear, selectedMonth), [selectedYear, selectedMonth]);
 
   const m1 = useMemo(
-    () => buildMonthUI(prev.year, prev.month, monthStats[m1Key]), // ★ 변경
+    () => buildMonthUI(prev.year, prev.month, monthStats[m1Key]),
     [channels, prev.year, prev.month, monthStats, m1Key]
   );
 
   const m2 = useMemo(
-    () => buildMonthUI(selectedYear, selectedMonth, monthStats[m2Key]), // ★ 변경
+    () => buildMonthUI(selectedYear, selectedMonth, monthStats[m2Key]),
     [channels, selectedYear, selectedMonth, monthStats, m2Key]
   );
 
@@ -647,8 +711,8 @@ export default function ChannelWorkHour({ targetDate }: { targetDate?: Date }) {
       <ChannelWorkHourWrap>
         {/* ★ 변경: 위: 이전 월 */}
         <TableBlock
-          titleYear={prev.year}              // ★ 변경
-          titleMonthIndex={prev.month}       // ★ 변경
+          titleYear={prev.year}
+          titleMonthIndex={prev.month}
           daysIn={m1.daysIn}
           weekendFlags={m1.weekendFlags}
           todayFlags={m1.todayFlags}
@@ -657,8 +721,8 @@ export default function ChannelWorkHour({ targetDate }: { targetDate?: Date }) {
 
         {/* ★ 변경: 아래: 선택 월 */}
         <TableBlock
-          titleYear={selectedYear}           // ★ 변경
-          titleMonthIndex={selectedMonth}    // ★ 변경
+          titleYear={selectedYear}
+          titleMonthIndex={selectedMonth}
           daysIn={m2.daysIn}
           weekendFlags={m2.weekendFlags}
           todayFlags={m2.todayFlags}
