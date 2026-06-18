@@ -200,7 +200,7 @@ export default function ManagerRequestItem({
           </UpdateDotWrap>
         </RequestListRequestIdText>
       </RequestListTableTd>
-      <RequestListTableTd>{item.company}</RequestListTableTd>
+      <RequestListTableTd style={{ whiteSpace: "pre-line" }}>{((s) => s.length > 8 ? s.replace(/([a-z])([A-Z])/g, "$1\n$2") : s)(String(item.company ?? ""))}</RequestListTableTd>
       <RequestListTableTd>{formatDate(item.request_date)}</RequestListTableTd>
       <RequestListCompletionTd>{formatDate(item.completion_date)}</RequestListCompletionTd>
       <RequestListOpenDtTd>{formatDate(item.open_date)}</RequestListOpenDtTd>
