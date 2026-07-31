@@ -735,13 +735,16 @@ export default function ChannelWorkHour({ targetDate }: { targetDate?: Date }) {
 
 /** ───────── styled ───────── */
 const ChannelWorkHourFrame = styled.div`
+  display: flex;
+  flex-direction: column;
   padding: 0 22px 24px;
-  height: calc(100vh - 178px);
+  height: 100%;
   overflow: hidden;
 `;
 
 const ChannelWorkHourWrap = styled.div`
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   scrollbar-width: thin;
 `;
