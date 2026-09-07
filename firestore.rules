@@ -1,0 +1,17 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ✅ 회원가입 화면 전용: 공개 필드(company_name/role/signup_active)만 노출
+    // companies 원본 문서에서 Cloud Function(syncCompanySignupInfo)이 자동 미러링
+    match /company_signup_info/{companyId} {
+      allow read: if true;
+      allow write: if false; // 클라이언트 쓰기 금지, Admin SDK(Cloud Function)만 갱신
+    }
+
+    // ✅ 그 외 모든 문서(companies 포함)는 로그인해야 read/write 가능
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

@@ -28,7 +28,9 @@ export default function SignUpPage() {
     [searchParams]
   );
 
-  // ★ 변경: companyParam으로 companies/{companyParam} 문서만 읽어서 company/role 세팅
+  // ★ 변경: companyParam으로 company_signup_info/{companyParam} 문서만 읽어서 company/role 세팅
+  // (companies 원본 컬렉션은 업무유형/공수 등 내부 데이터를 담고 있어 로그인 없이 읽으면 안 되므로,
+  //  회원가입에 필요한 3개 필드만 미러링된 공개 컬렉션을 대신 사용)
   useEffect(() => {
     const applyCompanyFromParam = async () => {
       // 초기화
@@ -38,7 +40,7 @@ export default function SignUpPage() {
       if (!companyParam) return;
 
       try {
-        const ref = doc(db, "companies", companyParam);
+        const ref = doc(db, "company_signup_info", companyParam);
         const snap = await getDoc(ref);
 
         if (!snap.exists()) return;
