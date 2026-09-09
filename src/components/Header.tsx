@@ -2,7 +2,7 @@ import styled from "styled-components";
 import { useEffect, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "../firebaseconfig";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, collection, query, where, onSnapshot } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import Nav from "./Nav";
 import { logoutAll } from "../utils/authClient";
@@ -25,6 +25,8 @@ export default function Header({ onResetFilters, onOpenSwitchAccount }: HeaderPr
   const [companyLogoUrl, setCompanyLogoUrl] = useState("");
   // 계정전환 권한 플래그
   const [canSwitchAccount, setCanSwitchAccount] = useState<boolean>(false);
+  // 승인 대기자 수 (관리자만 구독)
+  const [pendingCount, setPendingCount] = useState<number>(0);
   const navigate = useNavigate();
 
    // users.company(표시명) -> companies 문서 id로 변환
@@ -86,6 +88,21 @@ export default function Header({ onResetFilters, onOpenSwitchAccount }: HeaderPr
     return () => unsubscribe();
   }, []);
 
+  // 관리자(can_switch_account)일 때만 승인 대기자 수 실시간 구독
+  useEffect(() => {
+    if (!canSwitchAccount) {
+      setPendingCount(0);
+      return;
+    }
+    const q = query(collection(db, "users"), where("approved", "==", false));
+    const unsub = onSnapshot(
+      q,
+      (snap) => setPendingCount(snap.size),
+      () => setPendingCount(0)
+    );
+    return () => unsub();
+  }, [canSwitchAccount]);
+
   const logout = async () => {
     try {
       await logoutAll(auth);  // ★ 쿠키 제거 + Firebase signOut
@@ -114,7 +131,7 @@ export default function Header({ onResetFilters, onOpenSwitchAccount }: HeaderPr
             <Logo src={companyLogoUrl} alt="company logo" />
           </LogoWrap>
         )}
-        <Nav userRole={userRole} onResetFilters={onResetFilters} />
+        <Nav userRole={userRole} canSwitchAccount={canSwitchAccount} pendingCount={pendingCount} onResetFilters={onResetFilters} />
       </LogoFrame>
       <UtilWrap>
         <UserNameWrap><UserName>{userName}</UserName>님({getRoleName(userRole)}) {userCompany}환영합니다.</UserNameWrap>

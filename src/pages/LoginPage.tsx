@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled from "styled-components";
-import { auth } from "../firebaseconfig";
-import { loginWithRemember } from "../utils/authClient";
+import { auth, db } from "../firebaseconfig";
+import { doc, getDoc } from "firebase/firestore";
+import { loginWithRemember, logoutAll } from "../utils/authClient";
 import { FirebaseError } from "firebase/app";
 
 interface LoginPageProps {
@@ -43,7 +44,17 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
     if (!password) { alert("비밀번호를 입력해주세요."); return; }
 
     try {
-      await loginWithRemember(auth, emailInput, password, remember);
+      const cred = await loginWithRemember(auth, emailInput, password, remember);
+
+      // ★ 추가: 관리자 승인 전(approved !== true) 계정은 로그인 차단
+      const snap = await getDoc(doc(db, "users", cred.user.uid));
+      const approved = snap.exists() && (snap.data() as any)?.approved === true;
+      if (!approved) {
+        await logoutAll(auth);
+        alert("아직 관리자 승인 대기 중인 계정입니다.\n\n승인이 완료된 뒤 로그인해주세요.");
+        return;
+      }
+
       onLoginSuccess();
       navigate('/main');
     } catch (err) {

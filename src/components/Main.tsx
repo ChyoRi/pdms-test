@@ -2,6 +2,7 @@ import styled from "styled-components";
 import Requester from "./Requester";
 import Designer from "./Designer";
 import Manager from "./Manager";
+import Admin from "./Admin";
 import { useSearchParams } from "react-router-dom";
 import { useEffect } from "react";
 
@@ -37,7 +38,8 @@ type ViewType =
   | "myrequestlist"
   | "allrequestlist"
   | "inworkhour"
-  | "channelworkhour";
+  | "channelworkhour"
+  | "admin";
 
 // ★ 추가: 요청자/디자이너에게 넘길 수 있는 view로 좁힘
 const toCommonView = (view: ViewType): CommonViewType => {
@@ -70,6 +72,11 @@ export default function Main({ userRole, requestRows, onGlobalFilterChange, setI
 
   // ✅ 권한별 컴포넌트 렌더링
   const renderComponent = () => {
+    // 관리자 승인 페이지 (Admin 컴포넌트가 can_switch_account로 자체 접근 제어)
+    if (view === "admin") {
+      return <Admin />;
+    }
+
     if (userRole === 1) {
       // ★ 변경: 요청자는 CommonViewType만 받음
       const requesterView = toCommonView(view);

@@ -28,7 +28,7 @@ import SwitchRole from "../components/SwitchRole";
 type DrawerMode = "create" | "edit" | "detail" | null;
 
 // ★ 추가: Main.tsx의 ViewType과 동일하게 맞춤
-type ViewType = "dashboard" | "myrequestlist" | "allrequestlist" | "inworkhour"| "channelworkhour";
+type ViewType = "dashboard" | "myrequestlist" | "allrequestlist" | "inworkhour"| "channelworkhour" | "admin";
 
 // ★ 추가: 로그인 유저 정보만 따로 저장
 type LoginUserInfo = {

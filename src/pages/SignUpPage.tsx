@@ -4,7 +4,7 @@ import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { auth, db } from "../firebaseconfig";
 import { doc, setDoc, serverTimestamp, getDoc } from "firebase/firestore";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { saveAutoLoginCookie } from "../utils/authClient";
+import { logoutAll } from "../utils/authClient";
 
 type CompanySignUpDoc = {
   company_name: string;
@@ -104,12 +104,18 @@ export default function SignUpPage() {
         companyKey: companyParam,
         // ★ role은 companies 문서값 그대로 저장 (기본값 없음)
         role: companyRole,
+        // ★ 추가: 관리자 승인 전까지 데이터 접근 불가 (승인제)
+        //  - 규칙에서 가입 시 반드시 false로만 생성 가능하도록 강제됨
+        approved: false,
         createdAt: serverTimestamp(),
       });
 
-      await saveAutoLoginCookie(emailTrim, password);
+      // ★ 변경: 승인 전이므로 자동 로그인시키지 않고 로그아웃 → 승인 대기 안내
+      await logoutAll(auth);
 
-      alert("회원가입이 완료되었습니다!");
+      alert(
+        "회원가입이 완료되었습니다.\n\n관리자 승인 후 로그인할 수 있습니다. 승인이 완료되면 로그인해주세요."
+      );
       navigate("/");
     } catch (error: any) {
       alert("회원가입 중 오류 발생: " + error.message);

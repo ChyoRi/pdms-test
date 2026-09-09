@@ -2,14 +2,16 @@ import styled from "styled-components";
 import { useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 
-type ViewType = "dashboard" | "myrequestlist" | "allrequestlist" | "inworkhour" | "channelworkhour";
+type ViewType = "dashboard" | "myrequestlist" | "allrequestlist" | "inworkhour" | "channelworkhour" | "admin";
 
 interface NavProps {
   userRole: number | null; // 1: 요청자, 2: 디자이너, 3: 담당자(매니저)
+  canSwitchAccount?: boolean; // 관리자 여부 (가입 승인 메뉴 노출용)
+  pendingCount?: number; // 승인 대기자 수 (배지 표시용)
   onResetFilters?: () => void;
 }
 
-export default function Nav({ userRole, onResetFilters }: NavProps) {
+export default function Nav({ userRole, canSwitchAccount, pendingCount = 0, onResetFilters }: NavProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const view = (searchParams.get("view") || "dashboard") as ViewType;
 
@@ -111,6 +113,22 @@ export default function Nav({ userRole, onResetFilters }: NavProps) {
             </MainMenuItemButton>
           </MainMenuItem>
         )}
+
+        {/* 6) 관리자 전용: 가입 승인 관리 (대기자 있으면 배지) */}
+        {canSwitchAccount && (
+          <MainMenuItem>
+            <AdminMenuButton
+              type="button"
+              onClick={() => go("admin")}
+              $active={view === "admin"}
+            >
+              가입 승인 관리
+              {pendingCount > 0 && (
+                <PendingBadge>{pendingCount > 99 ? "99+" : pendingCount}</PendingBadge>
+              )}
+            </AdminMenuButton>
+          </MainMenuItem>
+        )}
       </MainMenuList>
     </NavFrame>
   );
@@ -134,4 +152,24 @@ const MainMenuItemButton = styled.button<{ $active?: boolean }>`
   &:hover {
     color: ${({ theme }) => theme.colors.white01};
   }
+`;
+
+const AdminMenuButton = styled(MainMenuItemButton)`
+  position: relative;
+`;
+
+const PendingBadge = styled.span`
+  position: absolute;
+  top: -8px;
+  right: -20px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: #e24b4a;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 18px;
+  text-align: center;
 `;
