@@ -13,8 +13,9 @@ export default function FindPasswordPage() {
     if (!EMAIL_RE.test(email)) { alert("이메일 형식이 올바르지 않습니다."); return; }
 
     try {
-      const BASE = "/pdms";
-      await sendPasswordResetEmail(auth, email, { 
+      // 빌드 모드별 base 경로 (dev: /pdms-dev/, prod: /pdms/, 로컬: /)
+      const BASE = import.meta.env.BASE_URL;
+      await sendPasswordResetEmail(auth, email, {
         url: `${window.location.origin}${BASE}`,
         handleCodeInApp: true,
       });
