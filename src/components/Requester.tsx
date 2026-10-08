@@ -11,6 +11,7 @@ import { makeSearchIndex, matchesQuery } from "../utils/search.ts";
 import ExportCSV from "./ExportCSV";
 import { downloadArrayToCSV } from "../utils/firestoreToCSV";
 import { addHistoryComment } from "../utils/commentHistory";
+import { toAsideRows } from "../utils/asideRows";
 
 type ViewType = "dashboard" | "myrequestlist" | "allrequestlist" | "inworkhour";
 
@@ -23,6 +24,8 @@ interface RequesterProps {
   view: ViewType;
   requestRows: RequestData[];
   onGlobalFilterChange?: (state: GlobalFilterState) => void;
+  // ★ 추가: 상단 필터가 적용된 리스트를 사이드바 카운트용으로 올림
+  onAsideRowsChange?: (rows: AsideRow[] | null) => void;
   setIsDrawerOpen: (value: boolean) => void;
   setEditData: (data: RequestData) => void;
   setDetailData: (data: RequestData) => void;
@@ -93,7 +96,7 @@ const toHourNum = (v: any): number => {
 // 소수 3자리 반올림(기존 흐름과 동일하게 쓰기 좋음)
 const round3 = (n: number) => Math.round((Number(n) || 0) * 1000) / 1000;
 
-export default function Requester({ view, requestRows, onGlobalFilterChange, userRole, setIsDrawerOpen, setEditData, setDetailData, statusFromAside, clearStatusFromAside, filterResetKey }: RequesterProps) {
+export default function Requester({ view, requestRows, onGlobalFilterChange, onAsideRowsChange, userRole, setIsDrawerOpen, setEditData, setDetailData, statusFromAside, clearStatusFromAside, filterResetKey }: RequesterProps) {
   const [userName, setUserName] = useState("");
   const [userCompany, setUserCompany] = useState<string>("");
   const [userUid, setUserUid]   = useState("");
@@ -551,7 +554,32 @@ export default function Requester({ view, requestRows, onGlobalFilterChange, use
       return true;
     });
   }, [prepared, statusFilter, dateRange, keyword, deptFilter]);
-  
+
+  // ★ 추가: 나의 요청 리스트에서 상단 필터가 하나라도 걸려 있을 때만
+  //          필터 결과를 사이드바 카운트 모수로 올린다.
+  //          필터가 없으면 null을 올려 기존 집계(MainPage requests + 완료 게이트)를 그대로 유지한다.
+  useEffect(() => {
+    const hasAnyFilter =
+      statusFilter !== DEFAULT_STATUS ||
+      deptFilter !== DEFAULT_DEPT ||
+      !!(dateRange.start && dateRange.end) ||
+      !!keyword.trim();
+
+    if (view !== "myrequestlist" || !hasAnyFilter) {
+      onAsideRowsChange?.(null);
+      return;
+    }
+
+    onAsideRowsChange?.(toAsideRows(viewList));
+  }, [view, viewList, statusFilter, deptFilter, dateRange, keyword, onAsideRowsChange]);
+
+  // ★ 추가: 언마운트 시 사이드바를 기본 집계로 되돌림
+  useEffect(() => {
+    return () => {
+      onAsideRowsChange?.(null);
+    };
+  }, []);
+
   const canMutate = (id: string, action: Action) => {
     const row = requests.find(r => r.id === id);
     if (!row) return false;

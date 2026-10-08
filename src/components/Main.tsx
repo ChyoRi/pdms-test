@@ -17,6 +17,8 @@ interface MainProps {
   userRole: number | null;
   requestRows: RequestData[];
   onGlobalFilterChange: (state: GlobalFilterState) => void;
+  // ★ 추가: 리스트 화면의 필터 적용 결과를 사이드바로 올림 (null이면 기본 집계)
+  onAsideRowsChange?: (rows: AsideRow[] | null) => void;
   setIsDrawerOpen: (value: boolean) => void;
   setEditData: (data: RequestData) => void;
   setDetailData: (data: RequestData) => void;
@@ -55,7 +57,7 @@ const toCommonView = (view: ViewType): CommonViewType => {
   return "dashboard";
 };
 
-export default function Main({ userRole, requestRows, onGlobalFilterChange, setIsDrawerOpen, setEditData, setDetailData, statusFromAside, clearStatusFromAside, filterResetKey, onOpenAssignDesigner }: MainProps) {
+export default function Main({ userRole, requestRows, onGlobalFilterChange, onAsideRowsChange, setIsDrawerOpen, setEditData, setDetailData, statusFromAside, clearStatusFromAside, filterResetKey, onOpenAssignDesigner }: MainProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const view = (searchParams.get("view") || "dashboard") as ViewType;
 
@@ -86,6 +88,7 @@ export default function Main({ userRole, requestRows, onGlobalFilterChange, setI
           view={requesterView}
           userRole={userRole}
           onGlobalFilterChange={onGlobalFilterChange}
+          onAsideRowsChange={onAsideRowsChange}
           requestRows={requestRows}
           setIsDrawerOpen={setIsDrawerOpen}
           setEditData={setEditData}
@@ -106,6 +109,7 @@ export default function Main({ userRole, requestRows, onGlobalFilterChange, setI
           view={designerView}
           userRole={userRole}
           onGlobalFilterChange={onGlobalFilterChange}
+          onAsideRowsChange={onAsideRowsChange}
           requestRows={requestRows}
           setIsDrawerOpen={setIsDrawerOpen}
           setDetailData={setDetailData}
@@ -123,6 +127,7 @@ export default function Main({ userRole, requestRows, onGlobalFilterChange, setI
           view={view}
           userRole={userRole}
           onGlobalFilterChange={onGlobalFilterChange}
+          onAsideRowsChange={onAsideRowsChange}
           requestRows={requestRows}
           setIsDrawerOpen={setIsDrawerOpen}
           setDetailData={setDetailData}

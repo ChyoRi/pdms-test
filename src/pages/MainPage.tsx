@@ -329,6 +329,10 @@ export default function MainPage() {
     hasKeyword: false,
   });
 
+  // ★ 추가: 리스트 화면의 상단 필터 결과(viewList)를 그대로 받아 사이드바 카운트에 사용
+  //  - null이면 리스트 화면이 아니므로 기존 requests 기준으로 집계
+  const [asideFilteredRows, setAsideFilteredRows] = useState<RequestLite[] | null>(null);
+
   // 자식(ManagerRequestItem)에서 호출할 “모달 열기”
   const openAssignDesigner = (target: RequestData) => {
     setAssignTarget(target);
@@ -725,11 +729,12 @@ export default function MainPage() {
   return (
     <Container>
       <Aside
-        requests={requests}
+        requests={asideFilteredRows ?? requests}
         userName={userName}
         role={userRole}
         onRequestButtonClick={handleOpenCreate}
         onClickStatus={handleClickStatusFromAside}
+        skipCompletionGate={asideFilteredRows !== null}
       />
 
       <DashBoardFrame>
@@ -740,6 +745,7 @@ export default function MainPage() {
           requestRows={fullRequests}
           setIsDrawerOpen={setIsDrawerOpen}
           onGlobalFilterChange={setGlobalFilterState}
+          onAsideRowsChange={setAsideFilteredRows}
           setEditData={(data: RequestData) => {
             setSelectedData(data);
             setDrawerMode("edit");

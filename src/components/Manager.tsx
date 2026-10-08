@@ -22,6 +22,7 @@ import ChannelWorkHour from "./ChannelWorkHour";
 import DashBoard from "./DashBoard";
 import ExportCSV from "./ExportCSV";
 import { makeSearchIndex, matchesQuery } from "../utils/search";
+import { toAsideRows } from "../utils/asideRows";
 import { downloadArrayToCSV } from "../utils/firestoreToCSV";
 
 
@@ -36,6 +37,8 @@ interface RequesterProps {
   view: ViewType;
   requestRows: RequestData[];
   onGlobalFilterChange?: (state: GlobalFilterState) => void;
+  // ★ 추가: 상단 필터가 적용된 리스트를 사이드바 카운트용으로 올림
+  onAsideRowsChange?: (rows: AsideRow[] | null) => void;
   setIsDrawerOpen: (value: boolean) => void;
   setDetailData: (data: RequestData) => void;
   userRole: number | null;
@@ -113,6 +116,7 @@ export default function Manager({
   view,
   requestRows,
   onGlobalFilterChange,
+  onAsideRowsChange,
   setIsDrawerOpen,
   setDetailData,
   userRole,
@@ -680,6 +684,33 @@ export default function Manager({
     dateRange,
     keyword,
   ]);
+
+  // ★ 추가: 전체 요청 리스트에서 상단 필터가 하나라도 걸려 있을 때만
+  //          필터 결과를 사이드바 카운트 모수로 올린다.
+  //          필터가 없으면 null을 올려 기존 집계(MainPage requests + 완료 게이트)를 그대로 유지한다.
+  useEffect(() => {
+    const hasAnyFilter =
+      statusFilter !== DEFAULT_STATUS ||
+      requesterFilter !== DEFAULT_REQUESTER ||
+      designerFilter !== DEFAULT_DESIGNER ||
+      companyFilter !== DEFAULT_COMPANY ||
+      !!(dateRange.start && dateRange.end) ||
+      !!keyword.trim();
+
+    if (view !== "myrequestlist" || !hasAnyFilter) {
+      onAsideRowsChange?.(null);
+      return;
+    }
+
+    onAsideRowsChange?.(toAsideRows(viewList));
+  }, [view, viewList, statusFilter, requesterFilter, designerFilter, companyFilter, dateRange, keyword, onAsideRowsChange]);
+
+  // ★ 추가: 언마운트 시 사이드바를 기본 집계로 되돌림
+  useEffect(() => {
+    return () => {
+      onAsideRowsChange?.(null);
+    };
+  }, []);
 
   // ★ 추가: 기간/검색 필터 상태를 MainPage로 올림
   useEffect(() => {

@@ -39,6 +39,14 @@ declare global {
   }
   
   type RequestLite = Pick<RequestData, "id" | "status">;
+
+  // 사이드바 상태 카운트 집계용 경량 행
+  type AsideRow = {
+    id: string;
+    status?: string;
+    completion_date?: any;
+    company?: string;
+  };
 }
 
 export {};

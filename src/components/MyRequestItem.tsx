@@ -9,13 +9,14 @@ interface MyRequestItemProps {
 }
 
 export default function MyRequestItem({ item, onClickStatus }: MyRequestItemProps) {
-  const handleClick = () => {                // ★ 추가
-    if (!item.count) return;                // 0건이면 무시
+  // ★ 변경: 상태 필터가 카운트에 반영되면 선택한 상태 외에는 전부 0이 되므로
+  //          0건이어도 클릭은 허용해야 다른 상태로 이동할 수 있다.
+  const handleClick = () => {
     onClickStatus?.(item.status);
   };
 
   return (
-    <ItemWrap status={item.status} onClick={handleClick} $clickable={item.count > 0}>
+    <ItemWrap status={item.status} onClick={handleClick} $clickable>
       <Status>{item.status}</Status>
       <StatusCount status={item.status}>{item.count}</StatusCount>
     </ItemWrap>

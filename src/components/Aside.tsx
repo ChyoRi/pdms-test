@@ -16,6 +16,8 @@ interface AsideProps {
   userName: string;
   onRequestButtonClick: () => void;
   onClickStatus?: (status: string) => void;
+  // ★ 추가: 상단 필터 결과를 그대로 받은 경우 완료/취소 게이트를 건너뜀
+  skipCompletionGate?: boolean;
 }
 
 type Bucket = { status: string; count: number };
@@ -167,8 +169,10 @@ const getRoleTitle = (role: number | null, name: string): string => {
   }
 };
 
-export default function Aside({ requests, role, userName, onRequestButtonClick, onClickStatus }: AsideProps) {
-  const gated = applyCompletionGate(requests);
+export default function Aside({ requests, role, userName, onRequestButtonClick, onClickStatus, skipCompletionGate = false }: AsideProps) {
+  // ★ 변경: 리스트 화면 필터 결과를 받은 경우에는 게이트를 적용하지 않고
+  //          화면 리스트와 1:1로 동일한 모수로 집계한다.
+  const gated = skipCompletionGate ? requests : applyCompletionGate(requests);
   const statusList = makeStatusBuckets(role, gated as any[]);
 
   const navigate = useNavigate();

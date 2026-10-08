@@ -4,147 +4,66 @@ import {
   signInWithEmailAndPassword,
   signOut,
   setPersistence,
+  browserLocalPersistence,
   inMemoryPersistence,
   type Auth,
 } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "../firebaseconfig";
 
-/** ───── Base64 유틸 ───── */
-const b64encode = (buf: ArrayBuffer) =>
-  btoa(String.fromCharCode(...new Uint8Array(buf)));
-const b64decode = (b64: string): ArrayBuffer => {
-  const bin = atob(b64);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return bytes.buffer;
-};
+/**
+ * ★ 변경: "로그인 유지"에서 비밀번호 저장을 제거
+ *
+ * (기존) 이메일/비밀번호를 pcz_auth_shadow 쿠키에 AES-GCM으로 넣어두고
+ *        새로고침 때마다 꺼내서 재로그인했다.
+ *        복호화 패스프레이즈(VITE_AUTH_PASSPHRASE)가 비어 있어 하드코딩 폴백이 쓰였고,
+ *        그 값이 배포 번들에 그대로 포함되어 사실상 평문 보관이었다.
+ *
+ * (변경) Firebase 공식 persistence(갱신 토큰)를 사용한다.
+ *        비밀번호는 메모리에도, 쿠키에도, 스토리지에도 남지 않는다.
+ */
 
-/** ───── Buffer 변환 헬퍼 ───── */
-const u8ToArrayBuffer = (view: Uint8Array): ArrayBuffer => {
-  const out = new Uint8Array(view.byteLength);
-  out.set(view);
-  return out.buffer as ArrayBuffer;
-};
+/** ───── 레거시 쿠키 정리 ─────
+ *  이미 사용자 브라우저에 깔려 있는 비밀번호 쿠키를 지우기 위해 당분간 유지한다.
+ *  (배포 후 충분한 기간이 지나면 제거 가능)
+ */
+const LEGACY_COOKIE_NAME = "pcz_auth_shadow";
 
-/** ───── Cookie 유틸 ───── */
-function setCookie(name: string, value: string, days = 7, path = "/") {
-  const expires = new Date(Date.now() + days * 864e5).toUTCString();
-  document.cookie = `${encodeURIComponent(name)}=${encodeURIComponent(
-    value
-  )}; Expires=${expires}; Path=${path}; SameSite=Lax`;
-}
-function getCookie(name: string): string | null {
-  const key = `${encodeURIComponent(name)}=`;
-  const list = document.cookie.split("; ");
-  for (const p of list) if (p.startsWith(key)) return decodeURIComponent(p.slice(key.length));
-  return null;
-}
-function deleteCookie(name: string, path = "/") {
-  document.cookie = `${encodeURIComponent(name)}=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=${path}; SameSite=Lax`;
+export function clearLegacyAuthCookie(path = "/") {
+  document.cookie =
+    `${encodeURIComponent(LEGACY_COOKIE_NAME)}=` +
+    `; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=${path}; SameSite=Lax`;
 }
 
-/** ───── 키 파생(PBKDF2) ───── */
-async function deriveKey(passphrase: string, saltAb: ArrayBuffer): Promise<CryptoKey> {
-  const enc = new TextEncoder();
-  const baseKey = await crypto.subtle.importKey("raw", enc.encode(passphrase), "PBKDF2", false, ["deriveKey"]);
-  return crypto.subtle.deriveKey(
-    { name: "PBKDF2", salt: saltAb, iterations: 100_000, hash: "SHA-256" },
-    baseKey,
-    { name: "AES-GCM", length: 256 },
-    false,
-    ["encrypt", "decrypt"]
-  );
-}
-
-/** ───── 암/복호화 ───── */
-const VERSION = 1;
-async function encryptToB64(plain: object, passphrase: string): Promise<string> {
-  const enc = new TextEncoder();
-  const ivU8 = crypto.getRandomValues(new Uint8Array(12));
-  const saltU8 = crypto.getRandomValues(new Uint8Array(16));
-
-  const key = await deriveKey(passphrase, u8ToArrayBuffer(saltU8));
-  const cipherAB = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv: u8ToArrayBuffer(ivU8) },
-    key,
-    u8ToArrayBuffer(enc.encode(JSON.stringify(plain)))
-  );
-
-  const header = new Uint8Array(1 + ivU8.length + saltU8.length);
-  header[0] = VERSION;
-  header.set(ivU8, 1);
-  header.set(saltU8, 1 + ivU8.length);
-
-  const out = new Uint8Array(header.length + new Uint8Array(cipherAB).length);
-  out.set(header, 0);
-  out.set(new Uint8Array(cipherAB), header.length);
-
-  return b64encode(out.buffer);
-}
-
-async function decryptFromB64(b64: string, passphrase: string): Promise<any> {
-  const all = new Uint8Array(b64decode(b64));
-  if (all[0] !== VERSION) throw new Error("Unsupported version");
-  const ivU8 = all.slice(1, 13);
-  const saltU8 = all.slice(13, 29);
-  const cipherU8 = all.slice(29);
-
-  const key = await deriveKey(passphrase, u8ToArrayBuffer(saltU8));
-  const plainAB = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv: u8ToArrayBuffer(ivU8) },
-    key,
-    u8ToArrayBuffer(cipherU8)
-  );
-  return JSON.parse(new TextDecoder().decode(plainAB));
-}
-
-/** ───── Firebase 메모리 퍼시스턴스 ───── */
-export async function initAuthMemoryPersistence(auth: Auth) {
-  await setPersistence(auth, inMemoryPersistence);
-}
-
-/** ───── 자동로그인 쿠키 ───── */
-const COOKIE_NAME = "pcz_auth_shadow";
-// 환경변수 비어있으면 개발 기본키 사용
-const PASSPHRASE = import.meta.env.VITE_AUTH_PASSPHRASE || "dev-only-fallback-change-this";
-
-/** ★ 추가: 회원가입/기타 상황에서 바로 저장할 때 사용 */
-export async function saveAutoLoginCookie(email: string, password: string, days = 7) {
-  const payload = { email, password, t: Date.now() };
-  const b64 = await encryptToB64(payload, PASSPHRASE);
-  setCookie(COOKIE_NAME, b64, days);
-}
-
-/** 기존 로그인 함수: 체크박스에 따라 저장/삭제 */
+/** ───── 로그인 ─────
+ *  remember=true  : browserLocalPersistence (브라우저를 닫았다 열어도 유지)
+ *  remember=false : inMemoryPersistence     (새로고침하면 해제 — 기존 동작과 동일)
+ *  persistence는 반드시 signIn 전에 지정해야 한다.
+ */
 export async function loginWithRemember(
   auth: Auth,
   email: string,
   password: string,
-  remember: boolean,
-  days = 7
+  remember: boolean
 ) {
-  const cred = await signInWithEmailAndPassword(auth, email, password);
-  if (remember) {
-    await saveAutoLoginCookie(email, password, days); // ★ 변경: 재사용
-  } else {
-    deleteCookie(COOKIE_NAME);
-  }
-  return cred;
+  await setPersistence(
+    auth,
+    remember ? browserLocalPersistence : inMemoryPersistence
+  );
+  clearLegacyAuthCookie();
+  return signInWithEmailAndPassword(auth, email, password);
 }
 
-export async function tryAutoLogin(auth: Auth): Promise<boolean> {
-  const b64 = getCookie(COOKIE_NAME);
-  if (!b64) return false;
-  try {
-    const { email, password } = await decryptFromB64(b64, PASSPHRASE);
-    await signInWithEmailAndPassword(auth, email, password);
-    return true;
-  } catch {
-    deleteCookie(COOKIE_NAME);
-    return false;
-  }
+/** ───── 관리자 승인 여부 ─────
+ *  로그인 시점과 세션 복구 시점 양쪽에서 같은 기준을 쓰기 위해 분리했다.
+ */
+export async function isUserApproved(uid: string): Promise<boolean> {
+  const snap = await getDoc(doc(db, "users", uid));
+  return snap.exists() && (snap.data() as { approved?: unknown }).approved === true;
 }
 
+/** ───── 로그아웃 ───── */
 export async function logoutAll(auth: Auth) {
-  deleteCookie(COOKIE_NAME);
+  clearLegacyAuthCookie();
   await signOut(auth);
 }
