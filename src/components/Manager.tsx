@@ -22,7 +22,7 @@ import ChannelWorkHour from "./ChannelWorkHour";
 import DashBoard from "./DashBoard";
 import ExportCSV from "./ExportCSV";
 import { makeSearchIndex, matchesQuery } from "../utils/search";
-import { toAsideRows } from "../utils/asideRows";
+import { toAsideRows, formatRangeLabel, makeFilterLabel } from "../utils/asideRows";
 import { downloadArrayToCSV } from "../utils/firestoreToCSV";
 
 
@@ -38,7 +38,7 @@ interface RequesterProps {
   requestRows: RequestData[];
   onGlobalFilterChange?: (state: GlobalFilterState) => void;
   // ★ 추가: 상단 필터가 적용된 리스트를 사이드바 카운트용으로 올림
-  onAsideRowsChange?: (rows: AsideRow[] | null) => void;
+  onAsideRowsChange?: (info: AsideFilterInfo | null) => void;
   setIsDrawerOpen: (value: boolean) => void;
   setDetailData: (data: RequestData) => void;
   userRole: number | null;
@@ -689,20 +689,22 @@ export default function Manager({
   //          필터 결과를 사이드바 카운트 모수로 올린다.
   //          필터가 없으면 null을 올려 기존 집계(MainPage requests + 완료 게이트)를 그대로 유지한다.
   useEffect(() => {
-    const hasAnyFilter =
-      statusFilter !== DEFAULT_STATUS ||
-      requesterFilter !== DEFAULT_REQUESTER ||
-      designerFilter !== DEFAULT_DESIGNER ||
-      companyFilter !== DEFAULT_COMPANY ||
-      !!(dateRange.start && dateRange.end) ||
-      !!keyword.trim();
+    const labels = [
+      formatRangeLabel(dateRange.start, dateRange.end),
+      makeFilterLabel("회사", companyFilter, DEFAULT_COMPANY),
+      makeFilterLabel("요청자", requesterFilter, DEFAULT_REQUESTER),
+      makeFilterLabel("디자이너", designerFilter, DEFAULT_DESIGNER),
+      // statusFilter는 DB 원본값이므로 매니저 화면 표기로 되돌려서 라벨에 쓴다
+      makeFilterLabel("상태", mapStatusForManager(statusFilter), DEFAULT_STATUS),
+      keyword.trim() ? `검색 ${keyword.trim()}` : "",
+    ].filter(Boolean);
 
-    if (view !== "myrequestlist" || !hasAnyFilter) {
+    if (view !== "myrequestlist" || labels.length === 0) {
       onAsideRowsChange?.(null);
       return;
     }
 
-    onAsideRowsChange?.(toAsideRows(viewList));
+    onAsideRowsChange?.({ rows: toAsideRows(viewList), labels });
   }, [view, viewList, statusFilter, requesterFilter, designerFilter, companyFilter, dateRange, keyword, onAsideRowsChange]);
 
   // ★ 추가: 언마운트 시 사이드바를 기본 집계로 되돌림

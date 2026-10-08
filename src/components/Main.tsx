@@ -18,7 +18,7 @@ interface MainProps {
   requestRows: RequestData[];
   onGlobalFilterChange: (state: GlobalFilterState) => void;
   // ★ 추가: 리스트 화면의 필터 적용 결과를 사이드바로 올림 (null이면 기본 집계)
-  onAsideRowsChange?: (rows: AsideRow[] | null) => void;
+  onAsideRowsChange?: (info: AsideFilterInfo | null) => void;
   setIsDrawerOpen: (value: boolean) => void;
   setEditData: (data: RequestData) => void;
   setDetailData: (data: RequestData) => void;

@@ -8,7 +8,7 @@ import MainTitle from "./MainTitle";
 import RequestFilterSearchWrap, { type CompletionSortKey } from "./RequestFilterSearchWrap";
 import DashBoard from "./DashBoard";
 import { makeSearchIndex, matchesQuery } from "../utils/search";
-import { toAsideRows } from "../utils/asideRows";
+import { toAsideRows, formatRangeLabel, makeFilterLabel } from "../utils/asideRows";
 
 type ViewType = "dashboard" | "myrequestlist" | "allrequestlist" | "inworkhour";
 
@@ -22,7 +22,7 @@ interface RequesterProps {
   requestRows: RequestData[];
   onGlobalFilterChange?: (state: GlobalFilterState) => void;
   // ★ 추가: 상단 필터가 적용된 리스트를 사이드바 카운트용으로 올림
-  onAsideRowsChange?: (rows: AsideRow[] | null) => void;
+  onAsideRowsChange?: (info: AsideFilterInfo | null) => void;
   userRole: number | null;
   setIsDrawerOpen: (value: boolean) => void;
   setDetailData: (data: RequestData) => void;
@@ -630,18 +630,19 @@ export default function Designer({ view, userRole, requestRows, onGlobalFilterCh
   //          필터 결과를 사이드바 카운트 모수로 올린다.
   //          필터가 없으면 null을 올려 기존 집계(MainPage requests + 완료 게이트)를 그대로 유지한다.
   useEffect(() => {
-    const hasAnyFilter =
-      statusFilter !== DEFAULT_STATUS ||
-      companyFilter !== DEFAULT_COMPANY ||
-      !!(dateRange.start && dateRange.end) ||
-      !!keyword.trim();
+    const labels = [
+      formatRangeLabel(dateRange.start, dateRange.end),
+      makeFilterLabel("회사", companyFilter, DEFAULT_COMPANY),
+      makeFilterLabel("상태", statusFilter, DEFAULT_STATUS),
+      keyword.trim() ? `검색 ${keyword.trim()}` : "",
+    ].filter(Boolean);
 
-    if (view !== "myrequestlist" || !hasAnyFilter) {
+    if (view !== "myrequestlist" || labels.length === 0) {
       onAsideRowsChange?.(null);
       return;
     }
 
-    onAsideRowsChange?.(toAsideRows(viewList));
+    onAsideRowsChange?.({ rows: toAsideRows(viewList), labels });
   }, [view, viewList, statusFilter, companyFilter, dateRange, keyword, onAsideRowsChange]);
 
   // ★ 추가: 언마운트 시 사이드바를 기본 집계로 되돌림

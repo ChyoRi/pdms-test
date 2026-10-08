@@ -47,6 +47,12 @@ declare global {
     completion_date?: any;
     company?: string;
   };
+
+  // 사이드바로 올리는 필터 적용 결과 (rows = 카운트 모수, labels = 화면에 표시할 필터 라벨)
+  type AsideFilterInfo = {
+    rows: AsideRow[];
+    labels: string[];
+  };
 }
 
 export {};

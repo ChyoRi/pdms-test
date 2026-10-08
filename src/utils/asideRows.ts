@@ -9,6 +9,24 @@
  * status는 화면 표시용 displayStatus가 아니라 DB 원본 값을 유지한다.
  * (Aside의 makeStatusBuckets가 역할별 라벨 묶음/스왑을 원본 기준으로 처리하기 때문)
  */
+/** 사이드바 필터 라벨용 기간 표기 (리스트 표의 10/8 표기와 동일한 형식) */
+export const formatRangeLabel = (start: Date | null, end: Date | null): string => {
+  if (!start || !end) return "";
+
+  const md = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
+
+  return md(start) === md(end) ? md(start) : `${md(start)} ~ ${md(end)}`;
+};
+
+/** 값이 기본값("○○ 선택")이 아닐 때만 "접두사 값" 형태의 라벨을 만든다 */
+export const makeFilterLabel = (prefix: string, value: string, defaultValue: string): string => {
+  const v = String(value ?? "").trim();
+
+  if (!v || v === defaultValue) return "";
+
+  return `${prefix} ${v}`;
+};
+
 export const toAsideRows = (rows: any[]): AsideRow[] => {
   return (rows ?? []).map((r: any) => ({
     id: String(r?.id ?? ""),

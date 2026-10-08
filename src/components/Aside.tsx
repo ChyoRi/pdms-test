@@ -18,6 +18,8 @@ interface AsideProps {
   onClickStatus?: (status: string) => void;
   // ★ 추가: 상단 필터 결과를 그대로 받은 경우 완료/취소 게이트를 건너뜀
   skipCompletionGate?: boolean;
+  // ★ 추가: 현재 적용 중인 상단 필터 라벨 (비어 있으면 영역 자체를 렌더하지 않음)
+  filterLabels?: string[];
 }
 
 type Bucket = { status: string; count: number };
@@ -169,7 +171,7 @@ const getRoleTitle = (role: number | null, name: string): string => {
   }
 };
 
-export default function Aside({ requests, role, userName, onRequestButtonClick, onClickStatus, skipCompletionGate = false }: AsideProps) {
+export default function Aside({ requests, role, userName, onRequestButtonClick, onClickStatus, skipCompletionGate = false, filterLabels = [] }: AsideProps) {
   // ★ 변경: 리스트 화면 필터 결과를 받은 경우에는 게이트를 적용하지 않고
   //          화면 리스트와 1:1로 동일한 모수로 집계한다.
   const gated = skipCompletionGate ? requests : applyCompletionGate(requests);
@@ -195,6 +197,16 @@ export default function Aside({ requests, role, userName, onRequestButtonClick, 
             <MyRequestIcon src={myrequestIcon} />
             <MyRequestTitle>{getRoleTitle(role, userName)}</MyRequestTitle>
           </MyRequestTitleWrap>
+
+          {/* ★ 추가: 상단 필터가 걸려 있을 때만 적용 중인 필터 라벨 노출 */}
+          {filterLabels.length > 0 && (
+            <FilterLabelWrap>
+              {filterLabels.map((label) => (
+                <FilterLabel key={label}>{label}</FilterLabel>
+              ))}
+            </FilterLabelWrap>
+          )}
+
           <MyRequestList>
             {statusList.map((item) => (
               <MyRequestItem 
@@ -286,6 +298,27 @@ const MyRequestTitle = styled.h4`
   font-size: 17px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.black};
+`;
+
+// ★ 추가: 적용 중인 상단 필터 라벨 영역
+const FilterLabelWrap = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: -14px 0 14px;
+`;
+
+const FilterLabel = styled.span`
+  padding: 4px 8px;
+  border: 1px solid ${({ theme }) => theme.colors.gray01};
+  border-radius: 4px;
+  font-family: 'Pretendard';
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: ${({ theme }) => theme.colors.gray06};
+  background-color: ${({ theme }) => theme.colors.gray08};
+  word-break: break-all;
 `;
 
 const MyRequestList = styled.ul`
