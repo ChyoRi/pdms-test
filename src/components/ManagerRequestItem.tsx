@@ -546,10 +546,11 @@ const AssignButton = styled.button`
 `;
 
 const ReviewButton = styled.button`
-  padding: 4.5px 10px;
+  padding: 4.5px 5px;
   border-radius: 4px;
   background-color: ${({ theme }) => theme.colors.black};
   color: ${({ theme }) => theme.colors.white01};
+  white-space: nowrap;
 `;
 
 const CompletedText = styled.span`

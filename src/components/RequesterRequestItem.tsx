@@ -525,10 +525,11 @@ const StautsBadge = styled.span<{ status: string }>`
 `;
 
 const ReviewButton = styled.button`
-  padding: 4.5px 10px;
+  padding: 4.5px 5px;
   border-radius: 4px;
   color: ${({ theme }) => theme.colors.white01};
   background-color: green;
+  white-space: nowrap;
   &:disabled {
     background-color: ${({ theme }) => theme.colors.gray07};
     color: ${({ theme }) => theme.colors.gray06};

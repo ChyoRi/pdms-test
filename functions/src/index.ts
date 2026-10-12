@@ -2,6 +2,7 @@
 import * as admin from "firebase-admin";
 import nodemailer = require("nodemailer");
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import { onCall, HttpsError } from "firebase-functions/v2/https";
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -270,3 +271,66 @@ export const notifyKyungdongComment = onDocumentCreated(
     await sendMail(to, subject, html);
   }
 );
+
+/**
+ * ✅ 가입 거절 (Functions v2 / onCall)
+ * - 기존에는 클라이언트가 users 문서만 지워서 Auth 계정이 남았고,
+ *   그 계정으로 다시 로그인해 프로필을 재생성할 수 있었다(거절이 무효).
+ * - 프로필과 Auth 계정을 서버에서 함께 삭제한다.
+ *
+ * ⚠ 호출자가 관리자인지는 반드시 서버에서 확인한다.
+ *   onCall은 로그인한 사용자라면 누구나 호출할 수 있다.
+ */
+export const rejectSignup = onCall({ region: "asia-northeast3" }, async (req) => {
+  // 1) 호출자 = 관리자(can_switch_account) 확인
+  const callerUid = req.auth?.uid;
+  if (!callerUid) {
+    throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+  }
+
+  const callerSnap = await db.collection("users").doc(callerUid).get();
+  if ((callerSnap.data() as any)?.can_switch_account !== true) {
+    throw new HttpsError("permission-denied", "관리자만 사용할 수 있습니다.");
+  }
+
+  // 2) 대상 검증
+  const targetUid = String(req.data?.uid ?? "").trim();
+  if (!targetUid) {
+    throw new HttpsError("invalid-argument", "uid가 필요합니다.");
+  }
+  if (targetUid === callerUid) {
+    throw new HttpsError("failed-precondition", "본인 계정은 거절할 수 없습니다.");
+  }
+
+  const targetRef = db.collection("users").doc(targetUid);
+  const target = (await targetRef.get()).data() as any | undefined;
+
+  if (target?.can_switch_account === true) {
+    throw new HttpsError("failed-precondition", "관리자 계정은 거절할 수 없습니다.");
+  }
+  if (target?.approved === true) {
+    throw new HttpsError(
+      "failed-precondition",
+      "이미 승인된 계정입니다. 승인을 취소한 뒤 진행하세요."
+    );
+  }
+
+  // 3) 프로필 삭제 → Auth 계정 삭제
+  //    (문서가 없는 '유령 계정'도 이 경로로 정리할 수 있다)
+  await targetRef.delete();
+
+  let authDeleted = true;
+  try {
+    await admin.auth().deleteUser(targetUid);
+  } catch (e: any) {
+    if (e?.code === "auth/user-not-found") {
+      authDeleted = false; // 이미 없으면 정상 처리
+    } else {
+      throw e;
+    }
+  }
+
+  console.log("[rejectSignup] done", { callerUid, targetUid, authDeleted });
+
+  return { ok: true, authDeleted };
+});

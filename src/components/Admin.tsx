@@ -1,6 +1,6 @@
 import styled from "styled-components";
 import { useEffect, useState, useCallback } from "react";
-import { auth, db } from "../firebaseconfig";
+import { app, auth, db } from "../firebaseconfig";
 import {
   collection,
   query,
@@ -9,8 +9,16 @@ import {
   doc,
   getDoc,
   updateDoc,
-  deleteDoc,
 } from "firebase/firestore";
+import { getFunctions, httpsCallable } from "firebase/functions";
+
+// ★ 변경: 거절은 Cloud Function이 처리한다.
+//   (브라우저에서는 남의 Auth 계정을 삭제할 수 없어 프로필만 지워졌고,
+//    그 결과 로그인 가능한 '유령 계정'이 남아 거절이 무효화됐다)
+const rejectSignupFn = httpsCallable<{ uid: string }, { ok: boolean; authDeleted: boolean }>(
+  getFunctions(app, "asia-northeast3"),
+  "rejectSignup"
+);
 
 type PendingUser = {
   uid: string;
@@ -89,13 +97,13 @@ export default function Admin() {
 
   const reject = async (u: PendingUser) => {
     if (busyUid) return;
-    if (!confirm(`${u.name}(${u.email}) 가입을 거절(삭제)할까요?\n\n프로필이 삭제됩니다. (로그인 계정 자체는 콘솔에서 별도 삭제 필요)`)) return;
+    if (!confirm(`${u.name}(${u.email}) 가입을 거절할까요?\n\n프로필과 로그인 계정이 함께 삭제됩니다.`)) return;
     setBusyUid(u.uid);
     try {
-      await deleteDoc(doc(db, "users", u.uid));
+      await rejectSignupFn({ uid: u.uid });
       setRows((prev) => prev.filter((x) => x.uid !== u.uid));
     } catch (e: any) {
-      alert("거절 중 오류가 발생했습니다: " + e.message);
+      alert("거절 중 오류가 발생했습니다: " + (e?.message ?? e));
     } finally {
       setBusyUid("");
     }
