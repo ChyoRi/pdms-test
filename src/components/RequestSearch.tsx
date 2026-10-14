@@ -5,20 +5,22 @@ export default function RequestSearch({
   keyword,
   onKeywordChange,
   onSearch,
+  placeholder = "문서번호와 작업항목을 검색해 주세요.",
 }: {
   keyword: string;
   onKeywordChange: (v: string) => void;
-  onSearch: (keyword: string) => void;
+  onSearch?: (keyword: string) => void; // 생략 시 keyword 바인딩만 (회원 목록 등)
+  placeholder?: string;
 }) {
   const push = (v: string) => {
     onKeywordChange(v);      // 인풋 바인딩
-    onSearch(v.trim());      // 타이핑 즉시 검색 (빈 문자열이면 전체 표시)
+    onSearch?.(v.trim());    // 타이핑 즉시 검색 (빈 문자열이면 전체 표시)
   };
 
   return (
     <Container>
       <SearchInput
-        placeholder="문서번호와 작업항목을 검색해 주세요."
+        placeholder={placeholder}
         value={keyword}
         onChange={(e) => push(e.target.value)}
         onKeyDown={(e) => {

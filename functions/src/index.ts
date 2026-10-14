@@ -315,22 +315,154 @@ export const rejectSignup = onCall({ region: "asia-northeast3" }, async (req) =>
     );
   }
 
-  // 3) 프로필 삭제 → Auth 계정 삭제
+  // 3) 프로필 + Auth 삭제, 거절 이력 기록
   //    (문서가 없는 '유령 계정'도 이 경로로 정리할 수 있다)
-  await targetRef.delete();
-
-  let authDeleted = true;
-  try {
-    await admin.auth().deleteUser(targetUid);
-  } catch (e: any) {
-    if (e?.code === "auth/user-not-found") {
-      authDeleted = false; // 이미 없으면 정상 처리
-    } else {
-      throw e;
-    }
-  }
+  const authDeleted = await deleteUserCompletely(targetUid);
+  await writeSignupHistory("rejected", targetUid, target, callerUid, callerSnap.data());
 
   console.log("[rejectSignup] done", { callerUid, targetUid, authDeleted });
 
   return { ok: true, authDeleted };
 });
+
+/**
+ * ✅ 회원 삭제 (Functions v2 / onCall)
+ * - 회원 관리 > 회원 목록에서 관리자가 승인된 회원을 삭제
+ * - users 문서와 Auth 계정을 함께 삭제한다.
+ */
+export const deleteMember = onCall({ region: "asia-northeast3" }, async (req) => {
+  // 1) 호출자 = 관리자(can_switch_account) 확인
+  const callerUid = req.auth?.uid;
+  if (!callerUid) {
+    throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+  }
+
+  const callerSnap = await db.collection("users").doc(callerUid).get();
+  if ((callerSnap.data() as any)?.can_switch_account !== true) {
+    throw new HttpsError("permission-denied", "관리자만 사용할 수 있습니다.");
+  }
+
+  // 2) 대상 검증
+  const targetUid = String(req.data?.uid ?? "").trim();
+  if (!targetUid) {
+    throw new HttpsError("invalid-argument", "uid가 필요합니다.");
+  }
+  if (targetUid === callerUid) {
+    throw new HttpsError("failed-precondition", "본인 계정은 삭제할 수 없습니다.");
+  }
+
+  const target = (await db.collection("users").doc(targetUid).get()).data() as any | undefined;
+
+  if (target?.can_switch_account === true) {
+    throw new HttpsError("failed-precondition", "관리자 계정은 삭제할 수 없습니다.");
+  }
+
+  // 3) 프로필 + Auth 삭제 (삭제는 가입 승인 이력에 기록하지 않음)
+  const authDeleted = await deleteUserCompletely(targetUid);
+
+  console.log("[deleteMember] done", { callerUid, targetUid, authDeleted });
+
+  return { ok: true, authDeleted };
+});
+
+/**
+ * ✅ 회원 목록 (Functions v2 / onCall)
+ * - users 문서만 조회하면 Auth에만 있는 계정, approved 필드가 없는 계정이 빠지고
+ *   프로필이 비어 있는 문서는 빈 행으로 보인다.
+ * - Auth 계정과 users 문서를 uid로 합쳐서 반환한다. (승인 대기 approved=false 는 제외)
+ */
+export const listMembers = onCall({ region: "asia-northeast3" }, async (req) => {
+  const callerUid = req.auth?.uid;
+  if (!callerUid) {
+    throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+  }
+
+  const callerSnap = await db.collection("users").doc(callerUid).get();
+  if ((callerSnap.data() as any)?.can_switch_account !== true) {
+    throw new HttpsError("permission-denied", "관리자만 사용할 수 있습니다.");
+  }
+
+  // 1) Auth 계정 전체
+  const authUsers = new Map<string, admin.auth.UserRecord>();
+  let pageToken: string | undefined;
+  do {
+    const page = await admin.auth().listUsers(1000, pageToken);
+    page.users.forEach((u) => authUsers.set(u.uid, u));
+    pageToken = page.pageToken;
+  } while (pageToken);
+
+  // 2) users 문서 전체
+  const profiles = new Map<string, any>();
+  (await db.collection("users").get()).forEach((d) => profiles.set(d.id, d.data()));
+
+  // 3) uid 기준으로 합치기
+  const uids = new Set([...authUsers.keys(), ...profiles.keys()]);
+  const members: any[] = [];
+
+  uids.forEach((uid) => {
+    const a = authUsers.get(uid);
+    const p = profiles.get(uid);
+
+    if (p?.approved === false) return; // 승인 대기 → 가입 승인 관리 탭에서 처리
+
+    // 상태: ok=정상 / no_approved=approved 값 없음(로그인 불가) / no_profile=users 문서 없음 / no_auth=Auth 계정 없음
+    let status = "ok";
+    if (!a) status = "no_auth";
+    else if (!p) status = "no_profile";
+    else if (p.approved !== true) status = "no_approved";
+
+    const createdAt =
+      typeof p?.createdAt?.toMillis === "function"
+        ? p.createdAt.toMillis()
+        : a?.metadata.creationTime
+          ? Date.parse(a.metadata.creationTime)
+          : null;
+
+    members.push({
+      uid,
+      name: String(p?.name || a?.displayName || ""),
+      email: String(p?.email || a?.email || ""),
+      company: String(p?.company ?? ""),
+      role: typeof p?.role === "number" ? p.role : null,
+      isAdmin: p?.can_switch_account === true,
+      createdAt,
+      status,
+    });
+  });
+
+  return { members };
+});
+
+/** users 문서 → Auth 계정 순으로 삭제. Auth가 이미 없으면 false */
+async function deleteUserCompletely(uid: string): Promise<boolean> {
+  await db.collection("users").doc(uid).delete();
+
+  try {
+    await admin.auth().deleteUser(uid);
+    return true;
+  } catch (e: any) {
+    if (e?.code === "auth/user-not-found") return false; // 이미 없으면 정상 처리
+    throw e;
+  }
+}
+
+/** 회원 관리 > 가입 승인 이력 기록 */
+async function writeSignupHistory(
+  action: "rejected",
+  uid: string,
+  target: any,
+  callerUid: string,
+  caller: any
+) {
+  await db.collection("signup_history").add({
+    action,
+    uid,
+    name: String(target?.name ?? ""),
+    email: String(target?.email ?? ""),
+    company: String(target?.company ?? ""),
+    role: typeof target?.role === "number" ? target.role : null,
+    processed_by_uid: callerUid,
+    processed_by_name: String(caller?.name ?? ""),
+    processed_at: admin.firestore.FieldValue.serverTimestamp(),
+  });
+}

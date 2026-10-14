@@ -487,10 +487,11 @@ const UrlLink = styled.a<{ $disabled?: boolean; $isCompleted?: boolean }>`
 
 const StautsBadge = styled.span<{ status: string }>`
   border-radius: 14px;
-  padding: 5.5px 12px;
+  padding: 5.5px 8px;
   font-family: 'Pretendard';
   font-size: 14px;
   font-weight: 400;
+  white-space: nowrap;
   color: ${({ status, theme }) => {
     switch (status) {
       case "대기":

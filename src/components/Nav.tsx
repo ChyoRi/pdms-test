@@ -6,7 +6,7 @@ type ViewType = "dashboard" | "myrequestlist" | "allrequestlist" | "inworkhour" 
 
 interface NavProps {
   userRole: number | null; // 1: 요청자, 2: 디자이너, 3: 담당자(매니저)
-  canSwitchAccount?: boolean; // 관리자 여부 (가입 승인 메뉴 노출용)
+  canSwitchAccount?: boolean; // 관리자 여부 (회원 관리 메뉴 노출용)
   pendingCount?: number; // 승인 대기자 수 (배지 표시용)
   onResetFilters?: () => void;
 }
@@ -114,7 +114,7 @@ export default function Nav({ userRole, canSwitchAccount, pendingCount = 0, onRe
           </MainMenuItem>
         )}
 
-        {/* 6) 관리자 전용: 가입 승인 관리 (대기자 있으면 배지) */}
+        {/* 6) 관리자 전용: 회원 관리 (대기자 있으면 배지) */}
         {canSwitchAccount && (
           <MainMenuItem>
             <AdminMenuButton
@@ -122,7 +122,7 @@ export default function Nav({ userRole, canSwitchAccount, pendingCount = 0, onRe
               onClick={() => go("admin")}
               $active={view === "admin"}
             >
-              가입 승인 관리
+              회원 관리
               {pendingCount > 0 && (
                 <PendingBadge>{pendingCount > 99 ? "99+" : pendingCount}</PendingBadge>
               )}
