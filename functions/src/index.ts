@@ -315,10 +315,9 @@ export const rejectSignup = onCall({ region: "asia-northeast3" }, async (req) =>
     );
   }
 
-  // 3) 프로필 + Auth 삭제, 거절 이력 기록
+  // 3) 프로필 + Auth 삭제
   //    (문서가 없는 '유령 계정'도 이 경로로 정리할 수 있다)
   const authDeleted = await deleteUserCompletely(targetUid);
-  await writeSignupHistory("rejected", targetUid, target, callerUid, callerSnap.data());
 
   console.log("[rejectSignup] done", { callerUid, targetUid, authDeleted });
 
@@ -444,25 +443,4 @@ async function deleteUserCompletely(uid: string): Promise<boolean> {
     if (e?.code === "auth/user-not-found") return false; // 이미 없으면 정상 처리
     throw e;
   }
-}
-
-/** 회원 관리 > 가입 승인 이력 기록 */
-async function writeSignupHistory(
-  action: "rejected",
-  uid: string,
-  target: any,
-  callerUid: string,
-  caller: any
-) {
-  await db.collection("signup_history").add({
-    action,
-    uid,
-    name: String(target?.name ?? ""),
-    email: String(target?.email ?? ""),
-    company: String(target?.company ?? ""),
-    role: typeof target?.role === "number" ? target.role : null,
-    processed_by_uid: callerUid,
-    processed_by_name: String(caller?.name ?? ""),
-    processed_at: admin.firestore.FieldValue.serverTimestamp(),
-  });
 }

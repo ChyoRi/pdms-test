@@ -1,5 +1,5 @@
 import styled from "styled-components";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { app, auth, db } from "../firebaseconfig";
 import {
@@ -9,13 +9,12 @@ import {
   getDocs,
   doc,
   getDoc,
-  orderBy,
-  limit,
-  writeBatch,
+  updateDoc,
   serverTimestamp,
 } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import RequestSearch from "./RequestSearch";
+import selectBoxArrow from "../assets/selectbox-arrow.svg";
 
 // ★ 변경: 거절은 Cloud Function이 처리한다.
 //   (브라우저에서는 남의 Auth 계정을 삭제할 수 없어 프로필만 지워졌고,
@@ -62,16 +61,15 @@ const STATUS_HINT: Record<Exclude<MemberStatus, "ok">, string> = {
   no_auth: "users 문서만 있고 Auth 로그인 계정이 없습니다.",
 };
 
-// 승인/거절 이력 컬렉션 (승인=클라이언트, 거절=rejectSignup 함수가 기록)
-const HISTORY_COL = "signup_history";
-const HISTORY_LIMIT = 300;
+// 회원 목록 필터 기본값 (= 전체)
+const ALL_COMPANY = "회사 선택";
+const ALL_ROLE = "권한 선택";
 
-type AdminTab = "pending" | "members" | "history";
+type AdminTab = "pending" | "members";
 
 const TABS: { key: AdminTab; label: string }[] = [
   { key: "pending", label: "가입 승인 관리" },
   { key: "members", label: "회원 목록" },
-  { key: "history", label: "가입 승인 이력" },
 ];
 
 type UserRow = {
@@ -84,24 +82,7 @@ type UserRow = {
   createdAt: any;
 };
 
-type HistoryAction = "approved" | "rejected";
-
-const ACTION_LABEL: Record<HistoryAction, string> = {
-  approved: "승인",
-  rejected: "거절",
-};
-
-type HistoryRow = {
-  id: string;
-  action: HistoryAction;
-  name: string;
-  email: string;
-  company: string;
-  role: number | null;
-  processedAt: any;
-};
-
-type Me = { uid: string; name: string };
+type Me = { uid: string };
 
 const roleName = (role: number | null) => {
   switch (role) {
@@ -153,9 +134,8 @@ export default function Admin() {
       const user = auth.currentUser;
       if (!user) { setIsAdmin(false); return; }
       const snap = await getDoc(doc(db, "users", user.uid));
-      const data = snap.data() as any;
-      setIsAdmin(snap.exists() && data?.can_switch_account === true);
-      setMe({ uid: user.uid, name: String(data?.name ?? user.displayName ?? "") });
+      setIsAdmin(snap.exists() && (snap.data() as any)?.can_switch_account === true);
+      setMe({ uid: user.uid });
     };
     run();
   }, []);
@@ -189,7 +169,6 @@ export default function Admin() {
 
       {tab === "pending" && <PendingPanel me={me} />}
       {tab === "members" && <MembersPanel me={me} />}
-      {tab === "history" && <HistoryPanel />}
     </Wrap>
   );
 }
@@ -220,25 +199,11 @@ function PendingPanel({ me }: { me: Me }) {
     if (!confirm(`${u.name}(${u.email}) 계정을 승인할까요?`)) return;
     setBusyUid(u.uid);
     try {
-      // 승인 처리 + 이력 기록을 한 번에 커밋
-      const batch = writeBatch(db);
-      batch.update(doc(db, "users", u.uid), {
+      await updateDoc(doc(db, "users", u.uid), {
         approved: true,
         approved_at: serverTimestamp(),
         approved_by: me.uid,
       });
-      batch.set(doc(collection(db, HISTORY_COL)), {
-        action: "approved",
-        uid: u.uid,
-        name: u.name,
-        email: u.email,
-        company: u.company,
-        role: u.role,
-        processed_by_uid: me.uid,
-        processed_by_name: me.name,
-        processed_at: serverTimestamp(),
-      });
-      await batch.commit();
       setRows((prev) => prev.filter((x) => x.uid !== u.uid));
     } catch (e: any) {
       alert("승인 중 오류가 발생했습니다: " + e.message);
@@ -319,20 +284,17 @@ function MembersPanel({ me }: { me: Me }) {
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState<MemberRow[]>([]);
   const [keyword, setKeyword] = useState("");
+  const [company, setCompany] = useState(ALL_COMPANY);
+  const [role, setRole] = useState(ALL_ROLE);
+  const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
   const [busyUid, setBusyUid] = useState<string>("");
 
-  // Auth 계정 + users 문서를 합친 회원 목록 (승인 대기 제외), 최근 가입 순
+  // Auth 계정 + users 문서를 합친 회원 목록 (승인 대기 제외)
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const { data } = await listMembersFn();
-      const list = [...data.members];
-      list.sort(
-        (a, b) =>
-          (b.createdAt ?? 0) - (a.createdAt ?? 0) ||
-          a.name.localeCompare(b.name, "ko")
-      );
-      setRows(list);
+      setRows(data.members);
     } catch (e: any) {
       alert("회원 목록을 불러오는 중 오류가 발생했습니다: " + (e?.message ?? e));
     } finally {
@@ -357,12 +319,26 @@ function MembersPanel({ me }: { me: Me }) {
     }
   };
 
+  // 회사 옵션은 회원 데이터에서 추출
+  const companyOptions = useMemo(
+    () =>
+      Array.from(new Set(rows.map((u) => u.company).filter(Boolean))).sort((a, b) =>
+        a.localeCompare(b, "en", { sensitivity: "base" })
+      ),
+    [rows]
+  );
+
   const kw = keyword.trim().toLowerCase();
-  const filtered = kw
-    ? rows.filter((u) =>
-        [u.name, u.email, u.company].some((v) => v.toLowerCase().includes(kw))
-      )
-    : rows;
+  const filtered = rows
+    .filter((u) => company === ALL_COMPANY || u.company === company)
+    .filter((u) => role === ALL_ROLE || String(u.role) === role)
+    .filter((u) =>
+      !kw || [u.name, u.email, u.company].some((v) => v.toLowerCase().includes(kw))
+    )
+    .sort((a, b) => {
+      const diff = (a.createdAt ?? 0) - (b.createdAt ?? 0);
+      return (sortOrder === "asc" ? diff : -diff) || a.name.localeCompare(b.name, "ko");
+    });
 
   return (
     <>
@@ -372,6 +348,25 @@ function MembersPanel({ me }: { me: Me }) {
           <CountLabel>{filtered.length}명</CountLabel>
         </TitleWrap>
         <HeaderRight>
+          <FilterSelect value={company} onChange={(e) => setCompany(e.target.value)}>
+            <option value={ALL_COMPANY}>{ALL_COMPANY}</option>
+            {companyOptions.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </FilterSelect>
+          <FilterSelect value={role} onChange={(e) => setRole(e.target.value)}>
+            <option value={ALL_ROLE}>{ALL_ROLE}</option>
+            {[1, 2, 3].map((r) => (
+              <option key={r} value={String(r)}>{roleName(r)}</option>
+            ))}
+          </FilterSelect>
+          <FilterSelect
+            value={sortOrder}
+            onChange={(e) => setSortOrder(e.target.value as "desc" | "asc")}
+          >
+            <option value="desc">최신 가입순</option>
+            <option value="asc">오래된 가입순</option>
+          </FilterSelect>
           <RequestSearch
             keyword={keyword}
             onKeywordChange={setKeyword}
@@ -422,91 +417,6 @@ function MembersPanel({ me }: { me: Me }) {
                         삭제
                       </RejectBtn>
                     )}
-                  </Td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </Table>
-      </TableScroll>
-    </>
-  );
-}
-
-/* ───────── 가입 승인 이력 ───────── */
-function HistoryPanel() {
-  const [loading, setLoading] = useState(false);
-  const [rows, setRows] = useState<HistoryRow[]>([]);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const qs = await getDocs(
-        query(collection(db, HISTORY_COL), orderBy("processed_at", "desc"), limit(HISTORY_LIMIT))
-      );
-      setRows(
-        qs.docs
-          // 회원 삭제 기록(action=deleted)은 이력에 표시하지 않음 (이전에 기록된 것 포함)
-          .filter((d) => (d.data() as any).action in ACTION_LABEL)
-          .map((d) => {
-            const data = d.data() as any;
-            return {
-              id: d.id,
-              action: data.action as HistoryAction,
-              name: String(data.name ?? ""),
-              email: String(data.email ?? ""),
-              company: String(data.company ?? ""),
-              role: typeof data.role === "number" ? data.role : null,
-              processedAt: data.processed_at ?? null,
-            };
-          })
-      );
-    } catch (e: any) {
-      alert("이력을 불러오는 중 오류가 발생했습니다: " + (e?.message ?? e));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-
-  return (
-    <>
-      <PanelHeader>
-        <TitleWrap>
-          <SubTitle>처리 이력</SubTitle>
-          <CountLabel>최근 {rows.length}건</CountLabel>
-        </TitleWrap>
-        <RefreshBtn type="button" onClick={load} disabled={loading}>
-          {loading ? "불러오는 중..." : "새로고침"}
-        </RefreshBtn>
-      </PanelHeader>
-
-      <TableScroll>
-        <Table>
-          <thead>
-            <tr>
-              <Th>이름</Th>
-              <Th>이메일</Th>
-              <Th>회사</Th>
-              <Th>권한</Th>
-              <Th>처리 일시</Th>
-              <Th>결과</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 ? (
-              <EmptyRow colSpan={6} text={loading ? "불러오는 중..." : "처리 이력이 없습니다."} />
-            ) : (
-              rows.map((h) => (
-                <tr key={h.id}>
-                  <Td>{h.name || "-"}</Td>
-                  <Td>{h.email || "-"}</Td>
-                  <Td>{h.company || "-"}</Td>
-                  <Td>{roleName(h.role)}</Td>
-                  <Td>{formatTS(h.processedAt)}</Td>
-                  <Td>
-                    <ResultLabel $action={h.action}>{ACTION_LABEL[h.action]}</ResultLabel>
                   </Td>
                 </tr>
               ))
@@ -603,20 +513,6 @@ const CountLabel = styled.span`
   font-weight: 500;
 `;
 
-const RESULT_COLORS: Record<HistoryAction, { bg: string; fg: string }> = {
-  approved: { bg: "#e7f6ec", fg: "#1e7a3c" },
-  rejected: { bg: "#fcebeb", fg: "#a32d2d" },
-};
-
-const ResultLabel = styled.span<{ $action: HistoryAction }>`
-  padding: 3px 10px;
-  border-radius: 6px;
-  background: ${({ $action }) => RESULT_COLORS[$action].bg};
-  color: ${({ $action }) => RESULT_COLORS[$action].fg};
-  font-size: 12px;
-  font-weight: 500;
-`;
-
 const StatusTag = styled.span`
   margin-left: 6px;
   padding: 2px 6px;
@@ -647,6 +543,33 @@ const Info = styled.p`
   margin-top: 16px;
   font-size: 15px;
   color: #555;
+`;
+
+// 요청 리스트 필터 셀렉트(RequestFilter SelectBox)와 동일한 스타일
+const FilterSelect = styled.select`
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+
+  width: 160px;
+  height: 48px;
+  padding: 0 12px;
+  border: 1px solid ${({ theme }) => theme.colors.gray02};
+  border-radius: 4px;
+  font-family: 'Pretendard';
+  font-size: 14px;
+  font-weight: 400;
+  color: ${({ theme }) => theme.colors.black};
+  background-color: ${({ theme }) => theme.colors.white01};
+  background-image: url(${selectBoxArrow});
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px 16px;
+
+  &:focus {
+    outline: none;
+    border-color: ${({ theme }) => theme.colors.black};
+  }
 `;
 
 // 요청 리스트 '필터 초기화' 버튼(RequestFilter ResetButton)과 동일한 스타일

@@ -61,17 +61,6 @@ service cloud.firestore {
       allow delete: if isAdmin() || (request.auth != null && request.auth.uid == userId);
     }
 
-    // 가입 승인/거절 이력 (관리자만 조회)
-    // - 승인: 관리자가 클라이언트에서 기록 (본인 uid로만)
-    // - 거절: rejectSignup 함수가 Admin SDK로 기록
-    match /signup_history/{historyId} {
-      allow read: if isAdmin();
-      allow create: if isAdmin() &&
-        request.resource.data.action == 'approved' &&
-        request.resource.data.processed_by_uid == request.auth.uid;
-      allow update, delete: if false;
-    }
-
     match /design_request/{requestId} {
       allow read: if isApproved();
       allow write: if isApproved();
