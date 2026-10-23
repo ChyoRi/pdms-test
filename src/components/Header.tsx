@@ -6,6 +6,7 @@ import { doc, getDoc, collection, query, where, onSnapshot } from "firebase/fire
 import { useNavigate } from "react-router-dom";
 import Nav from "./Nav";
 import { logoutAll } from "../utils/authClient";
+import { authErrorMessage } from "../utils/authErrorMessage";
 import switchAccountIcon from "../assets/switch-account.png";
 
 interface HeaderProps {
@@ -107,8 +108,8 @@ export default function Header({ onResetFilters, onOpenSwitchAccount }: HeaderPr
     try {
       await logoutAll(auth);  // ★ 쿠키 제거 + Firebase signOut
       navigate("/");
-    } catch (error: any) {
-      alert("로그아웃 중 오류가 발생했습니다: " + error.message);
+    } catch (error) {
+      alert(authErrorMessage(error, "logout")); // ★ 변경: 영어 원문 대신 한글 안내
     }
   };
 

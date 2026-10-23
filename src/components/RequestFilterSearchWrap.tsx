@@ -44,6 +44,13 @@ export default function RequestFilterSearchWrap({
   onApplyCompletionSort?: (sort: CompletionSortKey) => void;
   completionSort?: CompletionSortKey;
 }) {
+  // ★ 추가: '필터 초기화' 버튼을 누르면 검색어(입력창 + 적용된 검색어)도 같이 비운다
+  const handleResetFilters = () => {
+    onKeywordChange("");
+    onSearch("");
+    onResetFilters?.();
+  };
+
   return (
     <Container>
       <RequestFilter 
@@ -57,7 +64,7 @@ export default function RequestFilterSearchWrap({
         onApplyCompany={onApplyCompany}
         onApplyDesigner={onApplyDesigner}
         roleNumber={roleNumber}
-        onResetFilters={onResetFilters}
+        onResetFilters={handleResetFilters}
         resetKey={resetKey}
         deptOptions={deptOptions}
         onApplyDept={onApplyDept}

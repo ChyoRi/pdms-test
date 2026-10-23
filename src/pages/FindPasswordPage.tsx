@@ -2,6 +2,7 @@ import { useState } from "react";
 import styled from "styled-components";
 import { auth } from "../firebaseconfig";
 import { sendPasswordResetEmail } from "firebase/auth";
+import { authErrorMessage } from "../utils/authErrorMessage";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -20,12 +21,9 @@ export default function FindPasswordPage() {
         handleCodeInApp: true,
       });
       alert("비밀번호 재설정 메일을 보냈습니다. 받은 메일함을 확인해 주세요.");
-    } catch (e: any) {
-      if (e?.code === "auth/user-not-found") {
-        alert("등록되지 않은 이메일입니다.");
-        return;
-      }
-      alert("메일 발송 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.");
+    } catch (e) {
+      // ★ 변경: 오류 코드별 한글 안내 (user-not-found는 이메일 열거 보호가 꺼진 프로젝트에서만 옴)
+      alert(authErrorMessage(e, "resetPassword"));
     }
   };
 

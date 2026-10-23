@@ -5,6 +5,7 @@ import { auth, db } from "../firebaseconfig";
 import { doc, setDoc, serverTimestamp, getDoc } from "firebase/firestore";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { logoutAll } from "../utils/authClient";
+import { authErrorMessage } from "../utils/authErrorMessage";
 
 type CompanySignUpDoc = {
   company_name: string;
@@ -117,8 +118,9 @@ export default function SignUpPage() {
         "회원가입이 완료되었습니다.\n\n관리자 승인 후 로그인할 수 있습니다. 승인이 완료되면 로그인해주세요."
       );
       navigate("/");
-    } catch (error: any) {
-      alert("회원가입 중 오류 발생: " + error.message);
+    } catch (error) {
+      // ★ 변경: Firebase 영어 원문 대신 오류 코드별 한글 안내
+      alert(authErrorMessage(error, "signup"));
     }
   };
 

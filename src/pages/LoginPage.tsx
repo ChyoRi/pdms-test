@@ -3,25 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import styled from "styled-components";
 import { auth } from "../firebaseconfig";
 import { loginWithRemember, logoutAll, isUserApproved } from "../utils/authClient";
-import { FirebaseError } from "firebase/app";
+import { authErrorMessage } from "../utils/authErrorMessage";
 
 interface LoginPageProps {
   onLoginSuccess: () => void; // ✅ props 타입 정의
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-function mapLoginError(err: unknown): string {
-  const unified = "이메일 또는 비밀번호가 올바르지 않습니다."; // 단일 문구
-  if (!(err instanceof FirebaseError)) return unified;
-
-  if (err.code === "auth/invalid-email") {
-    return "이메일 형식이 올바르지 않습니다.";
-  }
-
-  return unified;
-}
-
 
 
 export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
@@ -64,7 +52,8 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
       onLoginSuccess();
       navigate('/main');
     } catch (err) {
-      alert(mapLoginError(err));
+      // ★ 변경: 네트워크·반복 시도·비활성 계정은 "비밀번호 틀림"과 구분해서 안내
+      alert(authErrorMessage(err, "login"));
     }
   };
 
