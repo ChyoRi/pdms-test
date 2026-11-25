@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import styled from "styled-components";
 import { auth, db } from "../firebaseconfig";
 import {
@@ -48,13 +49,20 @@ export default function Comment({ designRequestId, currentUserName, status }: Co
   const [parentDocId, setParentDocId] = useState<string>("");     // Firestore 문서 id
   const [items, setItems] = useState<CommentDoc[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const modalTitleId = useId();
+  const dialogRef = useRef<HTMLDialogElement | null>(null);
+  const expandButtonRef = useRef<HTMLButtonElement | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const backdropPointerDownRef = useRef(false);
+  const scrollPositionRef = useRef({ top: 0, atBottom: true });
 
   // 입력 상태
   const [body, setBody] = useState("");
   const [saving, setSaving] = useState(false);
 
   // 입력 조합 상태(IME) — 한글/일본어 입력 조합 중 Enter 등록 방지
-  const [isComposing, setIsComposing] = useState(false);
+  const isComposingRef = useRef(false);
 
   // 편집 상태
   const [editingId, setEditingId] = useState<string>("");
@@ -62,13 +70,15 @@ export default function Comment({ designRequestId, currentUserName, status }: Co
   const [updating, setUpdating] = useState<boolean>(false);
 
   // 편집 영역 IME 조합 상태
-  const [isEditingComposing, setIsEditingComposing] = useState(false);
+  const isEditingComposingRef = useRef(false);
+  const editTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const editButtonsRef = useRef(new Map<string, HTMLButtonElement>());
+  const previousEditingIdRef = useRef("");
 
   const currentUid = auth.currentUser?.uid || "";
 
   // 스크롤 제어용 ref/상태
   const listRef = useRef<HTMLDivElement | null>(null);     // 스크롤 컨테이너
-  const endRef  = useRef<HTMLDivElement | null>(null);     // 맨 아래 앵커
   const mountedRef = useRef(false);                        // 최초 로딩 여부
   const [justAdded, setJustAdded] = useState(false);       // 내가 방금 등록했는가
 
@@ -85,10 +95,65 @@ export default function Comment({ designRequestId, currentUserName, status }: Co
   const scrollToBottom = (smooth = false) => {
     const c = listRef.current;
     if (!c) return;
-    // 두 가지 모두 시도 (브라우저/레이아웃 상황별 안전)
-    c.scrollTop = c.scrollHeight;
-    endRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "auto" });
+    c.scrollTo({ top: c.scrollHeight, behavior: smooth ? "smooth" : "instant" });
   };
+
+  const changeExpanded = (expanded: boolean) => {
+    const list = listRef.current;
+    if (list) {
+      scrollPositionRef.current = {
+        top: list.scrollTop,
+        atBottom: list.scrollHeight - list.clientHeight - list.scrollTop < 24,
+      };
+    }
+    setEmojiOpen(false);
+    backdropPointerDownRef.current = false;
+    isComposingRef.current = false;
+    isEditingComposingRef.current = false;
+    setIsExpanded(expanded);
+  };
+
+  useLayoutEffect(() => {
+    const dialog = dialogRef.current;
+    if (!isExpanded || !dialog) return;
+
+    dialog.showModal();
+    const expandButton = expandButtonRef.current;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    closeButtonRef.current?.focus({ preventScroll: true });
+
+    return () => {
+      dialog.close();
+      document.body.style.overflow = previousOverflow;
+      expandButton?.focus({ preventScroll: true });
+    };
+  }, [isExpanded]);
+
+  useLayoutEffect(() => {
+    const previousEditingId = previousEditingIdRef.current;
+    previousEditingIdRef.current = editingId;
+    isEditingComposingRef.current = false;
+
+    if (editingId) {
+      const editor = editTextareaRef.current;
+      editor?.focus({ preventScroll: true });
+      editor?.setSelectionRange(editor.value.length, editor.value.length);
+    } else if (previousEditingId && (
+      document.activeElement === document.body ||
+      listRef.current?.contains(document.activeElement)
+    )) {
+      // 저장/취소로 입력칸이 사라져도 배경으로 포커스가 빠지지 않게 한다.
+      editButtonsRef.current.get(previousEditingId)?.focus({ preventScroll: true });
+    }
+  }, [editingId, isExpanded]);
+
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    const { top, atBottom } = scrollPositionRef.current;
+    list.scrollTo({ top: atBottom ? list.scrollHeight : top, behavior: "instant" });
+  }, [isExpanded]);
 
   // 1) 부모 문서 id 역조회 + 댓글 구독
   useEffect(() => {
@@ -322,7 +387,7 @@ export default function Comment({ designRequestId, currentUserName, status }: Co
     u
       .trim()
       // 앞에 괄호/따옴표가 붙는 케이스
-      .replace(/^[(\[{"'`]+/g, "")
+      .replace(/^[([{"'`]+/g, "")
       // 뒤에 붙는 흔한 문장부호/괄호/따옴표 제거
       .replace(/[)\]}>"'`,.;:!?]+$/g, "");
 
@@ -388,7 +453,8 @@ export default function Comment({ designRequestId, currentUserName, status }: Co
     if (isEnded) return;
     if (e.key !== "Enter") return;
     if (e.shiftKey) return;                 // 줄바꿈 허용
-    if (isComposing) return;                // 한글 조합 중이면 무시
+    // 브라우저에 따라 compositionend가 마지막 Enter보다 먼저 발생한다.
+    if (isComposingRef.current || e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) return;
     if (!body.trim() || saving || !parentDocId) return;
 
     e.preventDefault();
@@ -399,7 +465,7 @@ export default function Comment({ designRequestId, currentUserName, status }: Co
   const handleEditKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>, id: string) => {
     if (e.key !== "Enter") return;
     if (e.shiftKey) return;
-    if (isEditingComposing) return;
+    if (isEditingComposingRef.current || e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) return;
     if (!editingBody.trim() || updating) return;
 
     e.preventDefault();
@@ -412,14 +478,10 @@ export default function Comment({ designRequestId, currentUserName, status }: Co
     setEmojiOpen(v => !v);
   };
 
-  return (
-    <Wrap>
-      <CommentTitleWrap>
-        <CommentTitle>메모 Talk</CommentTitle>
-        <CommentIcon />
-      </CommentTitleWrap>
+  const commentPanel = (
+    <>
       {/* 목록 */}
-      <CommentContentWrap ref={listRef}>
+      <CommentContentWrap ref={listRef} $expanded={isExpanded}>
         {loading ? (
           <Empty>불러오는 중…</Empty>
         ) : items.length === 0 ? (
@@ -438,7 +500,13 @@ export default function Comment({ designRequestId, currentUserName, status }: Co
                   <Meta>
                     {isMine && !isLog && editingId !== row.id && ( // 로그면 버튼 숨김
                       <Actions>
-                        <SmallBtn onClick={() => startEdit(row)}>수정</SmallBtn>
+                        <SmallBtn
+                          ref={(button) => {
+                            if (button) editButtonsRef.current.set(row.id, button);
+                            else editButtonsRef.current.delete(row.id);
+                          }}
+                          onClick={() => startEdit(row)}
+                        >수정</SmallBtn>
                         <SmallBtn $danger onClick={() => handleDelete(row.id)}>삭제</SmallBtn>
                       </Actions>
                     )}
@@ -447,21 +515,23 @@ export default function Comment({ designRequestId, currentUserName, status }: Co
                 {editingId === row.id ? (
                   <EditRow>
                     <EditTextarea
+                      ref={editTextareaRef}
+                      aria-label="메모 수정 내용"
                       value={editingBody}
                       onChange={(e) => setEditingBody(e.target.value)}
                       rows={1}
                       // 편집 Enter 저장/Shift+Enter 줄바꿈 & IME 처리
                       onKeyDown={(e) => handleEditKeyDown(e, row.id)}
-                      onCompositionStart={() => setIsEditingComposing(true)}
-                      onCompositionEnd={() => setIsEditingComposing(false)}
+                      onCompositionStart={() => { isEditingComposingRef.current = true; }}
+                      onCompositionEnd={() => { isEditingComposingRef.current = false; }}
                     />
                     <BtnRow>
-                      <SmallBtn onClick={() => handleUpdate(row.id)} disabled={!editingBody.trim() || updating}>
+                      <EditActionButton type="button" onClick={() => handleUpdate(row.id)} disabled={!editingBody.trim() || updating}>
                         저장
-                      </SmallBtn>
-                      <SmallBtn $ghost onClick={() => { setEditingId(""); setEditingBody(""); }}>
+                      </EditActionButton>
+                      <EditActionButton type="button" onClick={() => { setEditingId(""); setEditingBody(""); }}>
                         취소
-                      </SmallBtn>
+                      </EditActionButton>
                     </BtnRow>
                   </EditRow>
                 ) : (
@@ -471,21 +541,21 @@ export default function Comment({ designRequestId, currentUserName, status }: Co
             );
           })
         )}
-        <div ref={endRef} id="comments-end-anchor" />
         {/* 작성 영역 */}
       </CommentContentWrap>
       <Editor>
         <InputWrap>
           <CommentWrite
             ref={textareaRef}
+            aria-label="메모 내용"
             placeholder="내용을 입력하세요"
             value={body}
              disabled={isEnded}
             onChange={(e) => setBody(e.target.value)}
-            rows={1}
+            rows={isExpanded ? 3 : 1}
             onKeyDown={handleAddKeyDown}
-            onCompositionStart={() => setIsComposing(true)}
-            onCompositionEnd={() => setIsComposing(false)}
+            onCompositionStart={() => { isComposingRef.current = true; }}
+            onCompositionEnd={() => { isComposingRef.current = false; }}
           />
           <EmojiBtn
             type="button"
@@ -522,6 +592,104 @@ export default function Comment({ designRequestId, currentUserName, status }: Co
           등록
         </AddBtn>
       </Editor>
+    </>
+  );
+
+  return (
+    <Wrap>
+      <CommentTitleWrap>
+        <CommentTitle>메모 Talk</CommentTitle>
+        <CommentIcon aria-hidden="true" />
+        <ExpandButton
+          ref={expandButtonRef}
+          type="button"
+          aria-haspopup="dialog"
+          aria-label="메모톡 크게 보기"
+          onClick={() => changeExpanded(true)}
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M10 2h4v4M14 2 9 7M6 14H2v-4M2 14l5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          크게 보기
+        </ExpandButton>
+      </CommentTitleWrap>
+      {isExpanded ? (
+        <ExpandedPlaceholder>크게 보기 창에서 메모를 확인하고 있습니다.</ExpandedPlaceholder>
+      ) : commentPanel}
+      {createPortal(
+        <MemoDialog
+          ref={dialogRef}
+          aria-labelledby={modalTitleId}
+          aria-modal="true"
+          onKeyDown={(event) => {
+            if (event.key === "Escape" && (
+              isComposingRef.current || isEditingComposingRef.current ||
+              event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229
+            )) {
+              event.preventDefault();
+              event.stopPropagation();
+              return;
+            }
+            if (event.key !== "Tab") return;
+            const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>(
+              'button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
+            )).filter((element) => element.getClientRects().length > 0);
+            const first = controls[0];
+            const last = controls[controls.length - 1];
+            if (event.shiftKey && document.activeElement === first) {
+              event.preventDefault();
+              last?.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+              event.preventDefault();
+              first?.focus();
+            }
+          }}
+          onCancel={(event) => {
+            event.preventDefault();
+            if (isComposingRef.current || isEditingComposingRef.current) return;
+            if (emojiOpen) setEmojiOpen(false);
+            else changeExpanded(false);
+          }}
+          onPointerDown={(event) => {
+            const rect = event.currentTarget.getBoundingClientRect();
+            backdropPointerDownRef.current = event.button === 0 &&
+              event.target === event.currentTarget && (
+                event.clientX < rect.left || event.clientX > rect.right ||
+                event.clientY < rect.top || event.clientY > rect.bottom
+              );
+          }}
+          onPointerCancel={() => { backdropPointerDownRef.current = false; }}
+          onClick={(event) => {
+            // 입력칸에서 시작해 배경에서 끝난 드래그도 dialog의 click으로 전달된다.
+            const startedOnBackdrop = backdropPointerDownRef.current;
+            backdropPointerDownRef.current = false;
+            if (!startedOnBackdrop || event.target !== event.currentTarget) return;
+            const rect = event.currentTarget.getBoundingClientRect();
+            if (event.clientX < rect.left || event.clientX > rect.right ||
+                event.clientY < rect.top || event.clientY > rect.bottom) {
+              changeExpanded(false);
+            }
+          }}
+        >
+          {isExpanded && (
+            <>
+              <ModalHeader>
+                <ModalHeading>
+                  <ModalTitle id={modalTitleId}>메모 Talk <CommentIcon aria-hidden="true" /></ModalTitle>
+                  <ModalDescription>{designRequestId} · 메모를 더 넓게 확인하고 작성하세요.</ModalDescription>
+                </ModalHeading>
+                <CloseButton ref={closeButtonRef} type="button" aria-label="메모톡 닫기" onClick={() => changeExpanded(false)}>
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                    <path d="m5 5 10 10M15 5 5 15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                  </svg>
+                </CloseButton>
+              </ModalHeader>
+              <ModalContent>{commentPanel}</ModalContent>
+            </>
+          )}
+        </MemoDialog>,
+        document.body
+      )}
     </Wrap>
   );
 }
@@ -529,6 +697,7 @@ export default function Comment({ designRequestId, currentUserName, status }: Co
 // ── styled ──────────────────────────────────────────────────
 const Wrap = styled.div`
   flex: 1;
+  min-width: 0;
 `;
 const CommentTitleWrap = styled.div`
   ${({ theme }) => theme.mixin.flex("center")};
@@ -565,12 +734,15 @@ const AddBtn = styled.button`
   white-space: nowrap;
   &:disabled { opacity:.5; cursor: not-allowed; }
 `;
-const CommentContentWrap = styled.div`
+const CommentContentWrap = styled.div<{ $expanded?: boolean }>`
   display: flex;
   flex-direction: column;
   gap: 14px;
-  height: calc(100vh - 670px);
-  padding: 10px 10px 0 10px;
+  height: ${({ $expanded }) => $expanded ? "auto" : "max(140px, calc(100dvh - 670px))"};
+  flex: ${({ $expanded }) => $expanded ? "1 1 0" : "none"};
+  min-height: 0;
+  padding: ${({ $expanded }) => $expanded ? "20px" : "10px 10px 0"};
+  border-radius: ${({ $expanded }) => $expanded ? "8px" : "0"};
   overflow-y: auto;
   scrollbar-width: thin;
   background-color: #fff6ee;
@@ -629,19 +801,51 @@ const SmallBtn = styled.button<{ $danger?: boolean; $ghost?: boolean }>`
   color: ${({ $danger, $ghost }) => $ghost ? "#111" : ($danger ? "#000" : "#000")};
 `;
 const EditRow = styled.div`
-  ${({ theme }) => theme.mixin.flex("center", "space-between")};
+  ${({ theme }) => theme.mixin.flex("center")};
   width: 100%;
-`;
-const EditTextarea = styled(Textarea)``;
-const BtnRow = styled.div`
-  display: flex;
+  min-width: 0;
   gap: 8px;
-  margin-left: 8px;
-  button {
-    white-space: nowrap;
+  margin-top: 4px;
+`;
+const EditTextarea = styled(Textarea)`
+  display: block;
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  height: 32px;
+  padding: 5px;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 18px;
+
+  &:focus {
+    border-color: ${({ theme }) => theme.colors.orange};
+    outline: none;
   }
 `;
+const BtnRow = styled.div`
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 6px;
+`;
+const EditActionButton = styled(SmallBtn)`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  white-space: nowrap;
+
+  &:hover:not(:disabled) { opacity: 0.8; }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+  &:focus-visible { outline: 2px solid ${({ theme }) => theme.colors.orange}; outline-offset: 2px; }
+`;
 const CommentIcon = styled.i` 
+  display: inline-block;
+  flex-shrink: 0;
   width:20px; 
   height:20px;
   background: url(${commentIcon}) no-repeat center / contain;
@@ -654,6 +858,7 @@ const InputWrap = styled.div`
 `;
 
 const CommentWrite = styled.textarea`
+  display: block;
   width: 100%;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
@@ -670,8 +875,11 @@ const CommentWrite = styled.textarea`
 `;
 
 const EmojiBtn = styled.button`
+  display: flex;
+  align-items: center;
+  justify-content: center;
   position: absolute;
-  top: 45%;
+  top: 50%;
   right: 18px;
   width: 28px;
   height: 28px;
@@ -687,8 +895,8 @@ const EmojiPopover = styled.div`
   position: absolute;
   right: 0;
   bottom: calc(100% + 8px);
-  width: 320px;             /* emoji-mart에 맞게 조금 넉넉하게 */
-  max-height: 360px;
+  width: min(320px, calc(100vw - 80px));
+  max-height: min(360px, 45dvh);
   overflow: auto;
   background: #fff;
   border: 1px solid #e5e7eb;
@@ -696,4 +904,126 @@ const EmojiPopover = styled.div`
   box-shadow: 0 10px 30px rgba(0,0,0,0.12);
   padding: 6px;             /* emoji-mart 자체 패딩이 있어도 얇게 */
   z-index: 40;
+`;
+
+const ExpandButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  padding: 6px 10px;
+  border: 1px solid ${({ theme }) => theme.colors.gray02};
+  border-radius: 6px;
+  background: ${({ theme }) => theme.colors.white01};
+  color: ${({ theme }) => theme.colors.black};
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+
+  &:hover { background: ${({ theme }) => theme.colors.beige01}; }
+  &:focus-visible { outline: 2px solid ${({ theme }) => theme.colors.orange}; outline-offset: 2px; }
+`;
+
+const ExpandedPlaceholder = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: max(140px, calc(100dvh - 670px));
+  background: #fff6ee;
+  color: ${({ theme }) => theme.colors.gray06};
+  font-size: 13px;
+`;
+
+const MemoDialog = styled.dialog`
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(880px, calc(100vw - 32px));
+  height: min(760px, calc(100vh - 48px));
+  height: min(760px, calc(100dvh - 48px));
+  max-width: none;
+  max-height: none;
+  padding: 0;
+  border: 1px solid ${({ theme }) => theme.colors.gray02};
+  border-radius: 10px;
+  background: ${({ theme }) => theme.colors.white01};
+  color: ${({ theme }) => theme.colors.black};
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+  font-family: inherit;
+
+  &[open] { display: flex; flex-direction: column; }
+  &::backdrop { background: rgba(0, 0, 0, 0.45); }
+  button:focus-visible, ${CommentWrite}:focus-visible, a:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.orange};
+    outline-offset: 2px;
+  }
+
+  @media (max-width: 600px) {
+    width: calc(100vw - 16px);
+    height: calc(100dvh - 24px);
+  }
+`;
+
+const ModalHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-shrink: 0;
+  padding: 18px 20px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.gray01};
+
+  @media (max-width: 600px) { padding: 14px; }
+`;
+
+const ModalHeading = styled.div`
+  min-width: 0;
+`;
+
+const ModalTitle = styled.h2`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 18px;
+  font-weight: 700;
+`;
+
+const ModalDescription = styled.p`
+  margin-top: 5px;
+  color: ${({ theme }) => theme.colors.gray06};
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+`;
+
+const CloseButton = styled.button`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border: 1px solid ${({ theme }) => theme.colors.gray02};
+  border-radius: 8px;
+  color: ${({ theme }) => theme.colors.gray06};
+  &:hover { background: ${({ theme }) => theme.colors.gray04}; }
+`;
+
+const ModalContent = styled.div`
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: 20px;
+
+  ${Editor} { flex-shrink: 0; margin-top: 16px; }
+  ${Body} { font-size: 15px; line-height: 1.65; }
+  ${CommentContent} { flex-shrink: 0; }
+  ${CommentWriterWrap} { flex-wrap: wrap; }
+
+  @media (max-width: 600px) {
+    padding: 12px;
+    ${CommentContentWrap} { padding: 14px; }
+  }
 `;
